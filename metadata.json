@@ -1,0 +1,6 @@
+{
+  "name": "NileFound - Nile University Lost & Found",
+  "description": "A lightweight, privacy-conscious campus Lost and Found PWA engineered for Nile University of Nigeria, Abuja.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

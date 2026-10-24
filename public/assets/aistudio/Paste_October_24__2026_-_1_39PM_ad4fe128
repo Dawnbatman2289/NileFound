@@ -1,0 +1,336 @@
+Engineering Design Specification and Technical Feasibility Analysis for NileFound: An Offline-First Campus Lost and Found Progressive Web ApplicationAcademic and Operational Context AnalysisNile University of Nigeria, situated in Cadastral Zone C-00, Jabi Airport Bypass, Abuja, operates a modern, multi-building academic campus. The physical footprint encompasses distinct structural clusters within the Nile Learning City, including primary academic facilities such as Niger House (housing Arts and Social Sciences), the Volta Academic Building, Limpopo Bay (housing the Faculty of Law and School of Postgraduate Studies), Congo House, Ubangi House (housing STEM laboratories and Environmental Sciences), Nile House (the administrative hub housing the Registry, Bursary, and ICT), and the Nile Student Centre. Residential facilities comprise multiple male and female hostel blocks situated directly on campus, accommodating thousands of undergraduate and postgraduate students.The daily operational environment presents significant friction regarding lost property management. High-value personal property—including student identity cards, mobile devices, laptops, calculators, power banks, flash drives, laboratory coats, and lecture materials—is frequently misplaced across high-traffic zones such as the Ubangi STEM laboratories, the Nile Library, the Picnic Arena, and hostel common areas.The current lost-and-found workflow relies on fragmented, informal channels. Found items are announced via transient WhatsApp group chats or word-of-mouth. This decentralization yields severe structural drawbacks:Information decays rapidly as chat histories overflow, rendering posts unsearchable after a few hours.There is no unified, verified central registry across campus faculties and security posts.No standard ownership verification protocol exists, exposing valuable items to fraudulent claims and opportunistic theft.Misplaced items delivered to campus security posts at Nile House or hostel reception desks remain unindexed in storage for extended periods.Because student software engineering initiatives must operate independently of institutional IT infrastructure during initial phases, primary field research must inform both functional product design and administrative buy-in.Field Survey and Stakeholder Discovery ProtocolTarget Stakeholder GroupPrimary ObjectiveKey Discovery QuestionsSurvey Method & Sample SizeUndergraduate & Postgraduate StudentsUnderstand recovery behavior, lost item frequency, and connectivity constraints.How often do you misplace items on campus? Which channels do you check first? Would you reveal a private item attribute to verify ownership? What is your typical daily mobile data allocation?Digital survey distributed across faculty groups ($n \ge 150$).Campus Security Officers (Nile House / Gates)Map physical custody workflows, holding durations, and logging protocols.Where are found items currently deposited? How do you record an item when handed in? What proof do you request before releasing an item? How long are items retained?Semi-structured in-person interviews ($n = 5$ officers).Student Affairs Officers (Student Services Centre)Evaluate administrative oversight requirements and compliance thresholds.Would Student Affairs adopt a centralized digital dashboard to approve returns? What governance features (e.g., auditing, post removal) are required?Professional interview at Student Services Centre, Room 101 ($n = 2$ administrators).Hostel Supervisors & Desk ManagersMap residential lost-and-found patterns in male/female accommodations.How are misplaced items in hostel common areas and kitchenettes handled? Are items transferred to main security or kept locally?Brief operational audit across hostel blocks ($n = 4$ supervisors).System Success MetricsSuccess MetricTarget Threshold (V1 Pilot)Measurement MethodologyStrategic ValueClaim Resolution Rate$\ge 40\%$ of logged items returned within 14 days.Ratio of RETURNED status records to total verified FOUND posts in database.Demonstrates real-world utility to Student Affairs.Time-to-Return (TTR)Median TTR $< 48$ hours.Timestamp delta: claims.verified_at minus items.created_at.Proves efficiency over informal WhatsApp messaging.Verification Accuracy$< 2\%$ false claim approval rate.Audit of rejected claims and administrative dispute logs.Establishes platform trust and fraud prevention.Network Data Efficiency$< 120\text{ KB}$ total payload per page load.Network performance audit via Lighthouse / browser DevTools over 3G throttled profiles.Ensures usability under network degradation.User Adoption$\ge 500$ verified user registrations within 30 days of pilot.Distinct active user records with validated domain emails (@nileuniversity.edu.ng).Validates community traction and platform network effects.System Requirements and Regulatory ArchitectureUser Stories and Acceptance CriteriaUser Story 1: Item Finder (Student or Staff)As a student or staff member who finds a misplaced item on campus, the user requires a mechanism to record the item details quickly with minimal data usage, ensuring the rightful owner can locate it without exposing sensitive details publicly.Acceptance Criteria 1.1: The system must allow users to log a found item by selecting a pre-defined campus location (e.g., Ubangi STEM Lab, Limpopo Bay, Nile Library), category, date found, and description.Acceptance Criteria 1.2: The system must require the finder to enter at least one "Hidden Verification Attribute" (e.g., device lock screen image description, engraving text, laptop sticker configuration, key chain tag detail) that is omitted from the public feed.Acceptance Criteria 1.3: Photos uploaded by the finder must undergo mandatory client-side browser compression, reducing image file sizes to $< 100\text{ KB}$ before upload.Acceptance Criteria 1.4: Photos of sensitive personal documents (such as Student ID cards, drivers' licenses, or national IDs) must automatically apply a CSS/Canvas blur effect to sensitive fields prior to public display.User Story 2: Item Owner / LoserAs a student who lost a valuable item on campus, the user requires a searchable and filterable feed operating smoothly under unstable network conditions, enabling the submission of private ownership claims.Acceptance Criteria 2.1: The public feed must support instant client-side filtering by category, location, date range, and text search without triggering page reloads.Acceptance Criteria 2.2: The claimant must submit an answer matching the "Hidden Verification Attribute" when initiating a claim request.Acceptance Criteria 2.3: Phone numbers and personal email addresses of finders and owners must never be exposed publicly. Contact details are revealed exclusively via a secure, double-opt-in approval workflow.User Story 3: Campus Security / Student Affairs AdministratorAs an administrator at the Student Services Centre, the administrative staff requires a dedicated dashboard to review pending claims, oversee physical items deposited at administrative desks, mark items as returned, and remove inappropriate posts.Acceptance Criteria 3.1: Administrative accounts (authenticated via designated institutional roles) must possess global override rights to approve or reject claims and mark items as RETURNED or EXPIRED.Acceptance Criteria 3.2: The administrative dashboard must display real-time summary statistics, including active lost posts, found items held at security posts, pending claims, and resolved returns.System Requirements CategorizationThe engineering design categorizes system capabilities into functional features that drive operational workflows and non-functional targets that satisfy technical constraints. Functional requirements encompass institutional authentication using university email subdomains (@nileuniversity.edu.ng), item reporting flows for lost and found property, hidden verification attribute mechanisms, searchable feed displays with automatic visual blurring for sensitive credentials, double-opt-in contact revelation, an automated status lifecycle state machine, and an administrative moderation console.Non-functional requirements focus on bandwidth efficiency, client-side resource optimization, offline resilience, responsive UI accessibility, and statutory privacy compliance. The system targets a total page payload under $120\text{ KB}$ and compresses all client image uploads below $100\text{ KB}$. Offline operational capability is established through Progressive Web App (PWA) asset caching and local draft preservation via IndexedDB. Device compatibility prioritizes low-end Android smartphones with viewport widths down to $320\text{px}$, while regulatory mechanics enforce strict data protection controls.Regulatory Architecture: Nigeria Data Protection Act (NDPA) 2023The NileFound platform processes personal data within Nigeria, placing it under the regulatory jurisdiction of the Nigeria Data Protection Act (NDPA) 2023, enforced by the Nigeria Data Protection Commission (NDPC). The technical design embeds compliance directly into system protocols:Regulatory PrincipleNDPA 2023 Statutory ProvisionTechnical Engineering ImplementationData MinimizationSection 24 NDPA 2023Collects strictly name, institutional email, phone number, and item metadata. Eliminates password storage by leveraging passwordless authentication.Right to Erasure / Right to be ForgottenSection 34 NDPA 2023Provides user-initiated data purging. Triggering account or post deletion executes cascading hard-deletes across database tables (users, items, claims) and purges media from storage buckets.Storage Retention & LimitationSection 24 NDPA 2023Enforces an automatic 60-day lifecycle expiration policy. A scheduled worker transitions stale items to EXPIRED status and deletes attached image blobs to prevent unnecessary data persistence.Consent & TransparencySection 25 NDPA 2023Requests explicit opt-in consent during registration, supported by a plain-language privacy notice detailing data processing purposes and rights.Confidentiality & Access ControlSection 24 NDPA 2023Protects contact information via database Row-Level Security (RLS) policies, preventing unverified public API access to phone numbers or email addresses.Risk Architecture MatrixRisk CategoryIdentified Threat ScenarioLikelihoodImpactTechnical & Operational Mitigation StrategyFraud / Malicious ClaimsBad actors claim high-value items (e.g., iPhones, laptops) belonging to other students.HighHighEnforce mandatory two-tier verification: claimants must answer the hidden attribute; finders or Student Affairs admins must manually approve claims before contact info disclosure.Data Privacy LeakagePublic scraper harvests student phone numbers and emails for spam or harassment.MediumHighEnforce Supabase Row-Level Security (RLS). Personal profile attributes are restricted to the asset owner, verified claim counterparty, or admin roles.Storage / Egress AbuseMalicious users upload massive image files to deplete free-tier database/storage limits.MediumMediumClient-side HTML5 Canvas compression caps image size at $< 100\text{ KB}$. Backend storage bucket policies limit file uploads to $\le 200\text{ KB}$ and restrict MIME types to image/jpeg and image/png.System AbandonmentLow initial usage leads students back to unindexed WhatsApp groups.HighHighDeploy physical QR code posters at high-traffic hubs (Nile Library, Student Services Centre, Ubangi STEM Lab); partner with the Student Representative Council (SRC) for official onboarding.Offline Sync ConflictsA user submits a claim offline for an item that was already claimed online by another student.LowMediumDatabase-level transactions enforce state updates. The server evaluates claims sequentially; if the item state is no longer FOUND_UNCLAIMED, secondary claims are gracefully rejected during sync.Architectural Trade-off Analysis and Stack DecisionTo select the optimal technology stack for NileFound, four distinct deployment architectures were evaluated against the operational realities of Nigerian university campuses, including mobile data costs, intermittent network coverage, low-end Android hardware, and zero capital budget.Evaluated OptionsOption A: Monolithic SSR: Server-Side Rendered application built using PHP / Laravel and MySQL, hosted on traditional shared web hosting.Option B: Jamstack Single Page Application PWA: Client-rendered application using React, Vite, and Tailwind CSS, backed by Supabase (PostgreSQL, Auth, Storage) and hosted on Cloudflare Pages global edge CDN.Option C: Cross-Platform Native Mobile Application: Mobile app developed with Flutter or React Native, utilizing Firebase BaaS.Option D: Low-Code Infrastructure: Application constructed on Airtable, Softr, or Bubble platforms.Weighted Decision MatrixEvaluation CriteriaWeightOption A (Laravel/PHP)Option B (Jamstack PWA)Option C (Flutter/Native)Option D (Low-Code)Bandwidth Efficiency20%6/10 (High HTML payload)9/10 (JSON API / static assets)8/10 (API-driven, high app size)4/10 (Unoptimized third-party assets)Free-Tier Durability20%3/10 (Requires paid hosting)10/10 (Cloudflare/Supabase free tiers)7/10 (Firebase free tier limits)2/10 (Strict row/view limits on free tiers)Offline / PWA Resilience20%2/10 (Requires full connection)9/10 (Service Worker + IndexedDB)9/10 (Native local storage)1/10 (No offline operational capability)Cross-Device Accessibility15%8/10 (Browser based)10/10 (Instant PWA install via browser)4/10 (Requires APK download / Store)7/10 (Browser based)Security & NDPA Compliance15%7/10 (Manual security implementation)9/10 (Postgres RLS + Managed Auth)7/10 (Firestore security rules)3/10 (Data hosted in proprietary clouds)Development Velocity10%7/10 (Familiar, but monolithic)9/10 (Component architecture, rapid Vite)5/10 (High build complexity)9/10 (Fast visual building)Weighted Total Score100%5.40 / 109.30 / 106.80 / 103.90 / 10Architectural Recommendation and Technical JustificationOption B (Jamstack SPA PWA using React, Vite, Tailwind CSS, Supabase, and Cloudflare Pages) is selected as the target production architecture.Unlike Monolithic SSR architectures that re-transmit full HTML pages across mobile networks on every request, the Jamstack model deploys immutable static HTML, CSS, and JavaScript assets directly to Cloudflare Pages edge servers. Subsequent dynamic interactions exchange lightweight JSON payloads through REST and Realtime endpoints, reducing bandwidth consumption.Through Vite's PWA integration (vite-plugin-pwa), the browser installs a Service Worker that caches static application shell assets locally. When network connectivity drops, users can continue browsing cached listings and fill out lost/found forms. Unsent forms are serialized into browser IndexedDB storage and automatically synchronized when network access resumes.Native mobile applications introduce distribution friction by requiring users to download sizeable APK files over expensive mobile data connections. A Progressive Web App installs directly from the mobile browser with a total storage footprint under $1.5\text{ MB}$, bypassing app store distribution barriers while placing an operational launcher on low-end Android home screens.Supabase handles backend data management by executing Row-Level Security (RLS) directly within the PostgreSQL engine. This ensures that privacy constraints—such as hiding phone numbers or verification details—are enforced at the database tier regardless of client-side application logic.Free-Tier Viability Verification AnalysisTo guarantee zero operational expense for the university or student developers, free-tier resource limits were verified against project scaling projections:Infrastructure ProviderFree-Tier Allocation LimitsProject Consumption ProjectionsOperational Safety MarginCloudflare PagesUnlimited bandwidth; unlimited builds; up to 20,000 static assets per project.Single React SPA bundle consisting of $< 15$ static build files.Virtually unlimited capacity for web client delivery.Supabase PostgreSQL500 MB database storage.1,000 item records require approximately $1\text{ MB}$ of relational data ($0.2\%$ of quota).Supports over 100,000 active relational records before archival.Supabase Storage1 GB total media bucket storage.1,000 client-compressed images ($80\text{ KB}$ avg) require approximately $80\text{ MB}$ ($7.8\%$ of quota).Supports over 12,000 image uploads before cleanup required.Supabase Egress Bandwidth5 GB to 10 GB monthly data egress.10,000 monthly page views with cached assets consume approximately $1.2\text{ GB}$ JSON/media egress.$> 75\%$ bandwidth headroom under standard usage.Technical System Design and SpecificationsDatabase Schema DesignThe relational database schema is structured around five core entities within PostgreSQL, governed by Row-Level Security (RLS) policies.The users table holds user profile records, extending the primary identity managed by auth.users. It stores full names, institutional email addresses (@nileuniversity.edu.ng), phone numbers, and institutional role flags (student, staff, or admin).The locations table acts as a pre-populated reference dataset containing physical campus sites across Nile Learning City, including Niger House, Volta Academic Building, Limpopo Bay, Ubangi STEM Lab, Nile House, Student Services Centre, and hostel blocks.The items table maintains the main registry of lost and found items. Each record captures the type (LOST or FOUND), title, category, location reference, date of incident, physical custody status (WITH_FINDER or DROPPED_AT_SECURITY), status lifecycle state, image upload URL, and a sensitivity flag (is_sensitive) indicating whether sensitive visual data requires client-side blurring.The verification_questions table maintains private validation data for found items. It stores finder-created verification questions alongside hashed or encrypted verification answers, preventing public exposure through RLS rules.The claims table tracks ownership claim requests. It links a claimant to a specific item record, storing the claimant's submitted verification answer, claim status (PENDING, APPROVED, or REJECTED), match proximity scores, and submission timestamps.Entity / Table NameAttribute / Column NameData TypeConstraints & Foreign KeysSecurity & Row-Level Security (RLS) PolicyusersidUUIDPrimary Key, REFERENCES auth.users(id)Public read restricted. Users read/update own profile. Admins maintain global access.emailVARCHAR(255)UNIQUE, NOT NULLDomain restricted (@nileuniversity.edu.ng). Exposed only to approved claim counterparties.full_nameVARCHAR(100)NOT NULLVisible to authenticated users on active items.phone_numberVARCHAR(20)NOT NULLStrictly protected. Excluded from public API responses.roleVARCHAR(20)DEFAULT 'student', CHECK (role IN ('student', 'staff', 'admin'))Restricted modification; enforced via database triggers.locationsidINTPrimary Key, AUTOINCREMENTPublic read-only access for campus building selection dropdowns.building_nameVARCHAR(100)NOT NULL, UNIQUECaptures Nile Learning City locations.itemsidUUIDPrimary Key, DEFAULT gen_random_uuid()Public read access for active listings (LOST, FOUND_UNCLAIMED).reporter_idUUIDForeign Key REFERENCES users(id) ON DELETE CASCADEItem reporters maintain update/delete access over their posts.typeVARCHAR(10)CHECK (type IN ('LOST', 'FOUND'))Indicates lost or found listing flow.categoryVARCHAR(50)NOT NULLOptions: ID Card, Electronics, Keys, Documents, Bags, Other.titleVARCHAR(100)NOT NULLIndexed for full-text search filters.descriptionTEXTNOT NULLDetailed public description; sensitive attributes omitted.location_idINTForeign Key REFERENCES locations(id)Linked to campus building registry.date_eventTIMESTAMPTZNOT NULLIncident timestamp recorded by user.holding_typeVARCHAR(20)CHECK (holding_type IN ('WITH_FINDER', 'DROPPED_AT_SECURITY'))Tracks physical item custody.statusVARCHAR(20)DEFAULT 'ACTIVE', CHECK (status IN ('ACTIVE', 'CLAIM_PENDING', 'VERIFIED', 'RETURNED', 'EXPIRED'))State machine managed status.photo_urlTEXTNULLABLEPublic URL pointing to optimized image storage blob.is_sensitiveBOOLEANDEFAULT falseTriggers client-side visual blur filter for sensitive documents.verification_questionsidUUIDPrimary KeyExcluded from public queries via RLS rules.item_idUUIDForeign Key REFERENCES items(id) ON DELETE CASCADEUnique constraint per found item record.question_textTEXTNOT NULLFinder's custom verification question.answer_hashTEXTNOT NULLHashed representation of verification answer.claimsidUUIDPrimary KeyAccess restricted to claimant, finder, and administrators.item_idUUIDForeign Key REFERENCES items(id) ON DELETE CASCADETarget found item ID.claimant_idUUIDForeign Key REFERENCES users(id) ON DELETE CASCADEUser filing the ownership claim.submitted_answerTEXTNOT NULLClaimant's descriptive verification attempt.statusVARCHAR(20)DEFAULT 'PENDING', CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED'))Updated via claim review workflows.match_scoreNUMERIC(3,2)NULLABLECalculated proximity score.created_atTIMESTAMPTZDEFAULT NOW()Timestamp of claim submission.Lifecycle State Engine WorkflowAn item record transitions through standard lifecycle states from creation to final resolution:Item Creation: A misplaced item is reported, entering either the LOST status (if reported by an owner searching for an item) or the FOUND_UNCLAIMED status (if reported by a finder).Claim Submission: An owner identifies a potential match in the public feed and submits an ownership claim containing an answer to the hidden verification question. The item state transitions to CLAIM_PENDING.Claim Evaluation: The finder or Student Affairs administrator reviews the submitted verification answer against the hidden criteria.If approved, the state transitions to VERIFIED, unlocking direct WhatsApp communication between counterparties.If rejected, the state reverts to FOUND_UNCLAIMED, allowing other users to submit claim attempts.Resolution: Upon physical handover of the property, the finder or administrator marks the record as RETURNED, closing the lifecycle.Expiration: Items remaining active without resolution after 60 days transition automatically to EXPIRED via scheduled maintenance routines.Screen Navigation ArchitectureThe application interface consists of five functional screens designed for low-end mobile viewports:Public Feed & Discovery Hub (/): Displays active lost and found listings with search bars, category filters, and campus location dropdowns (covering sites like Ubangi STEM Lab, Limpopo Bay, and Nile Library). Listings present thumbnail images with automatic CSS blurring applied to sensitive credentials, item metadata, relative timestamps, and status badges.Item Detail & Verification Interface (/items/:id): Shows full item descriptions, location tags, physical holding status ("Kept by Finder" or "Deposited at Security"), and primary action buttons ("Claim Item" or "I Lost This").Item Reporting Portal (/report): A step-by-step form for logging lost or found property. Captures category, title, campus location, description, date, and optional photo capture with automatic client compression. Selecting "I Found Something" dynamically displays the "Hidden Verification Detail" input.Claim Management Gateway (/claims/:id): Accessible by finders and administrators to review pending verification attempts. Displays the claimant's answer alongside the private hidden attribute, providing "Approve" and "Reject" controls that generate encrypted WhatsApp contact links upon approval.Administrative Oversight Console (/admin): A role-protected route accessible to Student Services Centre staff. Features operational analytics, content moderation tables for flagging or purging listings, and physical storage logs.Claim-Verification and Contact Revelation EngineTo prevent false claims while protecting user privacy:Creation Stage: When logging a found item, the finder provides a public title (e.g., "Found iPhone near Nile Library") and a hidden verification question/answer pair (e.g., Question: "What image is set on the lock screen lock display?", Answer: "A black Mercedes Benz logo").Claim Submission: A claimant selects "Claim Item", prompting a modal asking the finder's custom verification question. The claimant enters their descriptive response.Verification Stage: The claim enters CLAIM_PENDING. The finder or administrator receives a notification displaying the claimant's answer alongside the original hidden answer.Approval & Contact Unlocking:If approved: The item status transitions to VERIFIED. The system generates a formatted WhatsApp contact URL:$$\text{URL} = \text{"https://wa.me/"} \parallel \text{clean\_phone(finder\_phone)} \parallel \text{"?text="} \parallel \text{encode("Hello, my claim for " } \parallel \text{item\_title} \parallel \text{" was approved on NileFound.")}$$If rejected: The claim transitions to REJECTED, and the item reverts to FOUND_UNCLAIMED.Rule-Based Proximity Matching AlgorithmTo suggest potential matches between separate LOST and FOUND reports without backend computational overhead, NileFound uses a deterministic composite proximity scoring algorithm.For a given LOST item record $q$ and a FOUND item record $d$, the overall proximity match score $S(q, d) \in [0, 1]$ is calculated as:$$S(q, d) = w_c \cdot C(q, d) + w_l \cdot L(q, d) + w_t \cdot T(q, d) + w_k \cdot K(q, d)$$Where:$C(q, d) \in \{0, 1\}$ evaluates category match:$$C(q, d) = \begin{cases} 1 & \text{if } q.\text{category} = d.\text{category} \\ 0 & \text{otherwise} \end{cases}$$$L(q, d) \in \{0, 1\}$ evaluates campus location match:
+$$L(q, d) = \begin{cases} 1 & \text{if } q.\text{location\_id} = d.\text{location\_id} \\ 0.5 & \text{if adjacent campus zone} \\ 0 & \text{otherwise} \end{cases}$$$T(q, d)$ evaluates temporal proximity decay over date difference $\Delta t = \vert{}q.\text{date\_event} - d.\text{date\_event}\vert{}$ in days:$$T(q, d) = e^{-\lambda \cdot \Delta t} \quad \text{where } \lambda = 0.2$$$K(q, d) \in [0, 1]$ calculates textual description similarity using Jaccard Similarity over normalized token sets $Q$ and $D$ extracted from item titles and descriptions:$$K(q, d) = \frac{|Q \cap D|}{|Q \cup D|}$$Assigned Weights: $w_c = 0.35$, $w_l = 0.30$, $w_t = 0.20$, $w_k = 0.15$, satisfying $\sum w = 1.0$.If $S(q, d) \ge 0.60$, the system presents a suggested match link on the user's dashboard.Security Architecture & Supabase Row-Level Security (RLS) PoliciesDatabase security policies enforce access controls at the database layer:SQL-- 1. Enable RLS on core tables
+ALTER TABLE items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE claims ENABLE ROW LEVEL SECURITY;
+ALTER TABLE verification_questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+-- 2. Items Policy: Authenticated users can read active items
+CREATE POLICY "Public items are viewable by authenticated users" 
+ON items FOR SELECT 
+TO authenticated 
+USING (status IN ('ACTIVE', 'CLAIM_PENDING', 'VERIFIED'));
+
+-- 3. Verification Questions Policy: Restricted to item finder or admin
+CREATE POLICY "Verification questions private to reporter and admin" 
+ON verification_questions FOR SELECT 
+TO authenticated 
+USING (
+  EXISTS (
+    SELECT 1 FROM items 
+    WHERE items.id = verification_questions.item_id 
+    AND (items.reporter_id = auth.uid() OR auth.jwt() ->> 'role' = 'admin')
+  )
+);
+
+-- 4. Claims Policy: Restricted to claimant, item reporter, or admin
+CREATE POLICY "Claims viewable by claimant, item reporter, and admin" 
+ON claims FOR SELECT 
+TO authenticated 
+USING (
+  claimant_id = auth.uid() 
+  OR EXISTS (
+    SELECT 1 FROM items 
+    WHERE items.id = claims.item_id AND items.reporter_id = auth.uid()
+  )
+  OR auth.jwt() ->> 'role' = 'admin'
+);
+Prototype Specification and Implementation BlueprintInteractive Single-File HTML Prototype BlueprintTo demonstrate operational workflows to Student Affairs prior to full cloud deployment, developers can deploy a single-file HTML prototype (index.html). The prototype loads Tailwind CSS via CDN, uses browser localStorage as an in-memory database, and includes sample Nile University campus data.HTML<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NileFound - Campus Lost & Found Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 pb-12">
+  <header class="bg-emerald-700 text-white p-4 sticky top-0 z-50 shadow-md flex justify-between items-center">
+    <div>
+      <h1 class="text-xl font-bold tracking-wide">NileFound</h1>
+      <p class="text-xs text-emerald-200">Nile University Lost & Found Portal</p>
+    </div>
+    <span id="network-status" class="text-xs bg-emerald-800 px-2 py-1 rounded border border-emerald-600">Online</span>
+  </header>
+
+  <main class="max-w-md mx-auto p-4 space-y-4">
+    <div class="flex border-b border-slate-200 bg-white rounded-t p-1 shadow-sm">
+      <button onclick="switchTab('feed')" id="tab-feed" class="flex-1 py-2 text-center text-sm font-semibold border-b-2 border-emerald-600 text-emerald-700">Feed</button>
+      <button onclick="switchTab('report')" id="tab-report" class="flex-1 py-2 text-center text-sm font-semibold text-slate-500">Report Item</button>
+      <button onclick="switchTab('admin')" id="tab-admin" class="flex-1 py-2 text-center text-sm font-semibold text-slate-500">Admin</button>
+    </div>
+
+    <section id="view-feed" class="space-y-3">
+      <div class="flex gap-2">
+        <input type="text" id="search-input" oninput="renderFeed()" placeholder="Search items (e.g. ID card, phone)..." class="w-full p-2 text-sm border rounded shadow-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+        <select id="location-filter" onchange="renderFeed()" class="p-2 text-sm border rounded shadow-sm bg-white">
+          <option value="">All Locations</option>
+          <option value="Ubangi STEM Lab">Ubangi STEM Lab</option>
+          <option value="Limpopo Bay (Law)">Limpopo Bay (Law)</option>
+          <option value="Nile Library">Nile Library</option>
+          <option value="Student Centre">Student Centre</option>
+          <option value="Male Hostel">Male Hostel</option>
+        </select>
+      </div>
+      <div id="feed-container" class="space-y-3"></div>
+    </section>
+
+    <section id="view-report" class="hidden bg-white p-4 rounded shadow space-y-3">
+      <h2 class="text-base font-bold border-b pb-2">Log Misplaced / Found Property</h2>
+      <div>
+        <label class="block text-xs font-semibold mb-1">Report Type</label>
+        <select id="form-type" onchange="toggleVerificationField()" class="w-full p-2 border text-sm rounded">
+          <option value="LOST">I Lost Something</option>
+          <option value="FOUND">I Found Something</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold mb-1">Title</label>
+        <input type="text" id="form-title" placeholder="e.g. Blue Student ID Card" class="w-full p-2 border text-sm rounded">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold mb-1">Campus Location</label>
+        <select id="form-location" class="w-full p-2 border text-sm rounded">
+          <option value="Ubangi STEM Lab">Ubangi STEM Lab</option>
+          <option value="Limpopo Bay (Law)">Limpopo Bay (Law)</option>
+          <option value="Nile Library">Nile Library</option>
+          <option value="Student Centre">Student Centre</option>
+          <option value="Niger House">Niger House</option>
+          <option value="Male Hostel">Male Hostel</option>
+          <option value="Female Hostel">Female Hostel</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold mb-1">Description</label>
+        <textarea id="form-desc" placeholder="Provide general details..." class="w-full p-2 border text-sm rounded h-20"></textarea>
+      </div>
+      <div id="verification-group" class="hidden bg-amber-50 p-2 rounded border border-amber-200">
+        <label class="block text-xs font-semibold text-amber-800 mb-1">Hidden Verification Detail (Private)</label>
+        <input type="text" id="form-verification" placeholder="e.g. Scratch on back cover / lockscreen photo" class="w-full p-2 border text-sm rounded">
+        <p class="text-[10px] text-amber-600 mt-1">This detail will never be shown publicly. Claimants must match this.</p>
+      </div>
+      <button onclick="submitReport()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded text-sm shadow">Submit Report</button>
+    </section>
+
+    <section id="view-admin" class="hidden bg-white p-4 rounded shadow space-y-3">
+      <h2 class="text-base font-bold border-b pb-2">Student Services Oversight Console</h2>
+      <div id="admin-stats" class="grid grid-cols-2 gap-2 text-center">
+        <div class="bg-slate-100 p-2 rounded"><span class="block text-lg font-bold text-emerald-700" id="stat-total">0</span><span class="text-[10px] text-slate-500">Total Listings</span></div>
+        <div class="bg-slate-100 p-2 rounded"><span class="block text-lg font-bold text-amber-600" id="stat-pending">0</span><span class="text-[10px] text-slate-500">Pending Claims</span></div>
+      </div>
+      <div id="admin-items-list" class="space-y-2 text-xs"></div>
+    </section>
+  </main>
+
+  <script>
+    const defaultData = [
+      { id: '1', type: 'FOUND', title: 'Student ID Card', location: 'Ubangi STEM Lab', desc: 'Found near Lab 3 entrance. Blue lanyard attached.', status: 'ACTIVE', sensitive: true, verification: 'Matric No ends in 042' },
+      { id: '2', type: 'LOST', title: 'Scientific Calculator (FX-991EX)', location: 'Nile Library', desc: 'Silver cover casing with masking tape on back.', status: 'ACTIVE', sensitive: false, verification: '' }
+    ];
+
+    if (!localStorage.getItem('nilefound_data')) {
+      localStorage.setItem('nilefound_data', JSON.stringify(defaultData));
+    }
+
+    function getData() { return JSON.parse(localStorage.getItem('nilefound_data')); }
+    function saveData(data) { localStorage.setItem('nilefound_data', JSON.stringify(data)); }
+
+    function switchTab(tab) {
+      ['feed', 'report', 'admin'].forEach(t => {
+        document.getElementById(`view-${t}`).classList.add('hidden');
+        document.getElementById(`tab-${t}`).classList.remove('border-b-2', 'border-emerald-600', 'text-emerald-700');
+        document.getElementById(`tab-${t}`).classList.add('text-slate-500');
+      });
+      document.getElementById(`view-${tab}`).classList.remove('hidden');
+      document.getElementById(`tab-${tab}`).classList.add('border-b-2', 'border-emerald-600', 'text-emerald-700');
+      document.getElementById(`tab-${tab}`).classList.remove('text-slate-500');
+      if (tab === 'feed') renderFeed();
+      if (tab === 'admin') renderAdmin();
+    }
+
+    function toggleVerificationField() {
+      const type = document.getElementById('form-type').value;
+      const group = document.getElementById('verification-group');
+      if (type === 'FOUND') group.classList.remove('hidden');
+      else group.classList.add('hidden');
+    }
+
+    function submitReport() {
+      const data = getData();
+      const newItem = {
+        id: Date.now().toString(),
+        type: document.getElementById('form-type').value,
+        title: document.getElementById('form-title').value,
+        location: document.getElementById('form-location').value,
+        desc: document.getElementById('form-desc').value,
+        verification: document.getElementById('form-verification').value,
+        status: 'ACTIVE',
+        sensitive: document.getElementById('form-title').value.toLowerCase().includes('id')
+      };
+      if (!newItem.title) return alert('Please enter a title');
+      data.unshift(newItem);
+      saveData(data);
+      alert('Report logged successfully!');
+      switchTab('feed');
+    }
+
+    function renderFeed() {
+      const data = getData();
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const loc = document.getElementById('location-filter').value;
+      const container = document.getElementById('feed-container');
+      container.innerHTML = '';
+
+      const filtered = data.filter(item => 
+        (item.title.toLowerCase().includes(search) || item.desc.toLowerCase().includes(search)) &&
+        (loc === '' || item.location === loc)
+      );
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<p class="text-xs text-center text-slate-400 py-6">No matching lost or found records on campus.</p>`;
+        return;
+      }
+
+      filtered.forEach(item => {
+        const card = document.createElement('div');
+        card.className = "bg-white p-3 rounded shadow-sm border border-slate-100 space-y-2";
+        card.innerHTML = `
+          <div class="flex justify-between items-start">
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded ${item.type === 'LOST' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}">${item.type}</span>
+            <span class="text-[10px] text-slate-400">${item.location}</span>
+          </div>
+          <h3 class="text-sm font-bold ${item.sensitive ? 'blur-[2px] select-none' : ''}">${item.title}</h3>
+          <p class="text-xs text-slate-600">${item.desc}</p>
+          ${item.type === 'FOUND' ? `<button onclick="promptClaim('${item.id}')" class="w-full mt-2 bg-slate-800 text-white text-xs py-1.5 rounded hover:bg-slate-900">Claim This Item</button>` : ''}
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function promptClaim(id) {
+      const ans = prompt("To claim this item, describe a hidden attribute (e.g. lockscreen, sticker, internal contents):");
+      if (ans) {
+        alert("Claim submitted to finder and Student Services desk for verification.");
+      }
+    }
+
+    function renderAdmin() {
+      const data = getData();
+      document.getElementById('stat-total').innerText = data.length;
+      document.getElementById('stat-pending').innerText = data.filter(i => i.status === 'CLAIM_PENDING').length;
+      const list = document.getElementById('admin-items-list');
+      list.innerHTML = '';
+      data.forEach(i => {
+        list.innerHTML += `
+          <div class="p-2 border rounded flex justify-between items-center">
+            <div>
+              <p class="font-bold">${i.title} (${i.type})</p>
+              <p class="text-[10px] text-slate-400">${i.location} | Hidden: ${i.verification || 'None'}</p>
+            </div>
+            <button onclick="deleteItem('${i.id}')" class="text-red-600 hover:underline">Purge</button>
+          </div>
+        `;
+      });
+    }
+
+    function deleteItem(id) {
+      let data = getData().filter(i => i.id !== id);
+      saveData(data);
+      renderAdmin();
+    }
+
+    window.addEventListener('online', () => document.getElementById('network-status').innerText = 'Online');
+    window.addEventListener('offline', () => document.getElementById('network-status').innerText = 'Offline (Cached)');
+
+    renderFeed();
+  </script>
+</body>
+</html>
+Production Implementation PlanThe production build follows a sequential engineering progression:Toolchain Setup: Initialize React, Vite, Tailwind CSS, and PWA plugins.Backend Configuration: Deploy PostgreSQL schema, RLS policies, and authentication triggers on Supabase.Offline Engine Construction: Implement IndexedDB caching handlers and Service Worker sync background queues.Media Processing Module: Integrate client-side Canvas image downscaling algorithms.UI & Matching Integration: Construct React views, bind state management, and implement the proximity matching logic.Continuous Deployment: Connect the repository to Cloudflare Pages for automated edge building.Step 1: Toolchain SetupExecute project initialization commands:Bashnpm create vite@latest nilefound -- --template react
+cd nilefound
+npm install -D tailwindcss postcss autoprefixer vite-plugin-pwa
+npx tailwindcss init -p
+npm install @supabase/supabase-js idb lucide-react
+Step 2: Client-Side Image Compression Module (src/utils/imageCompressor.js)Implement canvas-based client image downscaling prior to upload:JavaScript/**
+ * Downscales and compresses an image file using HTML5 Canvas.
+ * @param {File} file - Raw image file from file input.
+ * @param {number} maxWidth - Maximum allowed width in pixels (default 1024px).
+ * @param {number} quality - Compression quality ratio between 0.0 and 1.0 (default 0.7).
+ * @returns {Promise<Blob>} Compressed JPEG blob under target size limit.
+ */
+export async function compressImage(file, maxWidth = 1024, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Canvas image compression failed.'));
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+    };
+    reader.onerror = (error) => reject(error);
+  });
+}
+Step 3: Offline Storage Engine (src/utils/offlineQueue.js)Manage local offline drafts using IndexedDB, auto-flushing records when connectivity resumes:JavaScriptimport { openDB } from 'idb';
+import { supabase } from '../supabaseClient';
+
+const DB_NAME = 'NileFoundOfflineDB';
+const STORE_NAME = 'draft_reports';
+
+export async function initDB() {
+  return openDB(DB_NAME, 1, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+      }
+    },
+  });
+}
+
+export async function saveDraftOffline(reportData) {
+  const db = await initDB();
+  await db.add(STORE_NAME, { ...reportData, timestamp: Date.now() });
+}
+
+export async function syncOfflineDrafts() {
+  if (!navigator.onLine) return;
+  const db = await initDB();
+  const drafts = await db.getAll(STORE_NAME);
+
+  for (const draft of drafts) {
+    try {
+      const { id, timestamp, ...payload } = draft;
+      const { error } = await supabase.from('items').insert([payload]);
+      if (!error) {
+        await db.delete(STORE_NAME, id);
+      }
+    } catch (err) {
+      console.error('Failed to auto-sync draft report:', err);
+    }
+  }
+}
+
+window.addEventListener('online', syncOfflineDrafts);
+Quality Assurance, Testing Framework, and Edge Case AnalysisUsability Testing ProtocolUsability evaluation conducts scenario-based testing with five representative students across distinct university faculties.Task IDTask DescriptionTarget WorkflowSuccess ThresholdMeasurement MetricTask 1Log a misplaced scientific calculator at Ubangi STEM Lab while throttling network to simulated 3G.Form completion efficiency and offline caching verification.Completion within $< 90$ seconds.Task Completion Time, System Usability Scale (SUS) score.Task 2Locate a found Student ID card on the public feed and submit an ownership claim.Discovery filtering, UI clarity, blur verification.Completion within $< 45$ seconds.Click Error Rate, Navigation Friction Score.Task 3Review a pending claim as an item finder, validate answer, and initiate WhatsApp contact.Verification engine comprehension and contact revelation.Completion within $< 30$ seconds.Success Rate, Subjective Friction Feedback.Edge Case Failure MatrixScenario / Edge CaseSystem Failure RiskAutomated Technical Handling StrategyDuplicate Item ReportingMultiple finders report the same lost item, creating feed clutter.Rule-based proximity engine flags duplicate candidates if $S(q, d) \ge 0.85$ on location, category, and date window. System prompts user to link to existing post.Incorrect Verification ResponseClaimant submits wrong answer to hidden verification attribute.Claim state sets to REJECTED. System enforces maximum 3 claim attempts per user per item within 24 hours to prevent brute-force guessing.Spam / Abusive SubmissionsMalicious user posts inappropriate content or spam text.Client-side rate limiting (max 3 posts per hour per verified user). Admin console features single-click purge and user profile suspension flags.Network Loss Mid-UploadNetwork connection drops during client image transmission.Image blob remains serialized in IndexedDB offline storage queue. Upload retries automatically via Exponential Backoff upon online event firing.Account Identity SpoofingNon-university user attempts registration with external domain.Supabase Auth Regex domain validation policy enforces exact string matches for institutional suffixes (@nileuniversity.edu.ng).Rollout Strategy, Institutional Governance, and SustainabilityPhased Campus Rollout PlanPhase 1: Controlled Pilot (Weeks 1–4): Deploy exclusively within the Ubangi STEM Laboratory Building and the Faculty of Computing / Software Engineering departments. Post QR code flyers linking to the PWA in computer laboratories and study lounges.Phase 2: Residential Expansion (Weeks 5–8): Expand coverage to Male and Female On-Campus Hostels and the Limpopo Bay Law Faculty building. Onboard hostel security officers and reception desk personnel to record physical items deposited at residential desks.Phase 3: Campus-Wide Institutional Adoption (Weeks 9+): Transfer master administrative access to the Student Services Centre (Room 101) and Nile House Security Administration. Embed NileFound onboarding links into orientation packages for incoming undergraduate students.Strategic Pitch for Student AffairsPresenting NileFound to university administrators focuses on operational control and risk reduction. The platform replaces unindexed WhatsApp messaging with an audited central register. Security is enforced through hidden verification details that prevent wrongful handovers, while administrators maintain complete operational control via a moderation dashboard tracking physical holding locations at Nile House or hostel desks. Furthermore, technical compliance with the Nigeria Data Protection Act (NDPA) 2023 mitigates legal risks regarding student data privacy.Long-Term Sustainability and Handover FrameworkTo maintain the system after founding developers graduate, the project repository should be hosted under an open-source organization co-managed by the Department of Software Engineering and the Nile Collective Lab (Entrepreneurship & Innovation Hub at the Student Services Centre). Complete documentation—including API references, database ERDs, deployment guides for Cloudflare Pages/Supabase, and administrative SOPs—must be archived. Ongoing platform maintenance can be passed to subsequent cohorts of Computer Engineering students as structured course projects.Portfolio and Competition AlignmentTarget Platform / CompetitionStrategic Alignment & Value PropositionWema Bank Hackaholics CompetitionQualifies for the Social Impact Track by solving campus administrative friction and the Hackathon Track by demonstrating offline-first progressive web app design.NITDA Tertiary Software AwardsDemonstrates adherence to national data privacy standards under NDPA 2023, showcasing technical compliance in higher-education software.Engineering Internship PortfolioDemonstrates full-stack software development skills, including offline service workers, client-side resource compression, deterministic matching algorithms, and PostgreSQL Row-Level Security.ConclusionThe NileFound architectural blueprint delivers a practical engineering design for an offline-first lost and found Progressive Web Application at Nile University of Nigeria. By combining client-side image compression, IndexedDB offline caching, a deterministic proximity matching algorithm, and PostgreSQL Row-Level Security, the platform addresses current operational shortcomings while remaining within free-tier resource bounds. Implementing the single-file HTML prototype provides an immediate path to validate user workflows with students and secure administrative backing from the Student Services Centre.
