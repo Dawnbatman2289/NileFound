@@ -94,7 +94,7 @@ export const SECURITY_INTERVIEW_GUIDE = [
       'Can we restrict accounts strictly to @nileuniversity.edu.ng Google Workspace single-sign-on?',
       'Who bears liability if a high-value item is disputed or reported stolen?'
     ],
-    riskToValidate: 'Administrative bureaucracy or refusal to endorse unofficial student tools unless vetted for student data privacy (NDPA 2023).'
+    riskToValidate: 'Administrative bureaucracy or refusal to endorse unofficial student tools unless vetted for student data privacy.'
   }
 ];
 
@@ -102,25 +102,25 @@ export const SUCCESS_METRICS = [
   {
     metric: 'Return Rate (%)',
     formula: '(Successfully Returned Items ÷ Total Reported Found Items) × 100',
-    target: '>= 45% within 14 days',
-    benchmark: 'WhatsApp informal channels estimated at < 15% return rate.'
+    target: '>= 45% within 14 days (my assumption, to be validated)',
+    benchmark: 'Baseline: Unmeasured in informal WhatsApp groups (to be determined in pilot)'
   },
   {
     metric: 'Median Time-to-Return (Hours)',
     formula: 'Median(Timestamp of "Returned" - Timestamp of "Reported")',
-    target: '< 24 Hours',
-    benchmark: 'Currently takes 3-7 days of asking across 5 different group chats.'
+    target: '< 24 Hours (my assumption, to be validated)',
+    benchmark: 'Baseline: Unmeasured (informal asking across multiple chats)'
   },
   {
     metric: 'False Claim Prevention Rate (%)',
     formula: '(Rejected / Disputed Claims ÷ Total Claim Attempts) × 100',
-    target: '100% of unverified claims prevented from revealing finder contact',
-    benchmark: 'In WhatsApp groups, anyone with the finder\'s number can call and lie.'
+    target: '100% of unverified claims prevented from revealing finder contact (my assumption, to be validated)',
+    benchmark: 'Baseline: Unmeasured (WhatsApp group finders post contact numbers publicly)'
   },
   {
     metric: 'Weekly Active Finders (WAF)',
     formula: 'Count of unique students logging or checking found items weekly',
-    target: '50+ active reports per week during exam and test periods',
-    benchmark: 'Exam periods (Midterms/Finals) see 300% surge in lost calculators and IDs.'
+    target: '50+ active reports per week during exam and test periods (my assumption, to be validated)',
+    benchmark: 'Baseline: Unmeasured (informal chatter spikes during exam periods)'
   }
 ];

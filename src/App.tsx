@@ -2,9 +2,8 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * 
- * NileFound - Main Application Shell
+ * NileFound - Production Pilot Web App
  * Engineered for Nile University of Nigeria, Abuja
- * Mentorship and Co-building for Ayomide (100L Computer Engineering)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -18,13 +17,36 @@ import { AdminPanel } from './components/AdminPanel.tsx';
 import { LoginPage } from './components/LoginPage.tsx';
 import { ReportModal } from './components/ReportModal.tsx';
 import { ClaimModal } from './components/ClaimModal.tsx';
+import { PrivacyModal } from './components/PrivacyModal.tsx';
 import { CampusItem, ClaimRecord, User } from './types/index.ts';
-import { INITIAL_ITEMS, INITIAL_CLAIMS } from './data/mockItems.ts';
+import { DEMO_ITEMS, DEMO_CLAIMS, INITIAL_ITEMS, INITIAL_CLAIMS } from './data/mockItems.ts';
 import { expireOldItems } from './utils/admin.ts';
 
 export default function App() {
+  // Demo Mode toggle: Real mode starts empty by default
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
+    return localStorage.getItem('nilefound_demo_mode') === 'true';
+  });
+
+  // Builder mode gating: Accessible only via ?builder=1 or footer link
+  const [builderMode, setBuilderMode] = useState<boolean>(() => {
+    return window.location.search.includes('builder=1');
+  });
+
   const [items, setItems] = useState<CampusItem[]>(() => {
-    const saved = localStorage.getItem('nilefound_items_v1');
+    if (isDemoMode) {
+      const saved = localStorage.getItem('nilefound_demo_items_v1');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch {
+          return DEMO_ITEMS;
+        }
+      }
+      return DEMO_ITEMS;
+    }
+
+    const saved = localStorage.getItem('nilefound_real_items_v1');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -36,7 +58,19 @@ export default function App() {
   });
 
   const [claims, setClaims] = useState<ClaimRecord[]>(() => {
-    const saved = localStorage.getItem('nilefound_claims_v1');
+    if (isDemoMode) {
+      const saved = localStorage.getItem('nilefound_demo_claims_v1');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch {
+          return DEMO_CLAIMS;
+        }
+      }
+      return DEMO_CLAIMS;
+    }
+
+    const saved = localStorage.getItem('nilefound_real_claims_v1');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -47,44 +81,74 @@ export default function App() {
     return INITIAL_CLAIMS;
   });
 
-  // Default active user is Ayomide (Admin) so you can immediately explore and use both student & admin tools
+  // Active user session (defaults to null or saved student/staff session)
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('nilefound_user_v1');
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch {
-        // Fallback default
+        return null;
       }
     }
+    // Default session for pilot testing
     return {
       id: 'admin-ayomide',
       name: 'Ayomide',
       email: 'ayomide2289@gmail.com',
       role: 'admin',
       matricNumber: '24/ENG/0192',
-      department: 'Computer Engineering (100L)',
+      department: 'Computer Engineering',
       isAdmin: true
     };
   });
 
-  const [activeTab, setActiveTab] = useState<AppTab>('admin');
+  // Students and staff land on Campus Feed by default
+  const [activeTab, setActiveTab] = useState<AppTab>('feed');
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [lowDataMode, setLowDataMode] = useState<boolean>(() => {
     return localStorage.getItem('nilefound_low_data') === 'true';
   });
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [selectedItemForClaim, setSelectedItemForClaim] = useState<CampusItem | null>(null);
   const [savedDraftCount, setSavedDraftCount] = useState<number>(0);
 
-  // Sync state to localStorage
+  // Sync state to localStorage according to demo mode
   useEffect(() => {
-    localStorage.setItem('nilefound_items_v1', JSON.stringify(items));
-  }, [items]);
+    localStorage.setItem('nilefound_demo_mode', String(isDemoMode));
+    if (isDemoMode) {
+      localStorage.setItem('nilefound_demo_items_v1', JSON.stringify(items));
+    } else {
+      localStorage.setItem('nilefound_real_items_v1', JSON.stringify(items));
+    }
+  }, [items, isDemoMode]);
 
   useEffect(() => {
-    localStorage.setItem('nilefound_claims_v1', JSON.stringify(claims));
-  }, [claims]);
+    if (isDemoMode) {
+      localStorage.setItem('nilefound_demo_claims_v1', JSON.stringify(claims));
+    } else {
+      localStorage.setItem('nilefound_real_claims_v1', JSON.stringify(claims));
+    }
+  }, [claims, isDemoMode]);
+
+  // Handle switching between Demo Mode and Real Mode
+  const handleToggleDemoMode = (newMode: boolean) => {
+    setIsDemoMode(newMode);
+    if (newMode) {
+      // Load demo data
+      const saved = localStorage.getItem('nilefound_demo_items_v1');
+      setItems(saved ? JSON.parse(saved) : DEMO_ITEMS);
+      const savedClaims = localStorage.getItem('nilefound_demo_claims_v1');
+      setClaims(savedClaims ? JSON.parse(savedClaims) : DEMO_CLAIMS);
+    } else {
+      // Load real empty pilot data
+      const saved = localStorage.getItem('nilefound_real_items_v1');
+      setItems(saved ? JSON.parse(saved) : []);
+      const savedClaims = localStorage.getItem('nilefound_real_claims_v1');
+      setClaims(savedClaims ? JSON.parse(savedClaims) : []);
+    }
+  };
 
   useEffect(() => {
     if (currentUser) {
@@ -123,10 +187,7 @@ export default function App() {
   };
 
   const handleClaimSuccess = (newClaim: ClaimRecord) => {
-    // Add to claims queue for admin review
     setClaims((prev) => [newClaim, ...prev]);
-
-    // Mark item status as claim_requested
     setItems((prev) =>
       prev.map((it) => (it.id === newClaim.itemId ? { ...it, status: 'claim_requested' } : it))
     );
@@ -173,6 +234,9 @@ export default function App() {
         isOnline={isOnline}
         lowDataMode={lowDataMode}
         setLowDataMode={setLowDataMode}
+        isDemoMode={isDemoMode}
+        setIsDemoMode={handleToggleDemoMode}
+        builderMode={builderMode}
         onOpenReportModal={() => setIsReportModalOpen(true)}
         savedDraftCount={savedDraftCount}
         currentUser={currentUser}
@@ -209,7 +273,7 @@ export default function App() {
             currentUser={currentUser}
             onLogin={(user) => {
               setCurrentUser(user);
-              if (user.role === 'admin') {
+              if (user.role === 'admin' || user.role === 'security') {
                 setActiveTab('admin');
               } else {
                 setActiveTab('feed');
@@ -217,16 +281,15 @@ export default function App() {
             }}
             onLogout={() => setCurrentUser(null)}
             onNavigateToFeed={() => setActiveTab('feed')}
+            isDemoMode={isDemoMode}
           />
         )}
 
-        {activeTab === 'prototype' && <SystemDesignView />}
-
-        {activeTab === 'research' && <ResearchKitView />}
-
-        {activeTab === 'metrics' && <MetricsView />}
-
-        {activeTab === 'career' && <CareerGuideView />}
+        {/* Builder Scaffolding Views (Only rendered if builder mode is open) */}
+        {builderMode && activeTab === 'prototype' && <SystemDesignView />}
+        {builderMode && activeTab === 'research' && <ResearchKitView />}
+        {builderMode && activeTab === 'metrics' && <MetricsView />}
+        {builderMode && activeTab === 'career' && <CareerGuideView />}
       </main>
 
       {/* Modals */}
@@ -243,8 +306,13 @@ export default function App() {
         onSuccessClaim={handleClaimSuccess}
       />
 
+      <PrivacyModal
+        isOpen={isPrivacyModalOpen}
+        onClose={() => setIsPrivacyModalOpen(false)}
+      />
+
       {/* Footer */}
-      <footer className="bg-white border-t border-stone-200 mt-12 py-6 px-4 text-xs text-stone-500">
+      <footer className="bg-white border-t border-stone-200 mt-12 py-5 px-4 text-xs text-stone-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
           <div className="flex items-center gap-2">
             <span className="font-bold text-stone-800">NileFound</span>
@@ -252,12 +320,22 @@ export default function App() {
             <span>Nile University of Nigeria, Abuja</span>
           </div>
 
-          <div className="text-[11px] text-stone-400">
-            Engineered with privacy-first standards • Aligned with Nigeria Data Protection Act (NDPA) 2023
+          <div className="flex items-center gap-2 text-[11px] text-stone-600">
+            <button
+              onClick={() => setIsPrivacyModalOpen(true)}
+              className="text-emerald-800 hover:text-emerald-950 underline font-medium"
+            >
+              Built with privacy in mind
+            </button>
           </div>
 
-          <div className="flex items-center gap-1.5 text-stone-600 font-medium">
-            <span>Co-built with Ayomide (100L CoE)</span>
+          <div className="flex items-center gap-2 text-stone-400 text-[11px]">
+            <button
+              onClick={() => setBuilderMode(!builderMode)}
+              className="text-stone-400 hover:text-stone-600 underline"
+            >
+              {builderMode ? 'Hide Builder Notes' : 'Builder Notes'}
+            </button>
           </div>
         </div>
       </footer>

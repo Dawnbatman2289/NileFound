@@ -2,31 +2,15 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * 
- * NileFound Campus Locations & Initial Seed Data
- * Mapped to the official Nile Learning City masterplan (Cadastral Zone C-00, Abuja).
+ * NileFound Demo Items & Seed Data
+ * Sample records for testing the platform in Demo Data Mode.
+ * Real production/pilot mode starts with an empty item list.
  */
 
 import { CampusItem, ClaimRecord } from '../types/index.ts';
+import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
 
-export const NILE_LOCATIONS = [
-  'Ubangi House (STEM Laboratories & Environmental Sciences)',
-  'Limpopo Bay (Faculty of Law & Postgraduate Studies)',
-  'Niger House (Faculty of Arts & Social Sciences)',
-  'Nile House (Registry, Bursary, ICT & Security Admin)',
-  'Volta Academic Building',
-  'Congo House',
-  'Central Nile Library (Ground & 1st Floor)',
-  'Nile Student Centre & Student Services Centre (Room 101)',
-  'Male Hostel Block A (Undergraduate)',
-  'Male Hostel Block B',
-  'Female Hostel Block A',
-  'Female Hostel Block B',
-  'Picnic Arena & Food Court',
-  'Sports Complex & Football Pitch',
-  'Main Campus Gate Security Post',
-  'Campus Shuttle Bus Stop / Car Park',
-  'Other Campus Area'
-];
+export const NILE_LOCATIONS = NILE_CAMPUS_LOCATIONS;
 
 export const CAMPUS_CLUSTERS: Record<string, string[]> = {
   'stem_cluster': [
@@ -35,17 +19,17 @@ export const CAMPUS_CLUSTERS: Record<string, string[]> = {
     'Congo House'
   ],
   'admin_law_cluster': [
-    'Nile House (Registry, Bursary, ICT & Security Admin)',
+    'Nile House (Administration & Security Office)',
     'Limpopo Bay (Faculty of Law & Postgraduate Studies)',
     'Niger House (Faculty of Arts & Social Sciences)',
-    'Nile Student Centre & Student Services Centre (Room 101)'
+    'Nile Student Centre'
   ],
   'residential_cluster': [
-    'Male Hostel Block A (Undergraduate)',
+    'Male Hostel Block A',
     'Male Hostel Block B',
     'Female Hostel Block A',
     'Female Hostel Block B',
-    'Sports Complex & Football Pitch'
+    'Sports Complex'
   ]
 };
 
@@ -62,24 +46,24 @@ export const CATEGORIES = [
   { id: 'other', label: 'Other Item', icon: 'Package', sensitive: false }
 ];
 
-export const INITIAL_ITEMS: CampusItem[] = [
+export const DEMO_ITEMS: CampusItem[] = [
   {
-    id: 'item-1',
+    id: 'demo-item-1',
     type: 'found',
-    title: 'Nile University Student ID Card',
+    title: 'Student ID Card',
     category: 'student_id',
-    description: 'Found near Lab 3 entrance in Ubangi House. Attached to a green and gold Nile lanyard. Matric number starts with 23/.... Surname starts with O.',
+    description: 'Found near Lab 3 entrance in Ubangi House. Attached to a green and gold Nile lanyard. Handed over to Main Gate security post.',
     location: 'Ubangi House (STEM Laboratories & Environmental Sciences)',
     dateLostOrFound: '2026-10-23',
     status: 'open',
-    holdingLocation: 'library_desk',
+    holdingLocation: 'security_main_gate',
     isSensitiveId: true,
-    verificationQuestion: 'What is the full matriculation number and department shown on the front?',
+    verificationQuestion: 'What department and level is on the ID card?',
     reportedByEmailDomain: 'nileuniversity.edu.ng',
     createdAt: '2026-10-23T11:30:00Z'
   },
   {
-    id: 'item-2',
+    id: 'demo-item-2',
     type: 'found',
     title: 'Oraimo 20000mAh Power Bank (Black)',
     category: 'power_bank',
@@ -94,11 +78,11 @@ export const INITIAL_ITEMS: CampusItem[] = [
     createdAt: '2026-10-22T16:15:00Z'
   },
   {
-    id: 'item-3',
+    id: 'demo-item-3',
     type: 'lost',
     title: 'Casio FX-991EX ClassWiz Calculator',
     category: 'calculator',
-    description: 'Silver and black casing scientific calculator with masking tape on back. Left behind after MTH 101 tutorial in Ubangi House. Has initials "AO" inscribed inside battery cover.',
+    description: 'Silver and black casing scientific calculator with masking tape on back. Left behind after MTH 101 tutorial in Ubangi House. Has initials inscribed inside battery cover.',
     location: 'Ubangi House (STEM Laboratories & Environmental Sciences)',
     dateLostOrFound: '2026-10-22',
     status: 'open',
@@ -108,12 +92,12 @@ export const INITIAL_ITEMS: CampusItem[] = [
     createdAt: '2026-10-22T18:00:00Z'
   },
   {
-    id: 'item-4',
+    id: 'demo-item-4',
     type: 'found',
     title: 'Room 214 Brass Key with Green Lanyard',
     category: 'keys',
     description: 'Single brass room door key with green fabric lanyard. Found on the concrete walkway towards Male Hostel Block A.',
-    location: 'Male Hostel Block A (Undergraduate)',
+    location: 'Male Hostel Block A',
     dateLostOrFound: '2026-10-24',
     status: 'claim_requested',
     holdingLocation: 'security_main_gate',
@@ -123,7 +107,7 @@ export const INITIAL_ITEMS: CampusItem[] = [
     createdAt: '2026-10-24T08:00:00Z'
   },
   {
-    id: 'item-5',
+    id: 'demo-item-5',
     type: 'found',
     title: 'Blue STEM Lab Coat (Size L)',
     category: 'lab_coat_clothing',
@@ -139,25 +123,19 @@ export const INITIAL_ITEMS: CampusItem[] = [
   }
 ];
 
-export const INITIAL_CLAIMS: ClaimRecord[] = [
+export const DEMO_CLAIMS: ClaimRecord[] = [
   {
-    id: 'claim-1',
-    itemId: 'item-4',
+    id: 'demo-claim-1',
+    itemId: 'demo-item-4',
     itemTitle: 'Room 214 Brass Key with Green Lanyard',
     claimantName: 'Tunde Bakare',
     claimantEmail: 'tunde.b@nileuniversity.edu.ng',
     submittedAnswer: "The green lanyard has 'Nile Faculty of Engineering 2027' printed in white letters on one side.",
     status: 'pending',
     createdAt: '2026-10-24T09:15:00Z'
-  },
-  {
-    id: 'claim-2',
-    itemId: 'item-1',
-    itemTitle: 'Nile University Student ID Card',
-    claimantName: 'Oluwaseun Okeke',
-    claimantEmail: 'o.okeke@nileuniversity.edu.ng',
-    submittedAnswer: 'Matriculation number is 23/0481, Computer Engineering Department, level 100.',
-    status: 'pending',
-    createdAt: '2026-10-23T15:00:00Z'
   }
 ];
+
+// In real pilot mode, items and claims start empty
+export const INITIAL_ITEMS: CampusItem[] = [];
+export const INITIAL_CLAIMS: ClaimRecord[] = [];

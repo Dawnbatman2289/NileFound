@@ -2,8 +2,8 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * 
- * NileFound Admin Panel (Custom-built for Ayomide & Campus Security)
- * Layout: Top KPI summary metrics, followed by claims approval queue, custody ledger, and moderation tools.
+ * NileFound Admin Panel
+ * Layout: Operational summary metrics, claims approval queue, custody ledger, and post moderation.
  * Main Action: Review verification answers, approve/reject claims, and audit physical custody items.
  */
 
@@ -15,16 +15,12 @@ import {
   Trash2, 
   Archive, 
   Download, 
-  MapPin, 
-  Clock, 
   Check, 
-  AlertCircle,
-  Building,
-  KeyRound,
-  FileSpreadsheet
+  KeyRound
 } from 'lucide-react';
 import { CampusItem, ClaimRecord, User } from '../types/index.ts';
-import { generateCampusAuditReport, expireOldItems } from '../utils/admin.ts';
+import { generateCampusAuditReport } from '../utils/admin.ts';
+import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
 
 interface AdminPanelProps {
   currentUser: User | null;
@@ -81,7 +77,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       `"${i.location}"`,
       i.holdingLocation,
       i.status,
-      i.dateLostOrFound
+      formatDateDDMMYYYY(i.dateLostOrFound)
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
@@ -103,13 +99,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
         <h3 className="font-bold text-stone-900 text-base">Restricted Administrator Area</h3>
         <p className="text-xs text-stone-600 leading-relaxed">
-          This panel is specially reserved for Ayomide (System Administrator) and verified Nile University Campus Security officers.
+          This panel is restricted to verified administrators and Nile University Campus Security officers.
         </p>
         <button
           onClick={onNavigateToLogin}
           className="bg-emerald-800 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-emerald-900 transition-colors"
         >
-          Sign In as Ayomide (Admin)
+          Sign In to Authorized Account
         </button>
       </div>
     );
@@ -122,11 +118,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         <div>
           <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider mb-1">
             <KeyRound className="w-4 h-4" />
-            <span>Ayomide's Administrative Control Center</span>
+            <span>Admin Panel</span>
           </div>
-          <h2 className="text-lg font-bold">NileFound System & Custody Management</h2>
+          <h2 className="text-lg font-bold">Campus Custody & Verification Management</h2>
           <p className="text-xs text-emerald-200/90 mt-0.5 leading-relaxed">
-            Logged in as <strong>{currentUser.name}</strong> ({currentUser.email}). Verify student claims, track gate-held items, and export audit sheets.
+            Signed in as <strong>{currentUser.name}</strong> ({currentUser.email}). Verify claims, audit gate-held items, and export records.
           </p>
         </div>
 
@@ -136,7 +132,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             className="flex items-center gap-1.5 bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-lg border border-emerald-700 transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export CSV Report</span>
+            <span>Export CSV</span>
           </button>
           <button
             onClick={() => {
@@ -159,38 +155,46 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
-      {/* KPI Stats Grid */}
+      {/* KPI Stats Grid - real records only; "No data yet" when empty */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white p-4 rounded-xl border border-stone-200 text-left">
           <span className="text-[11px] font-bold text-stone-500 uppercase">Pending Claims</span>
           <div className="text-2xl font-extrabold text-amber-600 font-mono mt-1">
-            {stats.pendingClaims}
+            {claims.length === 0 ? 'No data yet' : stats.pendingClaims}
           </div>
-          <span className="text-[10px] text-stone-400">Awaiting your approval</span>
+          <span className="text-[10px] text-stone-400">
+            {claims.length === 0 ? 'No claims submitted' : 'Awaiting review'}
+          </span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-stone-200 text-left">
           <span className="text-[11px] font-bold text-stone-500 uppercase">At Main Gate Desk</span>
           <div className="text-2xl font-extrabold text-emerald-900 font-mono mt-1">
-            {stats.heldAtGate}
+            {items.length === 0 ? 'No data yet' : stats.heldAtGate}
           </div>
-          <span className="text-[10px] text-stone-400">In physical security custody</span>
+          <span className="text-[10px] text-stone-400">
+            {items.length === 0 ? 'No items recorded' : 'Physical custody'}
+          </span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-stone-200 text-left">
           <span className="text-[11px] font-bold text-stone-500 uppercase">Reunited Items</span>
           <div className="text-2xl font-extrabold text-stone-900 font-mono mt-1">
-            {stats.totalReturned}
+            {items.length === 0 ? 'No data yet' : stats.totalReturned}
           </div>
-          <span className="text-[10px] text-stone-400">Successfully returned</span>
+          <span className="text-[10px] text-stone-400">
+            {items.length === 0 ? 'No returns yet' : 'Verified handovers'}
+          </span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-stone-200 text-left">
           <span className="text-[11px] font-bold text-stone-500 uppercase">Return Rate</span>
           <div className="text-2xl font-extrabold text-emerald-700 font-mono mt-1">
-            {stats.returnRate}%
+            {stats.totalFound === 0 ? 'No data yet' : `${stats.returnRate}%`}
           </div>
-          <span className="text-[10px] text-stone-400">Target &gt;= 45%</span>
+          <span className="text-[10px] text-stone-400">
+            Target: &gt;= 45% (to be validated)
+          </span>
         </div>
       </div>
 
@@ -257,12 +261,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           Claim for: {claim.itemTitle}
                         </span>
                         <div className="text-xs text-stone-600 mt-1">
-                          Claimed by: <strong className="text-stone-900">{claim.claimantName}</strong> ({claim.claimantEmail})
+                          Claimant: <strong className="text-stone-900">{claim.claimantName}</strong> ({claim.claimantEmail})
                         </div>
                       </div>
 
                       <span className="text-[11px] text-stone-400">
-                        {new Date(claim.createdAt).toLocaleDateString()}
+                        {formatDateDDMMYYYY(claim.createdAt)}
                       </span>
                     </div>
 
@@ -270,7 +274,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-stone-50 p-3 rounded-lg border border-stone-200">
                       <div>
                         <span className="text-[10px] font-bold text-stone-500 uppercase block">
-                          Finder's Secret Verification Challenge:
+                          Finder's Verification Question:
                         </span>
                         <p className="text-stone-800 font-medium mt-0.5">
                           "{item?.verificationQuestion || 'No question set'}"
@@ -297,7 +301,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         className="flex items-center gap-1 px-3 py-1.5 bg-stone-100 hover:bg-rose-50 hover:text-rose-700 text-stone-700 text-xs font-semibold rounded-lg border border-stone-200 transition-colors"
                       >
                         <XCircle className="w-3.5 h-3.5" />
-                        <span>Reject (Mismatched Answer)</span>
+                        <span>Reject Claim</span>
                       </button>
 
                       <button
@@ -334,66 +338,72 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-stone-50 text-stone-700 border-b border-stone-200">
-                  <th className="py-2.5 px-3 font-semibold">Item Title</th>
-                  <th className="py-2.5 px-3 font-semibold">Custody Desk</th>
-                  <th className="py-2.5 px-3 font-semibold">Original Location</th>
-                  <th className="py-2.5 px-3 font-semibold">Status</th>
-                  <th className="py-2.5 px-3 font-semibold text-right">Physical Handover</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100 text-stone-700">
-                {physicalCustodyItems.map((item) => (
-                  <tr key={item.id} className="hover:bg-stone-50/70">
-                    <td className="py-3 px-3 font-semibold text-stone-900">
-                      {item.title}
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="bg-stone-100 text-stone-800 px-2 py-0.5 rounded text-[11px] font-medium">
-                        {item.holdingLocation === 'security_main_gate'
-                          ? 'Main Gate Security'
-                          : item.holdingLocation === 'student_affairs_office'
-                          ? 'Student Affairs'
-                          : 'Library Desk'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-stone-600">{item.location}</td>
-                    <td className="py-3 px-3">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                        item.status === 'returned'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : item.status === 'claim_requested'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-stone-100 text-stone-700'
-                      }`}>
-                        {item.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      {item.status !== 'returned' ? (
-                        <button
-                          onClick={() => {
-                            onUpdateItemStatus(item.id, 'returned');
-                            showNotification(`Marked "${item.title}" as physically returned.`);
-                          }}
-                          className="bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold px-2.5 py-1 rounded transition-colors"
-                        >
-                          Mark Handed Over
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-emerald-700 font-semibold flex items-center justify-end gap-1">
-                          <Check className="w-3.5 h-3.5" /> Reunited
-                        </span>
-                      )}
-                    </td>
+          {physicalCustodyItems.length === 0 ? (
+            <div className="p-8 text-center text-xs text-stone-500">
+              No items currently held in physical campus facility custody.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-stone-50 text-stone-700 border-b border-stone-200">
+                    <th className="py-2.5 px-3 font-semibold">Item</th>
+                    <th className="py-2.5 px-3 font-semibold">Custody Desk</th>
+                    <th className="py-2.5 px-3 font-semibold">Campus Location</th>
+                    <th className="py-2.5 px-3 font-semibold">Status</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-stone-100 text-stone-700">
+                  {physicalCustodyItems.map((item) => (
+                    <tr key={item.id} className="hover:bg-stone-50/70">
+                      <td className="py-3 px-3 font-semibold text-stone-900">
+                        {item.title}
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="bg-stone-100 text-stone-800 px-2 py-0.5 rounded text-[11px] font-medium">
+                          {item.holdingLocation === 'security_main_gate'
+                            ? 'Main Gate Security'
+                            : item.holdingLocation === 'student_affairs_office'
+                            ? 'Student Affairs'
+                            : 'Library Desk'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-stone-600">{item.location}</td>
+                      <td className="py-3 px-3">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                          item.status === 'returned'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : item.status === 'claim_requested'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-stone-100 text-stone-700'
+                        }`}>
+                          {item.status.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        {item.status !== 'returned' ? (
+                          <button
+                            onClick={() => {
+                              onUpdateItemStatus(item.id, 'returned');
+                              showNotification(`Marked "${item.title}" as physically returned.`);
+                            }}
+                            className="bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold px-2.5 py-1 rounded transition-colors"
+                          >
+                            Mark Handed Over
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-emerald-700 font-semibold flex items-center justify-end gap-1">
+                            <Check className="w-3.5 h-3.5" /> Reunited
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -403,59 +413,66 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="p-4 border-b border-stone-200">
             <h3 className="font-bold text-stone-900 text-sm">Post Moderation & Deletion</h3>
             <p className="text-xs text-stone-500 mt-0.5">
-              Review all campus items. Remove abusive, duplicate, or test posts with one click.
+              Review campus reports. Remove duplicate or test posts.
             </p>
           </div>
 
-          <div className="divide-y divide-stone-100">
-            {items.map((item) => (
-              <div key={item.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-stone-50">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded uppercase ${
-                      item.type === 'found' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                    }`}>
-                      {item.type}
-                    </span>
-                    <span className="font-bold text-xs text-stone-900">{item.title}</span>
-                    <span className="text-[11px] text-stone-400">({item.location})</span>
+          {items.length === 0 ? (
+            <div className="p-8 text-center text-xs text-stone-500">
+              No campus items reported yet.
+            </div>
+          ) : (
+            <div className="divide-y divide-stone-100">
+              {items.map((item) => (
+                <div key={item.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-stone-50">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded uppercase ${
+                        item.type === 'found' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                      }`}>
+                        {item.type}
+                      </span>
+                      <span className="font-bold text-xs text-stone-900">{item.title}</span>
+                      <span className="text-[11px] text-stone-400">({item.location})</span>
+                    </div>
+                    <p className="text-xs text-stone-600 line-clamp-1">{item.description}</p>
+                    <span className="text-[10px] text-stone-400">Date: {formatDateDDMMYYYY(item.dateLostOrFound)}</span>
                   </div>
-                  <p className="text-xs text-stone-600 line-clamp-1">{item.description}</p>
-                </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <select
-                    value={item.status}
-                    onChange={(e) => {
-                      onUpdateItemStatus(item.id, e.target.value as CampusItem['status']);
-                      showNotification(`Updated status for "${item.title}" to ${e.target.value}.`);
-                    }}
-                    className="text-xs py-1 px-2 border border-stone-200 rounded-md bg-white font-medium"
-                  >
-                    <option value="open">Open</option>
-                    <option value="claim_requested">Claim Requested</option>
-                    <option value="verified">Verified</option>
-                    <option value="returned">Returned</option>
-                    <option value="expired">Expired</option>
-                  </select>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <select
+                      value={item.status}
+                      onChange={(e) => {
+                        onUpdateItemStatus(item.id, e.target.value as CampusItem['status']);
+                        showNotification(`Updated status for "${item.title}" to ${e.target.value}.`);
+                      }}
+                      className="text-xs py-1 px-2 border border-stone-200 rounded-md bg-white font-medium"
+                    >
+                      <option value="open">Open</option>
+                      <option value="claim_requested">Claim Requested</option>
+                      <option value="verified">Verified</option>
+                      <option value="returned">Returned</option>
+                      <option value="expired">Expired</option>
+                    </select>
 
-                  <button
-                    onClick={() => {
-                      if (confirm(`Are you sure you want to delete "${item.title}"?`)) {
-                        onDeleteItem(item.id);
-                        showNotification(`Deleted item "${item.title}".`);
-                      }
-                    }}
-                    className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                    title="Delete item"
-                    aria-label="Delete item"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                    <button
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to delete "${item.title}"?`)) {
+                          onDeleteItem(item.id);
+                          showNotification(`Deleted item "${item.title}".`);
+                        }
+                      }}
+                      className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                      title="Delete item"
+                      aria-label="Delete item"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

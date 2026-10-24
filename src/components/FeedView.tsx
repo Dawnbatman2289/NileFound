@@ -1,6 +1,10 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ * 
+ * NileFound Campus Feed
+ * Displays searchable campus lost & found listings with privacy protections
+ * for student ID cards and dates formatted in DD/MM/YYYY.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -12,15 +16,16 @@ import {
   AlertCircle, 
   Lock, 
   Sparkles, 
-  Check, 
-  EyeOff, 
   Building2, 
   Filter,
-  CheckCircle2
+  CheckCircle2,
+  Shield
 } from 'lucide-react';
-import { CampusItem, ItemCategory, ItemType } from '../types/index.ts';
-import { CATEGORIES, NILE_LOCATIONS } from '../data/mockItems.ts';
+import { CampusItem, ItemType } from '../types/index.ts';
+import { CATEGORIES } from '../data/mockItems.ts';
+import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
 import { calculateMatchScore } from '../utils/matching.ts';
+import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
 
 interface FeedViewProps {
   items: CampusItem[];
@@ -50,7 +55,9 @@ export const FeedView: React.FC<FeedViewProps> = ({
       
       if (searchTerm.trim()) {
         const query = searchTerm.toLowerCase();
-        const matchTitle = item.title.toLowerCase().includes(query);
+        const isFoundIdCard = item.type === 'found' && item.category === 'student_id';
+        const displayTitle = isFoundIdCard ? 'A student ID card was found' : item.title;
+        const matchTitle = displayTitle.toLowerCase().includes(query);
         const matchDesc = item.description.toLowerCase().includes(query);
         const matchLoc = item.location.toLowerCase().includes(query);
         if (!matchTitle && !matchDesc && !matchLoc) return false;
@@ -59,7 +66,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
     });
   }, [items, selectedType, selectedCategory, selectedLocation, searchTerm]);
 
-  // Separate lost vs found for matching demo
+  // Separate lost vs found
   const lostItems = useMemo(() => items.filter(i => i.type === 'lost'), [items]);
   const foundItems = useMemo(() => items.filter(i => i.type === 'found'), [items]);
 
@@ -87,7 +94,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by keyword, item name, room, or building..."
+              placeholder="Search by keyword, item name, or building..."
               className="w-full text-xs pl-9 pr-3 py-2.5 rounded-lg border border-stone-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 bg-stone-50/50"
             />
             {searchTerm && (
@@ -161,7 +168,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
               className="w-full text-xs py-1.5 px-2 rounded-md border border-stone-200 bg-white focus:ring-1 focus:ring-emerald-600"
             >
               <option value="all">All Nile Campus Locations</option>
-              {NILE_LOCATIONS.map((loc) => (
+              {NILE_CAMPUS_LOCATIONS.map((loc) => (
                 <option key={loc} value={loc}>
                   {loc}
                 </option>
@@ -171,9 +178,9 @@ export const FeedView: React.FC<FeedViewProps> = ({
         </div>
       </div>
 
-      {/* Smart Match Suggestion Trigger */}
+      {/* Match Suggestion Panel: only when lost items exist */}
       {lostItems.length > 0 && (
-        <div className="bg-gradient-to-r from-emerald-900 to-teal-950 text-white rounded-xl p-4 shadow-sm border border-emerald-800">
+        <div className="bg-emerald-950 text-white rounded-xl p-4 shadow-xs border border-emerald-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-1">
               <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs uppercase tracking-wide">
@@ -181,7 +188,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
                 <span>Deterministic Campus Match Suggestions</span>
               </div>
               <p className="text-xs text-emerald-100/90 leading-relaxed max-w-xl">
-                Rule-based algorithm compares category (35%), campus zone (25%), date window (20%), and keyword overlap (20%) with zero API overhead.
+                Rule-based algorithm compares category, campus zone, and date window with zero API overhead.
               </p>
             </div>
 
@@ -192,7 +199,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
                   const itm = lostItems.find((l) => l.id === e.target.value);
                   setSelectedLostItemForMatch(itm || null);
                 }}
-                className="text-xs py-1.5 px-2 rounded-lg bg-emerald-800 text-white border border-emerald-700 focus:outline-hidden"
+                className="text-xs py-1.5 px-2 rounded-lg bg-emerald-900 text-white border border-emerald-700 focus:outline-hidden"
               >
                 <option value="">Select a Lost Report to match...</option>
                 {lostItems.map((l) => (
@@ -206,7 +213,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
 
           {/* Render match results if selected */}
           {selectedLostItemForMatch && (
-            <div className="mt-4 pt-3 border-t border-emerald-800/80 space-y-2">
+            <div className="mt-4 pt-3 border-t border-emerald-800 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-emerald-200">
                   Matches found for: <strong className="text-white">{selectedLostItemForMatch.title}</strong>
@@ -221,37 +228,41 @@ export const FeedView: React.FC<FeedViewProps> = ({
 
               {matchResults.length === 0 ? (
                 <p className="text-xs text-emerald-300/80 italic py-1">
-                  No matching found items currently score above 30%. As students report items, matches will appear here automatically.
+                  No matching found items currently score above 30%. As reports are logged, matches will appear here.
                 </p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                  {matchResults.map(({ foundItem, result }) => (
-                    <div
-                      key={foundItem.id}
-                      className="bg-emerald-800/60 border border-emerald-700 rounded-lg p-3 text-xs space-y-2"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <span className="text-amber-300 font-bold text-[11px]">
-                            {result.score}% Match Confidence
-                          </span>
-                          <h4 className="font-semibold text-white text-xs mt-0.5">{foundItem.title}</h4>
+                  {matchResults.map(({ foundItem, result }) => {
+                    const isFoundId = foundItem.type === 'found' && foundItem.category === 'student_id';
+                    const titleText = isFoundId ? 'A student ID card was found' : foundItem.title;
+                    return (
+                      <div
+                        key={foundItem.id}
+                        className="bg-emerald-900/80 border border-emerald-700 rounded-lg p-3 text-xs space-y-2"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="text-amber-300 font-bold text-[11px]">
+                              {result.score}% Match Confidence
+                            </span>
+                            <h4 className="font-semibold text-white text-xs mt-0.5">{titleText}</h4>
+                          </div>
+                          <button
+                            onClick={() => onClaimItem(foundItem)}
+                            className="bg-amber-400 hover:bg-amber-300 text-stone-900 text-[10px] font-bold px-2 py-1 rounded"
+                          >
+                            Verify Claim
+                          </button>
                         </div>
-                        <button
-                          onClick={() => onClaimItem(foundItem)}
-                          className="bg-amber-400 hover:bg-amber-300 text-stone-900 text-[10px] font-bold px-2 py-1 rounded"
-                        >
-                          Verify Claim
-                        </button>
-                      </div>
 
-                      <ul className="text-[11px] text-emerald-200/90 list-disc list-inside space-y-0.5">
-                        {result.reasons.map((r, idx) => (
-                          <li key={idx}>{r}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+                        <ul className="text-[11px] text-emerald-200/90 list-disc list-inside space-y-0.5">
+                          {result.reasons.map((r, idx) => (
+                            <li key={idx}>{r}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -264,24 +275,26 @@ export const FeedView: React.FC<FeedViewProps> = ({
         <div className="flex items-center justify-between text-xs text-stone-600 px-1">
           <span>Showing <strong>{filteredItems.length}</strong> items</span>
           {lowDataMode && (
-            <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-[11px] font-medium border border-amber-200">
+            <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded text-[11px] font-medium border border-amber-200">
               Low-Data Mode active: Photos hidden
             </span>
           )}
         </div>
 
         {filteredItems.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl border border-stone-200 space-y-3">
+          <div className="text-center py-12 bg-white rounded-xl border border-stone-200 space-y-3 p-6">
             <AlertCircle className="w-8 h-8 text-stone-400 mx-auto" />
-            <h3 className="font-semibold text-stone-700 text-sm">No items found matching your filter</h3>
+            <h3 className="font-semibold text-stone-800 text-sm">No items found</h3>
             <p className="text-xs text-stone-500 max-w-sm mx-auto">
-              Try clearing filters or search terms, or be the first to report this item!
+              {items.length === 0
+                ? 'No items have been reported yet in this pilot.'
+                : 'No items match your active filters or search keyword.'}
             </p>
             <button
               onClick={onOpenReportModal}
-              className="bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-emerald-800 transition-colors"
+              className="bg-emerald-800 text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-emerald-900 transition-colors"
             >
-              Report Item Now
+              Report an Item
             </button>
           </div>
         ) : (
@@ -289,6 +302,10 @@ export const FeedView: React.FC<FeedViewProps> = ({
             {filteredItems.map((item) => {
               const isFound = item.type === 'found';
               const isReturned = item.status === 'returned';
+              const isFoundIdCard = isFound && item.category === 'student_id';
+              
+              // Privacy rule: For found student ID cards, show only "A student ID card was found" and location
+              const displayTitle = isFoundIdCard ? 'A student ID card was found' : item.title;
 
               return (
                 <div
@@ -331,13 +348,13 @@ export const FeedView: React.FC<FeedViewProps> = ({
                     </div>
 
                     {/* Sensitive ID Card notice or Image */}
-                    {item.isSensitiveId && !lowDataMode ? (
-                      <div className="bg-stone-100 border border-stone-200 rounded-lg p-2.5 flex items-center gap-2 text-xs text-stone-700">
-                        <EyeOff className="w-4 h-4 text-stone-500 shrink-0" />
+                    {isFoundIdCard ? (
+                      <div className="bg-stone-50 border border-stone-200 rounded-lg p-2.5 flex items-center gap-2 text-xs text-stone-700">
+                        <Shield className="w-4 h-4 text-emerald-700 shrink-0" />
                         <div>
-                          <p className="font-semibold text-[11px]">Sensitive ID Photo Blurred</p>
+                          <p className="font-semibold text-[11px] text-stone-900">Protected Student ID Record</p>
                           <p className="text-[10px] text-stone-500">
-                            NDPA 2023: Full names & matric numbers are withheld from public view.
+                            Deposited at Main Gate Security. Name & matric number withheld from feed.
                           </p>
                         </div>
                       </div>
@@ -354,13 +371,15 @@ export const FeedView: React.FC<FeedViewProps> = ({
 
                     {/* Title & Description */}
                     <div>
-                      <h3 className="font-bold text-stone-900 text-sm leading-snug">{item.title}</h3>
+                      <h3 className="font-bold text-stone-900 text-sm leading-snug">{displayTitle}</h3>
                       <p className="text-xs text-stone-600 mt-1 line-clamp-3 leading-relaxed">
-                        {item.description}
+                        {isFoundIdCard
+                          ? `Found in the vicinity of ${item.location}. Handed over to security desk for safekeeping.`
+                          : item.description}
                       </p>
                     </div>
 
-                    {/* Campus Location & Date */}
+                    {/* Campus Location & Date in DD/MM/YYYY */}
                     <div className="space-y-1 text-xs text-stone-600 pt-1">
                       <div className="flex items-center gap-1.5 text-stone-700">
                         <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
@@ -368,7 +387,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
                       </div>
                       <div className="flex items-center gap-1.5 text-stone-500 text-[11px]">
                         <Calendar className="w-3.5 h-3.5 shrink-0" />
-                        <span>{isFound ? 'Found on:' : 'Lost on:'} {item.dateLostOrFound}</span>
+                        <span>{isFound ? 'Found on:' : 'Lost on:'} {formatDateDDMMYYYY(item.dateLostOrFound)}</span>
                       </div>
                     </div>
 
@@ -377,12 +396,12 @@ export const FeedView: React.FC<FeedViewProps> = ({
                       <div className="bg-stone-50 border border-stone-200 rounded p-2 text-[11px] text-stone-700 flex items-center justify-between">
                         <span className="text-stone-500">Held at:</span>
                         <span className="font-semibold text-stone-800">
-                          {item.holdingLocation === 'security_main_gate'
-                            ? 'Security Post (Main Gate)'
+                          {isFoundIdCard || item.holdingLocation === 'security_main_gate'
+                            ? 'Main Gate Security Post'
                             : item.holdingLocation === 'library_desk'
                             ? 'Library Front Desk'
                             : item.holdingLocation === 'student_affairs_office'
-                            ? 'Student Affairs (Block A)'
+                            ? 'Student Affairs Office'
                             : 'With Finder'}
                         </span>
                       </div>
@@ -392,7 +411,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
                     {isFound && item.verificationQuestion && (
                       <div className="text-[10px] text-emerald-800 bg-emerald-50/80 border border-emerald-200 p-1.5 rounded flex items-center gap-1">
                         <Lock className="w-3 h-3 text-emerald-700 shrink-0" />
-                        <span>Anti-theft secret question enabled</span>
+                        <span>Anti-theft verification question active</span>
                       </div>
                     )}
                   </div>

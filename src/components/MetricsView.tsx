@@ -69,13 +69,13 @@ export const MetricsView: React.FC = () => {
       <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-5">
         <div className="border-b border-stone-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h3 className="font-bold text-stone-900 text-sm">Interactive Nile Campus Impact Simulator</h3>
+            <h3 className="font-bold text-stone-900 text-sm">Campus Impact Simulator (Exploratory Scenario Model)</h3>
             <p className="text-xs text-stone-500 mt-0.5">
-              Simulate how NileFound outperforms unstructured WhatsApp groups over a typical 16-week semester.
+              Simulate potential outcomes based on adjustable assumptions (to be validated during pilot).
             </p>
           </div>
           <span className="text-xs bg-amber-100 text-amber-900 px-2.5 py-1 rounded-full font-bold self-start sm:self-auto">
-            Pitch Deck Data
+            Exploratory Model (Not Verified Facts)
           </span>
         </div>
 
@@ -94,7 +94,7 @@ export const MetricsView: React.FC = () => {
               onChange={(e) => setEstimatedMonthlyLost(Number(e.target.value))}
               className="w-full accent-emerald-700"
             />
-            <span className="text-[10px] text-stone-400">Calculators, IDs, chargers, keys</span>
+            <span className="text-[10px] text-stone-400">Assumed monthly volume</span>
           </div>
 
           <div>
@@ -110,7 +110,7 @@ export const MetricsView: React.FC = () => {
               onChange={(e) => setReportingRatePct(Number(e.target.value))}
               className="w-full accent-emerald-700"
             />
-            <span className="text-[10px] text-stone-400">Finders who bother to log items</span>
+            <span className="text-[10px] text-stone-400">Assumed proportion logged</span>
           </div>
 
           <div>
@@ -126,39 +126,39 @@ export const MetricsView: React.FC = () => {
               onChange={(e) => setReturnSuccessPct(Number(e.target.value))}
               className="w-full accent-emerald-700"
             />
-            <span className="text-[10px] text-stone-400">Claims successfully verified</span>
+            <span className="text-[10px] text-stone-400">Assumed claim verification rate</span>
           </div>
         </div>
 
         {/* Projected Impact Output Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center space-y-1">
-            <span className="text-[11px] font-bold text-emerald-800 uppercase">Monthly Reunited Items</span>
+            <span className="text-[11px] font-bold text-emerald-800 uppercase">Simulated Reunited / Mo</span>
             <div className="text-3xl font-extrabold text-emerald-950 font-mono">
               {monthlyReturned}
             </div>
             <p className="text-[11px] text-emerald-700 font-medium">
-              vs. only ~{whatsappBaselineReturned} via unstructured WhatsApp
+              Calculated projection from slider assumptions
             </p>
           </div>
 
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center space-y-1">
-            <span className="text-[11px] font-bold text-amber-900 uppercase">Student Money Saved / Mo</span>
+            <span className="text-[11px] font-bold text-amber-900 uppercase">Simulated Money Saved / Mo</span>
             <div className="text-3xl font-extrabold text-amber-950 font-mono">
               ₦{(studentMoneySavedNgn).toLocaleString()}
             </div>
             <p className="text-[11px] text-amber-800 font-medium">
-              Saved from ID replacement fees, calculators & keys
+              Based on assumed ₦5,000 ID replacement cost
             </p>
           </div>
 
           <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-center space-y-1">
-            <span className="text-[11px] font-bold text-stone-700 uppercase">Median Time to Reconnect</span>
+            <span className="text-[11px] font-bold text-stone-700 uppercase">Pilot Target Window</span>
             <div className="text-3xl font-extrabold text-stone-900 font-mono">
-              ~18 hrs
+              &lt; 24 hrs
             </div>
             <p className="text-[11px] text-stone-500 font-medium">
-              Down from 5-7 days of asking in WhatsApp groups
+              Target assumption to be validated during pilot
             </p>
           </div>
         </div>

@@ -25,9 +25,9 @@ export const ResearchKitView: React.FC = () => {
   const [copiedSecurity, setCopiedSecurity] = useState(false);
   const [activeTab, setActiveTab] = useState<'student_survey' | 'security_script' | 'unknowns_matrix' | 'stride_threats'>('student_survey');
 
-  // Interactive survey runner so Ayomide can test it right away
+  // Interactive survey runner
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
-  const [submittedCount, setSubmittedCount] = useState(3); // Mock initial responses
+  const [submittedCount, setSubmittedCount] = useState(0);
 
   const handleCopySurvey = () => {
     const text = `📋 NILE UNIVERSITY LOST & FOUND - STAGE 1 STUDENT SURVEY\n` +
@@ -154,8 +154,8 @@ export const ResearchKitView: React.FC = () => {
               <span className="text-xs font-bold text-stone-700 uppercase tracking-wider">
                 Live Interactive Survey Runner
               </span>
-              <span className="text-xs text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full font-semibold border border-emerald-200">
-                {submittedCount} Recorded Student Responses
+              <span className="text-xs text-stone-600 bg-stone-100 px-2.5 py-1 rounded-full font-medium border border-stone-200">
+                {submittedCount === 0 ? 'No recorded responses yet' : `${submittedCount} Recorded Student Response${submittedCount > 1 ? 's' : ''}`}
               </span>
             </div>
 

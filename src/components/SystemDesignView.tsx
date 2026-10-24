@@ -45,7 +45,7 @@ export const SystemDesignView: React.FC = () => {
         </div>
         <h2 className="text-lg font-bold">Production Blueprint & Student Affairs Prototype</h2>
         <p className="text-xs text-emerald-100/90 leading-relaxed max-w-2xl">
-          Everything specified in your technical feasibility analysis: PostgreSQL schema with Row-Level Security, the standalone single-file prototype for Student Services Centre (Room 101), usability test protocols, and phased campus rollout.
+          Everything specified in your technical feasibility analysis: PostgreSQL schema with Row-Level Security, the standalone single-file prototype for Student Services Centre, usability test protocols, and phased campus rollout.
         </p>
       </div>
 
@@ -141,7 +141,7 @@ export const SystemDesignView: React.FC = () => {
             <div>
               <h3 className="font-bold text-stone-900 text-sm">Standalone Single-File HTML Prototype</h3>
               <p className="text-xs text-stone-500 mt-0.5">
-                Self-contained demonstration app (Tailwind CDN + in-memory localStorage) created for Student Affairs in Room 101.
+                Self-contained demonstration app (Tailwind CDN + in-memory localStorage) created for Student Affairs.
               </p>
             </div>
 
@@ -303,7 +303,7 @@ export const SystemDesignView: React.FC = () => {
                 <span className="text-[10px] font-bold bg-stone-200 text-stone-800 px-2 py-0.5 rounded">University Wide</span>
               </div>
               <p className="text-xs text-stone-700 leading-relaxed">
-                Transfer master administrative access to the <strong>Student Services Centre (Room 101)</strong> and <strong>Nile House Security Administration</strong>. Embed NileFound onboarding links into orientation packages for incoming undergraduate students.
+                Transfer master administrative access to the <strong>Student Services Centre</strong> and <strong>Nile House Security Administration</strong>. Embed NileFound onboarding links into orientation packages for incoming undergraduate students.
               </p>
             </div>
           </div>

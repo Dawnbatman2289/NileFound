@@ -73,6 +73,13 @@ export const CareerGuideView: React.FC = () => {
       {/* TAB 1: STAGE 3 ARCHITECTURAL DECISION MATRIX */}
       {activeSubTab === 'decision_matrix' && (
         <div className="space-y-6">
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs px-3.5 py-2.5 rounded-lg font-medium flex items-center gap-2">
+            <span className="font-bold uppercase tracking-wider text-[10px] bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded">
+              Draft Note
+            </span>
+            <span>AI-generated draft, not independent analysis</span>
+          </div>
+
           {/* Options Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {SOLUTION_OPTIONS.map((opt) => {
