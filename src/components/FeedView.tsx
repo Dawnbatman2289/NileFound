@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  * 
  * NileFound Campus Feed
- * Displays searchable campus lost & found listings with privacy protections
- * for student ID cards and dates formatted in DD/MM/YYYY.
+ * Layout: Search filters, category selectors, and responsive card grid in Nile Blue & White.
+ * Main Action: Browse campus listings, check match scores, and initiate claims.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -15,13 +15,11 @@ import {
   ShieldCheck, 
   AlertCircle, 
   Lock, 
-  Sparkles, 
-  Building2, 
-  Filter,
   CheckCircle2,
-  Shield
+  Shield,
+  LogIn
 } from 'lucide-react';
-import { CampusItem, ItemType } from '../types/index.ts';
+import { CampusItem, ItemType, User } from '../types/index.ts';
 import { CATEGORIES } from '../data/mockItems.ts';
 import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
 import { calculateMatchScore } from '../utils/matching.ts';
@@ -32,19 +30,28 @@ interface FeedViewProps {
   lowDataMode: boolean;
   onClaimItem: (item: CampusItem) => void;
   onOpenReportModal: () => void;
+  currentUser?: User | null;
+  isDemoMode?: boolean;
+  onNavigateToLogin?: () => void;
 }
 
 export const FeedView: React.FC<FeedViewProps> = ({
   items,
   lowDataMode,
   onClaimItem,
-  onOpenReportModal
+  onOpenReportModal,
+  currentUser,
+  isDemoMode,
+  onNavigateToLogin
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<'all' | ItemType>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
   const [selectedLostItemForMatch, setSelectedLostItemForMatch] = useState<CampusItem | null>(null);
+
+  // If user is not authenticated in real mode, display sign-in gate
+  const isAccessRestricted = !currentUser && !isDemoMode;
 
   // Filter items
   const filteredItems = useMemo(() => {
@@ -82,25 +89,51 @@ export const FeedView: React.FC<FeedViewProps> = ({
       .sort((a, b) => b.result.score - a.result.score);
   }, [selectedLostItemForMatch, foundItems]);
 
+  if (isAccessRestricted) {
+    return (
+      <div className="max-w-xl mx-auto py-12 px-4 text-center space-y-5">
+        <div className="bg-white rounded-xl border border-slate-200 p-8 shadow-xs space-y-4">
+          <div className="w-12 h-12 bg-blue-50 border border-blue-200 text-blue-900 rounded-full flex items-center justify-center mx-auto">
+            <Lock className="w-6 h-6 text-blue-900" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-base font-bold text-slate-900">Sign in to view campus items</h2>
+            <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
+              To protect student privacy and prevent unauthorized scraping, only verified Nile University accounts (@nileuniversity.edu.ng) can view listings or file claims.
+            </p>
+          </div>
+
+          <button
+            onClick={onNavigateToLogin}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-blue-900 hover:bg-blue-800 text-white px-5 py-2.5 rounded-lg text-xs font-bold shadow-xs transition-colors"
+          >
+            <LogIn className="w-4 h-4" />
+            <span>Sign in with Nile Email</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Search & Filter Header */}
-      <div className="bg-white rounded-xl shadow-xs border border-stone-200 p-4 space-y-3">
+      <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-4 space-y-3">
         <div className="flex flex-col sm:flex-row gap-2.5">
           {/* Search Bar */}
           <div className="relative flex-1">
-            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by keyword, item name, or building..."
-              className="w-full text-xs pl-9 pr-3 py-2.5 rounded-lg border border-stone-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 bg-stone-50/50"
+              placeholder="Search by keyword, item name, or campus building..."
+              className="w-full text-xs pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-800 bg-slate-50/50"
             />
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs font-bold"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
               >
                 ✕
               </button>
@@ -108,13 +141,13 @@ export const FeedView: React.FC<FeedViewProps> = ({
           </div>
 
           {/* Type Filter Buttons */}
-          <div className="flex bg-stone-100 p-1 rounded-lg shrink-0">
+          <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
             <button
               onClick={() => setSelectedType('all')}
               className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
                 selectedType === 'all'
-                  ? 'bg-white text-stone-900 shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               All ({items.length})
@@ -123,8 +156,8 @@ export const FeedView: React.FC<FeedViewProps> = ({
               onClick={() => setSelectedType('found')}
               className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
                 selectedType === 'found'
-                  ? 'bg-emerald-700 text-white shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
+                  ? 'bg-blue-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Found ({foundItems.length})
@@ -134,7 +167,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
               className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
                 selectedType === 'lost'
                   ? 'bg-rose-600 text-white shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Lost ({lostItems.length})
@@ -142,32 +175,32 @@ export const FeedView: React.FC<FeedViewProps> = ({
           </div>
         </div>
 
-        {/* Dropdown Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-stone-100">
-          <div className="flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+        {/* Category & Location Selectors */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-700 mb-1">Filter Category:</label>
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full text-xs py-1.5 px-2 rounded-md border border-stone-200 bg-white focus:ring-1 focus:ring-emerald-600"
+              className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-800 bg-white"
             >
               <option value="all">All Categories</option>
-              {CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
+              {CATEGORIES.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.label}
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-700 mb-1">Campus Location:</label>
             <select
               value={selectedLocation}
               onChange={(e) => setSelectedLocation(e.target.value)}
-              className="w-full text-xs py-1.5 px-2 rounded-md border border-stone-200 bg-white focus:ring-1 focus:ring-emerald-600"
+              className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-800 bg-white"
             >
-              <option value="all">All Nile Campus Locations</option>
+              <option value="all">All Campus Locations</option>
               {NILE_CAMPUS_LOCATIONS.map((loc) => (
                 <option key={loc} value={loc}>
                   {loc}
@@ -178,121 +211,29 @@ export const FeedView: React.FC<FeedViewProps> = ({
         </div>
       </div>
 
-      {/* Match Suggestion Panel: only when lost items exist */}
-      {lostItems.length > 0 && (
-        <div className="bg-emerald-950 text-white rounded-xl p-4 shadow-xs border border-emerald-900">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-1.5 text-amber-300 font-bold text-xs uppercase tracking-wide">
-                <Sparkles className="w-4 h-4 text-amber-300" />
-                <span>Deterministic Campus Match Suggestions</span>
-              </div>
-              <p className="text-xs text-emerald-100/90 leading-relaxed max-w-xl">
-                Rule-based algorithm compares category, campus zone, and date window with zero API overhead.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <select
-                value={selectedLostItemForMatch?.id || ''}
-                onChange={(e) => {
-                  const itm = lostItems.find((l) => l.id === e.target.value);
-                  setSelectedLostItemForMatch(itm || null);
-                }}
-                className="text-xs py-1.5 px-2 rounded-lg bg-emerald-900 text-white border border-emerald-700 focus:outline-hidden"
-              >
-                <option value="">Select a Lost Report to match...</option>
-                {lostItems.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    Match: {l.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Render match results if selected */}
-          {selectedLostItemForMatch && (
-            <div className="mt-4 pt-3 border-t border-emerald-800 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-emerald-200">
-                  Matches found for: <strong className="text-white">{selectedLostItemForMatch.title}</strong>
-                </span>
-                <button
-                  onClick={() => setSelectedLostItemForMatch(null)}
-                  className="text-[11px] text-emerald-400 hover:text-white"
-                >
-                  Clear Match View
-                </button>
-              </div>
-
-              {matchResults.length === 0 ? (
-                <p className="text-xs text-emerald-300/80 italic py-1">
-                  No matching found items currently score above 30%. As reports are logged, matches will appear here.
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                  {matchResults.map(({ foundItem, result }) => {
-                    const isFoundId = foundItem.type === 'found' && foundItem.category === 'student_id';
-                    const titleText = isFoundId ? 'A student ID card was found' : foundItem.title;
-                    return (
-                      <div
-                        key={foundItem.id}
-                        className="bg-emerald-900/80 border border-emerald-700 rounded-lg p-3 text-xs space-y-2"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <span className="text-amber-300 font-bold text-[11px]">
-                              {result.score}% Match Confidence
-                            </span>
-                            <h4 className="font-semibold text-white text-xs mt-0.5">{titleText}</h4>
-                          </div>
-                          <button
-                            onClick={() => onClaimItem(foundItem)}
-                            className="bg-amber-400 hover:bg-amber-300 text-stone-900 text-[10px] font-bold px-2 py-1 rounded"
-                          >
-                            Verify Claim
-                          </button>
-                        </div>
-
-                        <ul className="text-[11px] text-emerald-200/90 list-disc list-inside space-y-0.5">
-                          {result.reasons.map((r, idx) => (
-                            <li key={idx}>{r}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Main Items Feed */}
+      {/* Main Item Grid */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between text-xs text-stone-600 px-1">
+        <div className="flex items-center justify-between text-xs text-slate-600 px-1">
           <span>Showing <strong>{filteredItems.length}</strong> items</span>
           {lowDataMode && (
-            <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded text-[11px] font-medium border border-amber-200">
+            <span className="text-blue-900 bg-blue-50 px-2 py-0.5 rounded text-[11px] font-medium border border-blue-200">
               Low-Data Mode active: Photos hidden
             </span>
           )}
         </div>
 
         {filteredItems.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl border border-stone-200 space-y-3 p-6">
-            <AlertCircle className="w-8 h-8 text-stone-400 mx-auto" />
-            <h3 className="font-semibold text-stone-800 text-sm">No items found</h3>
-            <p className="text-xs text-stone-500 max-w-sm mx-auto">
+          <div className="text-center py-12 bg-white rounded-xl border border-slate-200 space-y-3 p-6">
+            <AlertCircle className="w-8 h-8 text-slate-400 mx-auto" />
+            <h3 className="font-semibold text-slate-800 text-sm">No items found</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
               {items.length === 0
                 ? 'No items have been reported yet in this pilot.'
                 : 'No items match your active filters or search keyword.'}
             </p>
             <button
               onClick={onOpenReportModal}
-              className="bg-emerald-800 text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-emerald-900 transition-colors"
+              className="bg-blue-900 text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors"
             >
               Report an Item
             </button>
@@ -312,10 +253,10 @@ export const FeedView: React.FC<FeedViewProps> = ({
                   key={item.id}
                   className={`bg-white rounded-xl border shadow-xs transition-all hover:shadow-md flex flex-col justify-between overflow-hidden ${
                     isReturned
-                      ? 'border-stone-200 opacity-75'
+                      ? 'border-slate-200 opacity-75'
                       : isFound
-                      ? 'border-emerald-200/90'
-                      : 'border-rose-200/90'
+                      ? 'border-blue-200'
+                      : 'border-rose-200'
                   }`}
                 >
                   <div className="p-4 space-y-3">
@@ -324,15 +265,15 @@ export const FeedView: React.FC<FeedViewProps> = ({
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
                           isFound
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                            : 'bg-rose-100 text-rose-800 border border-rose-200'
+                            ? 'bg-blue-50 text-blue-900 border border-blue-200'
+                            : 'bg-rose-50 text-rose-800 border border-rose-200'
                         }`}
                       >
                         {isFound ? 'Found Item' : 'Lost Report'}
                       </span>
 
                       {/* Status indicator */}
-                      <span className="text-[11px] font-semibold text-stone-600 flex items-center gap-1">
+                      <span className="text-[11px] font-semibold text-slate-600 flex items-center gap-1">
                         {isReturned ? (
                           <span className="text-emerald-700 flex items-center gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5" /> Returned
@@ -342,24 +283,24 @@ export const FeedView: React.FC<FeedViewProps> = ({
                             <Lock className="w-3.5 h-3.5" /> Claim Pending
                           </span>
                         ) : (
-                          <span className="text-stone-500">Open</span>
+                          <span className="text-slate-500">Open</span>
                         )}
                       </span>
                     </div>
 
                     {/* Sensitive ID Card notice or Image */}
                     {isFoundIdCard ? (
-                      <div className="bg-stone-50 border border-stone-200 rounded-lg p-2.5 flex items-center gap-2 text-xs text-stone-700">
-                        <Shield className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 flex items-center gap-2 text-xs text-slate-700">
+                        <Shield className="w-4 h-4 text-blue-900 shrink-0" />
                         <div>
-                          <p className="font-semibold text-[11px] text-stone-900">Protected Student ID Record</p>
-                          <p className="text-[10px] text-stone-500">
+                          <p className="font-semibold text-[11px] text-slate-900">Protected Student ID Record</p>
+                          <p className="text-[10px] text-slate-500">
                             Deposited at Main Gate Security. Name & matric number withheld from feed.
                           </p>
                         </div>
                       </div>
                     ) : item.imageUrl && !lowDataMode ? (
-                      <div className="h-32 w-full rounded-lg overflow-hidden bg-stone-100 relative">
+                      <div className="h-32 w-full rounded-lg overflow-hidden bg-slate-100 relative">
                         <img
                           src={item.imageUrl}
                           alt={item.title}
@@ -371,8 +312,8 @@ export const FeedView: React.FC<FeedViewProps> = ({
 
                     {/* Title & Description */}
                     <div>
-                      <h3 className="font-bold text-stone-900 text-sm leading-snug">{displayTitle}</h3>
-                      <p className="text-xs text-stone-600 mt-1 line-clamp-3 leading-relaxed">
+                      <h3 className="font-bold text-slate-900 text-sm leading-snug">{displayTitle}</h3>
+                      <p className="text-xs text-slate-600 mt-1 line-clamp-3 leading-relaxed">
                         {isFoundIdCard
                           ? `Found in the vicinity of ${item.location}. Handed over to security desk for safekeeping.`
                           : item.description}
@@ -380,12 +321,12 @@ export const FeedView: React.FC<FeedViewProps> = ({
                     </div>
 
                     {/* Campus Location & Date in DD/MM/YYYY */}
-                    <div className="space-y-1 text-xs text-stone-600 pt-1">
-                      <div className="flex items-center gap-1.5 text-stone-700">
-                        <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                    <div className="space-y-1 text-xs text-slate-600 pt-1">
+                      <div className="flex items-center gap-1.5 text-slate-700">
+                        <MapPin className="w-3.5 h-3.5 text-blue-900 shrink-0" />
                         <span className="font-medium text-[11px] truncate">{item.location}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-stone-500 text-[11px]">
+                      <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
                         <Calendar className="w-3.5 h-3.5 shrink-0" />
                         <span>{isFound ? 'Found on:' : 'Lost on:'} {formatDateDDMMYYYY(item.dateLostOrFound)}</span>
                       </div>
@@ -393,9 +334,9 @@ export const FeedView: React.FC<FeedViewProps> = ({
 
                     {/* Holding Custody Badge for Found items */}
                     {isFound && (
-                      <div className="bg-stone-50 border border-stone-200 rounded p-2 text-[11px] text-stone-700 flex items-center justify-between">
-                        <span className="text-stone-500">Held at:</span>
-                        <span className="font-semibold text-stone-800">
+                      <div className="bg-slate-50 border border-slate-200 rounded p-2 text-[11px] text-slate-700 flex items-center justify-between">
+                        <span className="text-slate-500">Held at:</span>
+                        <span className="font-semibold text-slate-800">
                           {isFoundIdCard || item.holdingLocation === 'security_main_gate'
                             ? 'Main Gate Security Post'
                             : item.holdingLocation === 'library_desk'
@@ -409,23 +350,23 @@ export const FeedView: React.FC<FeedViewProps> = ({
 
                     {/* Hidden question badge */}
                     {isFound && item.verificationQuestion && (
-                      <div className="text-[10px] text-emerald-800 bg-emerald-50/80 border border-emerald-200 p-1.5 rounded flex items-center gap-1">
-                        <Lock className="w-3 h-3 text-emerald-700 shrink-0" />
+                      <div className="text-[10px] text-blue-900 bg-blue-50 border border-blue-200 p-1.5 rounded flex items-center gap-1">
+                        <Lock className="w-3 h-3 text-blue-800 shrink-0" />
                         <span>Anti-theft verification question active</span>
                       </div>
                     )}
                   </div>
 
                   {/* Card Footer Actions */}
-                  <div className="p-3 bg-stone-50 border-t border-stone-100 flex items-center justify-between gap-2">
+                  <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
                     {isFound ? (
                       <button
                         onClick={() => onClaimItem(item)}
                         disabled={isReturned}
                         className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                           isReturned
-                            ? 'bg-stone-200 text-stone-500 cursor-not-allowed'
-                            : 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs'
+                            ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                            : 'bg-blue-900 hover:bg-blue-800 text-white shadow-xs'
                         }`}
                       >
                         <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />

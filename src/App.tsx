@@ -4,6 +4,8 @@
  * 
  * NileFound - Production Pilot Web App
  * Engineered for Nile University of Nigeria, Abuja
+ * Layout: Responsive single-page layout with Nile Blue & White branding.
+ * Main Action: Browse campus listings, report lost/found items, and verify ownership claims.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -21,6 +23,19 @@ import { PrivacyModal } from './components/PrivacyModal.tsx';
 import { CampusItem, ClaimRecord, User } from './types/index.ts';
 import { DEMO_ITEMS, DEMO_CLAIMS, INITIAL_ITEMS, INITIAL_CLAIMS } from './data/mockItems.ts';
 import { expireOldItems } from './utils/admin.ts';
+import { auth, testConnection } from './lib/firebase.ts';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import {
+  subscribeToRealtimeItems,
+  subscribeToRealtimeClaims,
+  saveItemToFirestore,
+  updateItemStatusInFirestore,
+  deleteItemFromFirestore,
+  saveClaimToFirestore,
+  updateClaimStatusInFirestore,
+  syncUserProfile,
+  fetchUserRole,
+} from './services/firestoreService.ts';
 
 export default function App() {
   // Demo Mode toggle: Real mode starts empty by default
@@ -81,8 +96,9 @@ export default function App() {
     return INITIAL_CLAIMS;
   });
 
-  // Active user session (defaults to null or saved student/staff session)
+  // Active user session (starts null in real mode unless authenticated and emailVerified)
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    if (!isDemoMode) return null;
     const saved = localStorage.getItem('nilefound_user_v1');
     if (saved) {
       try {
@@ -91,16 +107,7 @@ export default function App() {
         return null;
       }
     }
-    // Default session for pilot testing
-    return {
-      id: 'admin-ayomide',
-      name: 'Ayomide',
-      email: 'ayomide2289@gmail.com',
-      role: 'admin',
-      matricNumber: '24/ENG/0192',
-      department: 'Computer Engineering',
-      isAdmin: true
-    };
+    return null;
   });
 
   // Students and staff land on Campus Feed by default
@@ -136,13 +143,11 @@ export default function App() {
   const handleToggleDemoMode = (newMode: boolean) => {
     setIsDemoMode(newMode);
     if (newMode) {
-      // Load demo data
       const saved = localStorage.getItem('nilefound_demo_items_v1');
       setItems(saved ? JSON.parse(saved) : DEMO_ITEMS);
       const savedClaims = localStorage.getItem('nilefound_demo_claims_v1');
       setClaims(savedClaims ? JSON.parse(savedClaims) : DEMO_CLAIMS);
     } else {
-      // Load real empty pilot data
       const saved = localStorage.getItem('nilefound_real_items_v1');
       setItems(saved ? JSON.parse(saved) : []);
       const savedClaims = localStorage.getItem('nilefound_real_claims_v1');
@@ -161,6 +166,100 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('nilefound_low_data', String(lowDataMode));
   }, [lowDataMode]);
+
+  // Test connection to Firestore on initial boot
+  useEffect(() => {
+    testConnection();
+  }, []);
+
+  // Listen to Firebase Auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser && fbUser.email) {
+        // Enforce verified institutional email requirement
+        if (!fbUser.emailVerified) {
+          if (!isDemoMode) {
+            setCurrentUser(null);
+          }
+          return;
+        }
+
+        const email = fbUser.email.trim().toLowerCase();
+        // Check role in /roles/{uid}
+        const assignedRole = await fetchUserRole(fbUser.uid);
+        const isStaffOrAdmin = assignedRole === 'admin' || assignedRole === 'security';
+        const isNileDomain = email.endsWith('@nileuniversity.edu.ng');
+
+        if (isStaffOrAdmin) {
+          const user: User = {
+            id: fbUser.uid,
+            name: fbUser.displayName || 'Campus Staff',
+            email,
+            role: assignedRole,
+            isAdmin: assignedRole === 'admin',
+            department: assignedRole === 'security' ? 'Campus Security & Safety' : 'University Administration',
+          };
+          setCurrentUser(user);
+          syncUserProfile(user).catch((e) => console.debug('Profile sync:', e));
+        } else if (isNileDomain) {
+          const user: User = {
+            id: fbUser.uid,
+            name: fbUser.displayName || 'Nile Member',
+            email,
+            role: 'student',
+            isAdmin: false,
+            department: 'Nile University of Nigeria',
+          };
+          setCurrentUser(user);
+          syncUserProfile(user).catch((e) => console.debug('Profile sync:', e));
+        } else {
+          // Reject non-Nile accounts without an administrative role
+          await signOut(auth);
+          setCurrentUser(null);
+        }
+      } else {
+        if (!isDemoMode) {
+          setCurrentUser(null);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [isDemoMode]);
+
+  // Real-time Firestore sync when in real mode AND authenticated
+  useEffect(() => {
+    if (isDemoMode) return;
+
+    if (!currentUser) {
+      setItems([]);
+      setClaims([]);
+      return;
+    }
+
+    const unsubscribeItems = subscribeToRealtimeItems(
+      (realtimeItems) => {
+        setItems(realtimeItems);
+      },
+      (err) => {
+        console.warn('Real-time items sync error:', err);
+      }
+    );
+
+    const unsubscribeClaims = subscribeToRealtimeClaims(
+      currentUser,
+      (realtimeClaims) => {
+        setClaims(realtimeClaims);
+      },
+      (err) => {
+        console.warn('Real-time claims sync error:', err);
+      }
+    );
+
+    return () => {
+      unsubscribeItems();
+      unsubscribeClaims();
+    };
+  }, [isDemoMode, currentUser]);
 
   // Monitor connectivity
   useEffect(() => {
@@ -181,42 +280,117 @@ export default function App() {
     };
   }, []);
 
-  const handleAddItem = (newItem: CampusItem) => {
-    setItems((prev) => [newItem, ...prev]);
+  const handleAddItem = async (newItem: CampusItem) => {
     setSavedDraftCount(0);
+    if (isDemoMode) {
+      setItems((prev) => [newItem, ...prev]);
+      return;
+    }
+
+    try {
+      const docId = await saveItemToFirestore(newItem, currentUser);
+      setItems((prev) => [{ ...newItem, id: docId }, ...prev]);
+    } catch (err) {
+      console.error('Error saving item to Firestore:', err);
+      setItems((prev) => [newItem, ...prev]);
+    }
   };
 
-  const handleClaimSuccess = (newClaim: ClaimRecord) => {
-    setClaims((prev) => [newClaim, ...prev]);
-    setItems((prev) =>
-      prev.map((it) => (it.id === newClaim.itemId ? { ...it, status: 'claim_requested' } : it))
-    );
+  const handleClaimSuccess = async (newClaim: ClaimRecord) => {
+    if (isDemoMode) {
+      setClaims((prev) => [newClaim, ...prev]);
+      setItems((prev) =>
+        prev.map((it) => (it.id === newClaim.itemId ? { ...it, status: 'claim_requested' } : it))
+      );
+      return;
+    }
+
+    try {
+      const matchingItem = items.find((i) => i.id === newClaim.itemId);
+      await saveClaimToFirestore(newClaim, currentUser, matchingItem?.id);
+    } catch (err) {
+      console.error('Error saving claim to Firestore:', err);
+      setClaims((prev) => [newClaim, ...prev]);
+    }
   };
 
-  const handleApproveClaim = (claimId: string, itemId: string) => {
-    setClaims((prev) =>
-      prev.map((c) => (c.id === claimId ? { ...c, status: 'approved' } : c))
-    );
-    setItems((prev) =>
-      prev.map((it) => (it.id === itemId ? { ...it, status: 'returned' } : it))
-    );
+  const handleApproveClaim = async (claimId: string, itemId: string) => {
+    if (isDemoMode) {
+      setClaims((prev) =>
+        prev.map((c) => (c.id === claimId ? { ...c, status: 'approved' } : c))
+      );
+      setItems((prev) =>
+        prev.map((it) => (it.id === itemId ? { ...it, status: 'returned' } : it))
+      );
+      return;
+    }
+
+    try {
+      await updateClaimStatusInFirestore(claimId, itemId, 'approved');
+      setClaims((prev) =>
+        prev.map((c) => (c.id === claimId ? { ...c, status: 'approved' } : c))
+      );
+      setItems((prev) =>
+        prev.map((it) => (it.id === itemId ? { ...it, status: 'returned' } : it))
+      );
+    } catch (err) {
+      console.error('Error approving claim in Firestore:', err);
+    }
   };
 
-  const handleRejectClaim = (claimId: string) => {
-    setClaims((prev) =>
-      prev.map((c) => (c.id === claimId ? { ...c, status: 'rejected' } : c))
-    );
+  const handleRejectClaim = async (claimId: string) => {
+    if (isDemoMode) {
+      setClaims((prev) =>
+        prev.map((c) => (c.id === claimId ? { ...c, status: 'rejected' } : c))
+      );
+      return;
+    }
+
+    const claim = claims.find((c) => c.id === claimId);
+    if (!claim) return;
+
+    try {
+      await updateClaimStatusInFirestore(claimId, claim.itemId, 'rejected');
+      setClaims((prev) =>
+        prev.map((c) => (c.id === claimId ? { ...c, status: 'rejected' } : c))
+      );
+    } catch (err) {
+      console.error('Error rejecting claim in Firestore:', err);
+    }
   };
 
-  const handleUpdateItemStatus = (itemId: string, status: CampusItem['status']) => {
-    setItems((prev) =>
-      prev.map((it) => (it.id === itemId ? { ...it, status } : it))
-    );
+  const handleUpdateItemStatus = async (itemId: string, status: CampusItem['status']) => {
+    if (isDemoMode) {
+      setItems((prev) =>
+        prev.map((it) => (it.id === itemId ? { ...it, status } : it))
+      );
+      return;
+    }
+
+    try {
+      await updateItemStatusInFirestore(itemId, status);
+      setItems((prev) =>
+        prev.map((it) => (it.id === itemId ? { ...it, status } : it))
+      );
+    } catch (err) {
+      console.error('Error updating item status in Firestore:', err);
+    }
   };
 
-  const handleDeleteItem = (itemId: string) => {
-    setItems((prev) => prev.filter((it) => it.id !== itemId));
-    setClaims((prev) => prev.filter((c) => c.itemId !== itemId));
+  const handleDeleteItem = async (itemId: string) => {
+    if (isDemoMode) {
+      setItems((prev) => prev.filter((it) => it.id !== itemId));
+      setClaims((prev) => prev.filter((c) => c.itemId !== itemId));
+      return;
+    }
+
+    try {
+      await deleteItemFromFirestore(itemId);
+      setItems((prev) => prev.filter((it) => it.id !== itemId));
+      setClaims((prev) => prev.filter((c) => c.itemId !== itemId));
+    } catch (err) {
+      console.error('Error deleting item from Firestore:', err);
+    }
   };
 
   const handleExpireOldItems = () => {
@@ -226,8 +400,8 @@ export default function App() {
   const pendingClaimsCount = claims.filter((c) => c.status === 'pending').length;
 
   return (
-    <div className="min-h-screen bg-stone-100 flex flex-col font-sans text-stone-900 selection:bg-emerald-200">
-      {/* Top App Bar & Navigation */}
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-900 selection:bg-blue-200">
+      {/* Top App Bar & Navigation (Nile Blue #002B66 / #0F3D78) */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -251,6 +425,9 @@ export default function App() {
             lowDataMode={lowDataMode}
             onClaimItem={(item) => setSelectedItemForClaim(item)}
             onOpenReportModal={() => setIsReportModalOpen(true)}
+            currentUser={currentUser}
+            isDemoMode={isDemoMode}
+            onNavigateToLogin={() => setActiveTab('login')}
           />
         )}
 
@@ -285,7 +462,7 @@ export default function App() {
           />
         )}
 
-        {/* Builder Scaffolding Views (Only rendered if builder mode is open) */}
+        {/* Builder Scaffolding Views (Only rendered if ?builder=1) */}
         {builderMode && activeTab === 'prototype' && <SystemDesignView />}
         {builderMode && activeTab === 'research' && <ResearchKitView />}
         {builderMode && activeTab === 'metrics' && <MetricsView />}
@@ -312,27 +489,27 @@ export default function App() {
       />
 
       {/* Footer */}
-      <footer className="bg-white border-t border-stone-200 mt-12 py-5 px-4 text-xs text-stone-500">
+      <footer className="bg-white border-t border-slate-200 mt-12 py-5 px-4 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-stone-800">NileFound</span>
+            <span className="font-bold text-slate-800">NileFound</span>
             <span>•</span>
             <span>Nile University of Nigeria, Abuja</span>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-stone-600">
+          <div className="flex items-center gap-2 text-[11px] text-slate-600">
             <button
               onClick={() => setIsPrivacyModalOpen(true)}
-              className="text-emerald-800 hover:text-emerald-950 underline font-medium"
+              className="text-blue-900 hover:text-blue-950 underline font-medium"
             >
               Built with privacy in mind
             </button>
           </div>
 
-          <div className="flex items-center gap-2 text-stone-400 text-[11px]">
+          <div className="flex items-center gap-2 text-slate-400 text-[11px]">
             <button
               onClick={() => setBuilderMode(!builderMode)}
-              className="text-stone-400 hover:text-stone-600 underline"
+              className="text-slate-400 hover:text-slate-600 underline"
             >
               {builderMode ? 'Hide Builder Notes' : 'Builder Notes'}
             </button>

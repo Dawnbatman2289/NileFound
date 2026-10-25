@@ -1,0 +1,176 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny: Block all unmatched paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Nile verified account check (requires email_verified == true and Nile University domain)
+    function isNileVerified() {
+      return isSignedIn()
+        && request.auth.token.keys().hasAll(['email', 'email_verified'])
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.matches('.*@nileuniversity[.]edu[.]ng$');
+    }
+
+    // Check roles document directly in /roles/{uid}
+    function hasRole(roleName) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/roles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == roleName;
+    }
+
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    function isSecurity() {
+      return hasRole('security');
+    }
+
+    function isStaffOrAdmin() {
+      return isAdmin() || isSecurity();
+    }
+
+    // Access permitted for verified Nile students or authorized campus staff/admins
+    function isNileMember() {
+      return isNileVerified() || isStaffOrAdmin();
+    }
+
+    function isValidItem(data) {
+      return data.title is string && data.title.size() >= 2 && data.title.size() <= 100
+        && data.type in ['lost', 'found']
+        && data.category in ['student_id', 'phone_tech', 'power_bank', 'calculator', 'flash_drive', 'keys', 'bag_backpack', 'lab_coat_clothing', 'books_notes', 'other']
+        && data.description is string && data.description.size() <= 1000
+        && data.location is string && data.location.size() >= 2 && data.location.size() <= 100
+        && data.status in ['open', 'claim_requested', 'verified', 'returned', 'expired']
+        && data.holdingLocation in ['finder_holding', 'security_main_gate', 'student_affairs_office', 'faculty_officer', 'library_desk']
+        && data.authorId is string && data.authorId.size() <= 128
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 50000))
+        && (!('verificationQuestion' in data) || (data.verificationQuestion is string && data.verificationQuestion.size() <= 300))
+        && (!('isSensitiveId' in data) || (data.isSensitiveId is bool));
+    }
+
+    function isValidItemSecret(data, itemId) {
+      return data.itemId is string && data.itemId == itemId
+        && data.authorId is string && data.authorId == request.auth.uid
+        && data.expectedAnswer is string && data.expectedAnswer.size() >= 1 && data.expectedAnswer.size() <= 500;
+    }
+
+    function isValidClaim(data) {
+      return data.itemId is string && data.itemId.size() <= 128
+        && data.claimantId is string && data.claimantId.size() <= 128
+        && data.claimantName is string && data.claimantName.size() <= 100
+        && data.claimantEmail is string && data.claimantEmail.size() <= 100
+        && data.submittedAnswer is string && data.submittedAnswer.size() >= 1 && data.submittedAnswer.size() <= 500
+        && data.status in ['pending', 'approved', 'rejected'];
+    }
+
+    function isValidUser(data) {
+      return data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && data.email is string && data.email.size() <= 100
+        && data.role in ['student', 'security', 'admin'];
+    }
+
+    // Items collection (Feed of lost and found items)
+    match /items/{itemId} {
+      allow get, list: if isValidId(itemId) && isNileMember();
+      allow create: if isValidId(itemId) && isNileMember()
+        && isValidItem(incoming())
+        && incoming().authorId == request.auth.uid;
+      allow update: if isValidId(itemId) && isNileMember()
+        && isValidItem(incoming())
+        && (
+          isAdmin() ||
+          (
+            incoming().authorId == existing().authorId
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && existing().status != 'returned'
+          )
+        );
+      allow delete: if isValidId(itemId) && (
+        isAdmin() ||
+        (isNileMember() && existing().authorId == request.auth.uid)
+      );
+
+      // Private secret verification answer subcollection (Only author and admin can read)
+      match /secrets/{secretId} {
+        allow get: if isValidId(secretId) && isNileMember() && (
+          isAdmin() ||
+          resource.data.authorId == request.auth.uid
+        );
+        allow list: if isAdmin();
+        allow create: if isValidId(secretId) && isNileMember()
+          && isValidItemSecret(incoming(), itemId);
+        allow update, delete: if isValidId(secretId) && (
+          isAdmin() ||
+          (isNileMember() && resource.data.authorId == request.auth.uid)
+        );
+      }
+    }
+
+    // Claims collection
+    match /claims/{claimId} {
+      allow get: if isValidId(claimId) && isNileMember() && (
+        isAdmin() ||
+        resource.data.claimantId == request.auth.uid ||
+        resource.data.finderId == request.auth.uid
+      );
+      allow list: if isNileMember() && (
+        isAdmin() ||
+        resource.data.claimantId == request.auth.uid ||
+        resource.data.finderId == request.auth.uid
+      );
+      allow create: if isValidId(claimId) && isNileMember()
+        && isValidClaim(incoming())
+        && incoming().claimantId == request.auth.uid
+        && exists(/databases/$(database)/documents/items/$(incoming().itemId));
+      allow update: if isValidId(claimId) && isNileMember()
+        && isValidClaim(incoming())
+        && (
+          isAdmin() ||
+          (
+            resource.data.finderId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(claimId) && isAdmin();
+    }
+
+    // Role assignment collection (/roles/{userId})
+    match /roles/{userId} {
+      allow get: if isValidId(userId) && isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Users directory
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isNileMember() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isValidId(userId) && isNileMember()
+        && request.auth.uid == userId
+        && isValidUser(incoming());
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+  }
+}

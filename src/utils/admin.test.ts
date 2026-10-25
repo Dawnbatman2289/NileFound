@@ -17,8 +17,8 @@ test('canUserModerate allows admin and security but blocks standard students', (
   };
   const adminUser: User = {
     id: 'u2',
-    name: 'Ayomide',
-    email: 'ayomide2289@gmail.com',
+    name: 'Campus Administrator',
+    email: 'admin@nileuniversity.edu.ng',
     role: 'admin',
     isAdmin: true
   };

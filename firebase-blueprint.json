@@ -1,0 +1,106 @@
+{
+  "entities": {
+    "Item": {
+      "title": "Item",
+      "description": "A lost or found campus item reported by a Nile University student or staff member.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "type": { "type": "string", "enum": ["lost", "found"] },
+        "category": { "type": "string", "enum": ["student_id", "phone_tech", "power_bank", "calculator", "flash_drive", "keys", "bag_backpack", "lab_coat_clothing", "books_notes", "other"] },
+        "description": { "type": "string", "maxLength": 1000 },
+        "location": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "dateLostOrFound": { "type": "string", "maxLength": 40 },
+        "status": { "type": "string", "enum": ["open", "claim_requested", "verified", "returned", "expired"] },
+        "holdingLocation": { "type": "string", "enum": ["finder_holding", "security_main_gate", "student_affairs_office", "faculty_officer", "library_desk"] },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 100 },
+        "authorEmail": { "type": "string", "maxLength": 100 },
+        "verificationQuestion": { "type": "string", "maxLength": 300 },
+        "imageUrl": { "type": "string", "maxLength": 50000 },
+        "isSensitiveId": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "type", "category", "description", "location", "status", "holdingLocation", "authorId", "createdAt"]
+    },
+    "ItemSecret": {
+      "title": "ItemSecret",
+      "description": "Private verification answer set by the finder, only accessible to the author and campus admins.",
+      "type": "object",
+      "properties": {
+        "itemId": { "type": "string", "maxLength": 128 },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "expectedAnswer": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["itemId", "authorId", "expectedAnswer", "createdAt"]
+    },
+    "Claim": {
+      "title": "Claim",
+      "description": "An ownership claim submitted for a found item.",
+      "type": "object",
+      "properties": {
+        "itemId": { "type": "string", "maxLength": 128 },
+        "itemTitle": { "type": "string", "maxLength": 100 },
+        "claimantId": { "type": "string", "maxLength": 128 },
+        "claimantName": { "type": "string", "maxLength": 100 },
+        "claimantEmail": { "type": "string", "maxLength": 100 },
+        "submittedAnswer": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "finderId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["itemId", "claimantId", "claimantName", "claimantEmail", "submittedAnswer", "status", "createdAt"]
+    },
+    "Role": {
+      "title": "Role",
+      "description": "RBAC role document for campus administrators and security personnel.",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["admin", "security", "student"] },
+        "email": { "type": "string", "maxLength": 100 },
+        "assignedBy": { "type": "string", "maxLength": 128 },
+        "assignedAt": { "type": "string" }
+      },
+      "required": ["role", "email", "assignedAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile containing campus affiliation and contact details.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "enum": ["student", "security", "admin"] },
+        "matricNumber": { "type": "string", "maxLength": 20 },
+        "department": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "email", "role", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/items/{itemId}": {
+      "schema": "Item",
+      "description": "Protected records of lost and found items on Nile campus, readable only by verified Nile members."
+    },
+    "/items/{itemId}/secrets/{secretId}": {
+      "schema": "ItemSecret",
+      "description": "Private expected verification answer for a found item, readable only by the finder and admins."
+    },
+    "/claims/{claimId}": {
+      "schema": "Claim",
+      "description": "Ownership claims readable only by the claimant, item finder, or campus admin."
+    },
+    "/roles/{userId}": {
+      "schema": "Role",
+      "description": "Role document defining administrative or security personnel access."
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile records."
+    }
+  }
+}

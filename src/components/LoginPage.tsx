@@ -3,13 +3,33 @@
  * SPDX-License-Identifier: Apache-2.0
  * 
  * NileFound Authentication Screen
- * Layout: Card with security requirements, domain validation, and role assignment.
- * Main Action: Sign in using Nile University student or staff credentials.
+ * Layout: Institutional single-column card with Email/Password tabs (Sign In, Create Account, Email Verification, Reset Password) and demo account selector in Nile Blue and white.
+ * Main Action: Authenticate using a verified Nile University email address (@nileuniversity.edu.ng).
  */
 
-import React, { useState } from 'react';
-import { Shield, Check, UserCheck, AlertTriangle, Lock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  Shield, 
+  Check, 
+  UserCheck, 
+  AlertCircle, 
+  Mail, 
+  Lock, 
+  KeyRound, 
+  RotateCw, 
+  LogOut, 
+  ArrowRight 
+} from 'lucide-react';
 import { User, UserRole } from '../types/index.ts';
+import { auth } from '../lib/firebase.ts';
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  sendEmailVerification, 
+  sendPasswordResetEmail, 
+  signOut 
+} from 'firebase/auth';
+import { fetchUserRole, syncUserProfile } from '../services/firestoreService.ts';
 
 interface LoginPageProps {
   currentUser: User | null;
@@ -19,151 +39,400 @@ interface LoginPageProps {
   isDemoMode: boolean;
 }
 
-const ADMIN_EMAILS = [
-  'ayomide2289@gmail.com', // Pilot exception: project lead
-  'admin@nileuniversity.edu.ng'
-];
-
-const SECURITY_EMAILS = [
-  'security.gate@nileuniversity.edu.ng',
-  'security@nileuniversity.edu.ng',
-  'musa.security@nileuniversity.edu.ng'
-];
-
-export function resolveUserRole(email: string): { role: UserRole; isAdmin: boolean; isPilotException?: boolean } {
-  const normalized = email.trim().toLowerCase();
-  if (normalized === 'ayomide2289@gmail.com') {
-    return { role: 'admin', isAdmin: true, isPilotException: true };
-  }
-  if (ADMIN_EMAILS.includes(normalized)) {
-    return { role: 'admin', isAdmin: true };
-  }
-  if (SECURITY_EMAILS.includes(normalized) || normalized.includes('security@nileuniversity.edu.ng')) {
-    return { role: 'security', isAdmin: false };
-  }
-  return { role: 'student', isAdmin: false };
-}
+type AuthMode = 'signin' | 'signup' | 'verify' | 'forgot';
 
 export const LoginPage: React.FC<LoginPageProps> = ({
   currentUser,
   onLogin,
   onLogout,
   onNavigateToFeed,
-  isDemoMode
+  isDemoMode,
 }) => {
-  const [emailInput, setEmailInput] = useState('');
-  const [nameInput, setNameInput] = useState('');
-  const [loginMessage, setLoginMessage] = useState<string | null>(null);
-  const [domainError, setDomainError] = useState<string | null>(null);
+  const [authMode, setAuthMode] = useState<AuthMode>(() => {
+    if (auth.currentUser && !auth.currentUser.emailVerified) {
+      return 'verify';
+    }
+    return 'signin';
+  });
 
-  // Preset demo accounts for rapid testing on campus (only shown when demo mode is active)
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string>(() => {
+    return auth.currentUser?.email || '';
+  });
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isVerifyingCheck, setIsVerifyingCheck] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // 60-second cooldown timer for resending verification email
+  const [resendCooldown, setResendCooldown] = useState<number>(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
+
+  // Sync unverified user state if Firebase current user exists
+  useEffect(() => {
+    if (auth.currentUser && !auth.currentUser.emailVerified) {
+      setUnverifiedEmail(auth.currentUser.email || '');
+      setAuthMode('verify');
+    }
+  }, []);
+
+  // Preset accounts for Demo Mode testing only (completely isolated from real Firestore)
   const DEMO_ACCOUNTS: User[] = [
     {
-      id: 'admin-ayomide',
-      name: 'Ayomide (Project Lead)',
-      email: 'ayomide2289@gmail.com',
+      id: 'demo-admin',
+      name: 'Campus Administrator',
+      email: 'admin@nileuniversity.edu.ng',
       role: 'admin',
-      matricNumber: '24/ENG/0192',
-      department: 'Computer Engineering',
-      isAdmin: true
+      matricNumber: 'ADMIN-01',
+      department: 'Student Affairs',
+      isAdmin: true,
     },
     {
-      id: 'student-chidera',
+      id: 'demo-student-chidera',
       name: 'Chidera Eze',
       email: 'chidera@nileuniversity.edu.ng',
       role: 'student',
       matricNumber: '23/ENG/0481',
       department: 'Computer Engineering',
-      isAdmin: false
+      isAdmin: false,
     },
     {
-      id: 'security-musa',
+      id: 'demo-security-musa',
       name: 'Officer Musa (Main Gate)',
       email: 'security.gate@nileuniversity.edu.ng',
       role: 'security',
       department: 'Campus Security & Safety',
-      isAdmin: false
-    }
+      isAdmin: false,
+    },
   ];
 
-  const handleCustomLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setDomainError(null);
-    setLoginMessage(null);
-
-    const email = emailInput.trim().toLowerCase();
-    if (!email) return;
-
-    // Check institutional domain with pilot exception for Ayomide
-    const isPilotAdmin = email === 'ayomide2289@gmail.com';
-    const isNileDomain = email.endsWith('@nileuniversity.edu.ng');
-
-    if (!isPilotAdmin && !isNileDomain) {
-      setDomainError('Only @nileuniversity.edu.ng emails can sign in during the pilot.');
-      return;
-    }
-
-    const { role, isAdmin, isPilotException } = resolveUserRole(email);
-
-    const user: User = {
-      id: `user-${Date.now()}`,
-      name: nameInput.trim() || (isPilotAdmin ? 'Ayomide' : 'Nile Student'),
-      email,
-      role,
-      isAdmin,
-      department: role === 'security' ? 'Campus Security & Safety' : 'Nile University of Nigeria'
-    };
-
-    onLogin(user);
-    setLoginMessage(`Signed in as ${user.name} (${role.toUpperCase()}${isPilotException ? ' - Pilot Exception' : ''})`);
+  const clearFeedback = () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
   };
 
   const handleSelectDemoAccount = (preset: User) => {
     onLogin(preset);
-    setLoginMessage(`Switched active account to ${preset.name}`);
+    setSuccessMessage(`Active demo account: ${preset.name}`);
+  };
+
+  /**
+   * Validates email domain and password requirements
+   */
+  const validateCredentials = (isRegistration: boolean): boolean => {
+    const trimmed = emailInput.trim().toLowerCase();
+    if (!trimmed.endsWith('@nileuniversity.edu.ng')) {
+      setErrorMessage('Use your Nile University email.');
+      return false;
+    }
+    if (isRegistration && passwordInput.length < 8) {
+      setErrorMessage('Password must be at least 8 characters.');
+      return false;
+    }
+    if (!passwordInput) {
+      setErrorMessage('Please enter your password.');
+      return false;
+    }
+    return true;
+  };
+
+  /**
+   * Real Mode: Handle Email & Password Sign Up
+   */
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearFeedback();
+
+    if (!validateCredentials(true)) return;
+
+    const trimmedEmail = emailInput.trim().toLowerCase();
+    const cleanPassword = passwordInput;
+    // Wipe password state immediately after extracting to avoid memory retention
+    setPasswordInput('');
+
+    setIsSubmitting(true);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, cleanPassword);
+      // Immediately send verification email
+      await sendEmailVerification(userCredential.user);
+
+      setUnverifiedEmail(trimmedEmail);
+      setAuthMode('verify');
+      setResendCooldown(60);
+      setSuccessMessage('We sent a link to your Nile email. Check your inbox and junk folder.');
+    } catch (err: any) {
+      if (err?.code === 'auth/email-already-in-use') {
+        setErrorMessage('An account with this email already exists. Sign in instead.');
+      } else if (err?.code === 'auth/weak-password') {
+        setErrorMessage('Password must be at least 8 characters.');
+      } else if (err?.code === 'auth/network-request-failed') {
+        setErrorMessage('Network connection failed. Check your data connection.');
+      } else {
+        setErrorMessage(err?.message || 'Could not create account. Please check your details.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  /**
+   * Real Mode: Handle Email & Password Sign In
+   */
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearFeedback();
+
+    const trimmedEmail = emailInput.trim().toLowerCase();
+    if (!trimmedEmail.endsWith('@nileuniversity.edu.ng')) {
+      setErrorMessage('Use your Nile University email.');
+      return;
+    }
+    if (!passwordInput) {
+      setErrorMessage('Please enter your password.');
+      return;
+    }
+
+    const cleanPassword = passwordInput;
+    setPasswordInput('');
+
+    setIsSubmitting(true);
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, cleanPassword);
+      const fbUser = userCredential.user;
+
+      // If email is not verified, gate access and route to verify screen
+      if (!fbUser.emailVerified) {
+        setUnverifiedEmail(trimmedEmail);
+        setAuthMode('verify');
+        setErrorMessage('Your email address is not verified yet. Please check your inbox.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Check role in /roles/{uid}
+      const assignedRole = await fetchUserRole(fbUser.uid);
+      const role: UserRole = assignedRole === 'admin' || assignedRole === 'security'
+        ? assignedRole
+        : 'student';
+      const isAdmin = role === 'admin';
+
+      const loggedUser: User = {
+        id: fbUser.uid,
+        name: fbUser.displayName || trimmedEmail.split('@')[0],
+        email: trimmedEmail,
+        role,
+        isAdmin,
+        department: role === 'security' ? 'Campus Security & Safety' : 'Nile University of Nigeria',
+      };
+
+      try {
+        await syncUserProfile(loggedUser);
+      } catch (err) {
+        console.warn('Could not sync user profile to Firestore:', err);
+      }
+
+      onLogin(loggedUser);
+      setSuccessMessage(`Signed in as ${loggedUser.name}`);
+      onNavigateToFeed();
+    } catch (err: any) {
+      if (
+        err?.code === 'auth/invalid-credential' ||
+        err?.code === 'auth/wrong-password' ||
+        err?.code === 'auth/user-not-found'
+      ) {
+        setErrorMessage('Incorrect email or password. Please check your details.');
+      } else if (err?.code === 'auth/too-many-requests') {
+        setErrorMessage('Too many failed attempts. Please wait a few minutes.');
+      } else if (err?.code === 'auth/network-request-failed') {
+        setErrorMessage('Network connection failed. Check your data connection.');
+      } else {
+        setErrorMessage(err?.message || 'Could not sign in. Please try again.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  /**
+   * Real Mode: Handle "I've verified" confirmation
+   * Must reload the user and force-refresh the ID token (getIdToken(true))
+   */
+  const handleVerifyCheck = async () => {
+    clearFeedback();
+    setIsVerifyingCheck(true);
+
+    try {
+      if (!auth.currentUser) {
+        setErrorMessage('No active session found. Please sign in with your credentials.');
+        setAuthMode('signin');
+        setIsVerifyingCheck(false);
+        return;
+      }
+
+      // Reload user record from Firebase Auth server
+      await auth.currentUser.reload();
+      // Force refresh the token to retrieve refreshed claims and verification status
+      await auth.currentUser.getIdToken(true);
+
+      if (auth.currentUser.emailVerified) {
+        const email = (auth.currentUser.email || '').trim().toLowerCase();
+        const uid = auth.currentUser.uid;
+        const assignedRole = await fetchUserRole(uid);
+        const role: UserRole = assignedRole === 'admin' || assignedRole === 'security'
+          ? assignedRole
+          : 'student';
+        const isAdmin = role === 'admin';
+
+        const loggedUser: User = {
+          id: uid,
+          name: auth.currentUser.displayName || email.split('@')[0],
+          email,
+          role,
+          isAdmin,
+          department: role === 'security' ? 'Campus Security & Safety' : 'Nile University of Nigeria',
+        };
+
+        try {
+          await syncUserProfile(loggedUser);
+        } catch (err) {
+          console.warn('Could not sync profile:', err);
+        }
+
+        onLogin(loggedUser);
+        setSuccessMessage('Email verified successfully.');
+        onNavigateToFeed();
+      } else {
+        setErrorMessage('Your email is still unverified. Please open the confirmation link in your inbox or junk folder and try again.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Could not check verification status. Check your network.');
+    } finally {
+      setIsVerifyingCheck(false);
+    }
+  };
+
+  /**
+   * Real Mode: Handle Resend Verification Email with 60-second cooldown
+   */
+  const handleResendEmail = async () => {
+    if (resendCooldown > 0) return;
+    clearFeedback();
+
+    try {
+      if (auth.currentUser) {
+        await sendEmailVerification(auth.currentUser);
+        setResendCooldown(60);
+        setSuccessMessage('Verification link resent. Check your inbox and junk folder.');
+      } else {
+        setErrorMessage('Please sign in to request a verification email.');
+        setAuthMode('signin');
+      }
+    } catch (err: any) {
+      if (err?.code === 'auth/too-many-requests') {
+        setErrorMessage('Too many requests. Please wait a few minutes before resending.');
+      } else {
+        setErrorMessage(err?.message || 'Could not send verification email. Try again.');
+      }
+    }
+  };
+
+  /**
+   * Real Mode: Handle Forgot Password
+   */
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearFeedback();
+
+    const trimmedEmail = emailInput.trim().toLowerCase();
+    if (!trimmedEmail.endsWith('@nileuniversity.edu.ng')) {
+      setErrorMessage('Use your Nile University email.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await sendPasswordResetEmail(auth, trimmedEmail);
+      setSuccessMessage('Password reset link sent to your Nile email. Check your inbox.');
+    } catch (err: any) {
+      if (err?.code === 'auth/user-not-found') {
+        setSuccessMessage('If that account exists, a reset link was sent.');
+      } else {
+        setErrorMessage(err?.message || 'Could not send reset link. Try again.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  /**
+   * Real Mode: Handle Sign Out
+   */
+  const handleSignOut = async () => {
+    clearFeedback();
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.warn('Sign out error:', err);
+    }
+    onLogout();
+    setEmailInput('');
+    setPasswordInput('');
+    setAuthMode('signin');
   };
 
   return (
     <div className="max-w-xl mx-auto py-4 space-y-6">
-      {/* Current Session Banner if logged in */}
+      {/* Current Active Session Banner */}
       {currentUser && (
-        <div className="bg-emerald-950 text-white rounded-xl p-4 shadow-xs border border-emerald-900 flex items-center justify-between gap-3">
+        <div className="bg-blue-950 text-white rounded-lg p-4 border border-blue-900 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-emerald-900 border border-emerald-800 flex items-center justify-center font-bold text-amber-300 text-sm">
+            <div className="w-10 h-10 rounded-full bg-blue-900 border border-blue-800 flex items-center justify-center font-bold text-blue-200 text-sm">
               {currentUser.name.charAt(0)}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm text-white">{currentUser.name}</span>
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                  currentUser.role === 'admin'
-                    ? 'bg-amber-400 text-stone-900'
-                    : currentUser.role === 'security'
-                    ? 'bg-emerald-700 text-emerald-200'
-                    : 'bg-stone-800 text-stone-300'
-                }`}>
+                <span
+                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                    currentUser.role === 'admin'
+                      ? 'bg-amber-400 text-slate-900'
+                      : currentUser.role === 'security'
+                      ? 'bg-blue-700 text-blue-100'
+                      : 'bg-slate-800 text-slate-300'
+                  }`}
+                >
                   {currentUser.role}
                 </span>
-                {currentUser.email === 'ayomide2289@gmail.com' && (
-                  <span className="text-[9px] bg-amber-400/20 text-amber-300 px-1 rounded border border-amber-400/40">
-                    Pilot exception
-                  </span>
-                )}
               </div>
-              <p className="text-xs text-emerald-200/80">{currentUser.email}</p>
+              <p className="text-xs text-blue-200/80">{currentUser.email}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={onNavigateToFeed}
-              className="bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+              className="bg-blue-800 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors min-h-[44px]"
             >
               Go to Feed
             </button>
             <button
-              onClick={onLogout}
-              className="bg-stone-900 hover:bg-stone-800 text-stone-300 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+              onClick={handleSignOut}
+              className="bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold px-3 py-2 rounded-lg transition-colors min-h-[44px]"
             >
               Sign Out
             </button>
@@ -171,94 +440,304 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         </div>
       )}
 
-      {/* Main Login Card */}
-      <div className="bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
-        {/* Prominent DEMO LOGIN NOT SECURE badge */}
-        <div className="bg-amber-500 text-stone-950 px-4 py-2.5 font-bold text-xs uppercase tracking-wider flex items-center justify-between">
-          <span className="flex items-center gap-1.5">
-            <AlertTriangle className="w-4 h-4 text-stone-950" />
-            DEMO LOGIN – NOT SECURE
+      {/* Main Authentication Card */}
+      <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
+        {/* Header Notice */}
+        <div className="bg-blue-900 text-white px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-blue-300" />
+            <span className="font-bold text-xs uppercase tracking-wider">
+              {isDemoMode ? 'Demo Mode Authentication' : 'Nile University Institutional Access'}
+            </span>
+          </div>
+          <span className="text-[10px] bg-blue-800 text-blue-200 font-semibold px-2 py-0.5 rounded">
+            {isDemoMode ? 'Demo Simulation' : 'Verified Accounts Only'}
           </span>
-          <span className="text-[10px] bg-stone-900 text-amber-400 font-bold px-1.5 py-0.5 rounded">
-            Pilot Prototype
-          </span>
-        </div>
-
-        {/* Technical requirements explanation */}
-        <div className="bg-amber-50 border-b border-amber-200 p-4 text-xs text-amber-950 leading-relaxed">
-          <p className="font-semibold text-amber-950 mb-1">Production Architecture Requirement:</p>
-          <p className="text-amber-900">
-            A production app needs Supabase Auth with Google OAuth restricted to @nileuniversity.edu.ng, plus Row-Level Security policies in Postgres so students can't edit each other's data or view hidden verification answers.
-          </p>
         </div>
 
         <div className="p-5 space-y-5">
-          {domainError && (
+          {/* Plain explanation */}
+          <div className="text-xs text-slate-600 leading-relaxed space-y-1">
+            <p className="font-semibold text-slate-900">
+              Only verified Nile University community members can access listings and submit claims.
+            </p>
+            <p>
+              Use your institutional email ending in <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-800 font-mono">@nileuniversity.edu.ng</code>.
+            </p>
+          </div>
+
+          {/* Feedback Messages */}
+          {errorMessage && (
             <div className="bg-rose-50 border border-rose-300 text-rose-900 text-xs p-3 rounded-lg flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{domainError}</span>
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{errorMessage}</span>
             </div>
           )}
 
-          {loginMessage && (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs p-3 rounded-lg flex items-center gap-2">
-              <Check className="w-4 h-4 text-emerald-700 shrink-0" />
-              <span>{loginMessage}</span>
+          {successMessage && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-950 text-xs p-3 rounded-lg flex items-center gap-2">
+              <Check className="w-4 h-4 text-blue-800 shrink-0" />
+              <span>{successMessage}</span>
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleCustomLogin} className="space-y-3.5">
+          {/* REAL MODE: Email/Password Authentication Forms */}
+          {!isDemoMode && (
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">
-                Full Name:
-              </label>
-              <input
-                type="text"
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                placeholder="e.g. Tunde or Aisha"
-                className="w-full text-xs px-3 py-2.5 rounded-lg border border-stone-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
-              />
+              {/* Screen 1: Verify Email Pending Screen */}
+              {authMode === 'verify' && (
+                <div className="space-y-4 pt-1">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-blue-900 font-bold text-xs uppercase tracking-wider">
+                      <Mail className="w-4 h-4 text-blue-800" />
+                      <span>Verification Required</span>
+                    </div>
+                    <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                      We sent a link to your Nile email. Check your inbox and junk folder.
+                    </p>
+                    {unverifiedEmail && (
+                      <p className="text-xs font-mono bg-white px-2.5 py-1.5 rounded border border-blue-200 text-slate-800 inline-block">
+                        {unverifiedEmail}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleVerifyCheck}
+                      disabled={isVerifyingCheck}
+                      className="w-full min-h-[44px] py-2.5 px-4 bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2"
+                    >
+                      <RotateCw className={`w-4 h-4 ${isVerifyingCheck ? 'animate-spin' : ''}`} />
+                      <span>{isVerifyingCheck ? 'Checking verification...' : "I've verified"}</span>
+                    </button>
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        type="button"
+                        onClick={handleResendEmail}
+                        disabled={resendCooldown > 0}
+                        className="flex-1 min-h-[44px] py-2.5 px-4 bg-white border border-slate-300 hover:border-slate-400 disabled:opacity-50 text-slate-700 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <Mail className="w-3.5 h-3.5 text-slate-500" />
+                        <span>
+                          {resendCooldown > 0 ? `Resend (${resendCooldown}s)` : 'Resend link'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSignOut}
+                        className="min-h-[44px] py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <LogOut className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Sign out</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Screen 2: Sign In Form */}
+              {authMode === 'signin' && (
+                <form onSubmit={handleSignIn} className="space-y-3.5 pt-1">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Nile Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="email"
+                        required
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="yourname@nileuniversity.edu.ng"
+                        className="w-full text-xs pl-9 pr-3 py-2.5 min-h-[44px] rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-800 bg-slate-50/50"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Password
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          clearFeedback();
+                          setAuthMode('forgot');
+                        }}
+                        className="text-[11px] text-blue-900 hover:underline font-medium"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="password"
+                        required
+                        value={passwordInput}
+                        onChange={(e) => setPasswordInput(e.target.value)}
+                        placeholder="Enter your password"
+                        className="w-full text-xs pl-9 pr-3 py-2.5 min-h-[44px] rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-800 bg-slate-50/50"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full min-h-[44px] py-2.5 px-4 bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-2"
+                  >
+                    <span>{isSubmitting ? 'Signing in...' : 'Sign In'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+
+                  <div className="pt-2 text-center text-xs text-slate-600">
+                    <span>Don't have an account? </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearFeedback();
+                        setPasswordInput('');
+                        setAuthMode('signup');
+                      }}
+                      className="text-blue-900 font-bold hover:underline"
+                    >
+                      Create account
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Screen 3: Sign Up Form */}
+              {authMode === 'signup' && (
+                <form onSubmit={handleSignUp} className="space-y-3.5 pt-1">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Nile Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="email"
+                        required
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="yourname@nileuniversity.edu.ng"
+                        className="w-full text-xs pl-9 pr-3 py-2.5 min-h-[44px] rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-800 bg-slate-50/50"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Must end in @nileuniversity.edu.ng
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Create Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="password"
+                        required
+                        minLength={8}
+                        value={passwordInput}
+                        onChange={(e) => setPasswordInput(e.target.value)}
+                        placeholder="Minimum 8 characters"
+                        className="w-full text-xs pl-9 pr-3 py-2.5 min-h-[44px] rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-800 bg-slate-50/50"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Minimum 8 characters. Never shared with anyone.
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full min-h-[44px] py-2.5 px-4 bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-2"
+                  >
+                    <span>{isSubmitting ? 'Creating account...' : 'Create Account'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+
+                  <div className="pt-2 text-center text-xs text-slate-600">
+                    <span>Already have an account? </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearFeedback();
+                        setPasswordInput('');
+                        setAuthMode('signin');
+                      }}
+                      className="text-blue-900 font-bold hover:underline"
+                    >
+                      Sign in
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Screen 4: Forgot Password Form */}
+              {authMode === 'forgot' && (
+                <form onSubmit={handleForgotPassword} className="space-y-3.5 pt-1">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Nile Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="email"
+                        required
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="yourname@nileuniversity.edu.ng"
+                        className="w-full text-xs pl-9 pr-3 py-2.5 min-h-[44px] rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-800 bg-slate-50/50"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      We'll send a password reset link to this institutional address.
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full min-h-[44px] py-2.5 px-4 bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-2"
+                  >
+                    <KeyRound className="w-4 h-4" />
+                    <span>{isSubmitting ? 'Sending link...' : 'Send reset link'}</span>
+                  </button>
+
+                  <div className="pt-2 text-center text-xs text-slate-600">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearFeedback();
+                        setAuthMode('signin');
+                      }}
+                      className="text-blue-900 font-bold hover:underline"
+                    >
+                      Back to sign in
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
+          )}
 
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">
-                Campus Email Address: <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="email"
-                value={emailInput}
-                onChange={(e) => {
-                  setEmailInput(e.target.value);
-                  setDomainError(null);
-                }}
-                placeholder="matric@nileuniversity.edu.ng"
-                className="w-full text-xs px-3 py-2.5 rounded-lg border border-stone-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
-                required
-              />
-              <span className="text-[11px] text-stone-500 mt-1 block">
-                Must end with <code className="bg-stone-100 px-1 py-0.5 rounded text-stone-700 font-mono">@nileuniversity.edu.ng</code>.
-                Roles are assigned automatically from the campus registry.
-              </span>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg text-xs font-bold shadow-xs transition-colors mt-2"
-            >
-              Sign In
-            </button>
-          </form>
-
-          {/* Demo Accounts (For testing only - only visible in demo mode) */}
+          {/* DEMO MODE ONLY: Clearly labelled simulated accounts */}
           {isDemoMode && (
-            <div className="pt-4 border-t border-stone-200 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-stone-700 uppercase tracking-wider">
-                  Demo accounts (for testing only):
-                </span>
-                <span className="text-[10px] text-stone-400">Demo mode active</span>
+            <div className="pt-2 border-t border-slate-200 space-y-3">
+              <div className="bg-amber-50 border border-amber-300 text-amber-950 p-2.5 rounded-lg text-xs">
+                <span className="font-bold">Demo Mode active:</span> Choose a simulated campus account below. Real mode uses Firebase Email/Password with verification.
               </div>
 
               <div className="grid grid-cols-1 gap-2">
@@ -269,45 +748,42 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       key={account.id}
                       type="button"
                       onClick={() => handleSelectDemoAccount(account)}
-                      className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${
+                      className={`w-full min-h-[44px] p-2.5 rounded-lg border text-left transition-all flex items-center justify-between ${
                         isActive
-                          ? 'border-emerald-600 bg-emerald-50/80 ring-1 ring-emerald-600'
-                          : 'border-stone-200 hover:border-emerald-500 hover:bg-stone-50'
+                          ? 'border-blue-700 bg-blue-50/80 ring-1 ring-blue-700'
+                          : 'border-slate-200 hover:border-blue-500 hover:bg-slate-50'
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className={`w-7 h-7 rounded-md flex items-center justify-center font-bold text-xs ${
-                          account.role === 'admin'
-                            ? 'bg-amber-400 text-stone-900'
-                            : account.role === 'security'
-                            ? 'bg-emerald-800 text-white'
-                            : 'bg-stone-200 text-stone-700'
-                        }`}>
-                          {account.role === 'admin' ? '★' : account.role === 'security' ? '🛡' : '🎓'}
+                        <div
+                          className={`w-7 h-7 rounded-md flex items-center justify-center font-bold text-xs ${
+                            account.role === 'admin'
+                              ? 'bg-amber-400 text-slate-900'
+                              : account.role === 'security'
+                              ? 'bg-blue-900 text-white'
+                              : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {account.role === 'admin' ? 'A' : account.role === 'security' ? 'S' : 'U'}
                         </div>
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-xs text-stone-900">{account.name}</span>
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded uppercase bg-stone-100 text-stone-600">
+                            <span className="font-bold text-xs text-slate-900">{account.name}</span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded uppercase bg-slate-100 text-slate-600">
                               {account.role}
                             </span>
-                            {account.email === 'ayomide2289@gmail.com' && (
-                              <span className="text-[9px] bg-amber-100 text-amber-800 px-1 rounded">
-                                Pilot exception
-                              </span>
-                            )}
                           </div>
-                          <span className="text-[10px] text-stone-500">{account.email}</span>
+                          <span className="text-[10px] text-slate-500">{account.email}</span>
                         </div>
                       </div>
 
                       <div className="text-right">
                         {isActive ? (
-                          <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                          <span className="text-xs font-bold text-blue-900 flex items-center gap-1">
                             <UserCheck className="w-3.5 h-3.5" /> Active
                           </span>
                         ) : (
-                          <span className="text-xs font-semibold text-stone-500 hover:text-stone-900">
+                          <span className="text-xs font-semibold text-slate-500 hover:text-slate-900">
                             Select →
                           </span>
                         )}
