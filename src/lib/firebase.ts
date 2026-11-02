@@ -52,30 +52,39 @@ export function handleFirestoreError(
   operationType: OperationType,
   path: string | null
 ): never {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo:
-        auth.currentUser?.providerData?.map((provider) => ({
-          providerId: provider.providerId,
-          email: provider.email,
-        })) || [],
-    },
-    operationType,
-    path,
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  const errMsg = error instanceof Error ? error.message : String(error);
+  if (errMsg.includes('token-service-api-has-not-been-used') || errMsg.includes('securetoken.googleapis.com')) {
+    signOut(auth).catch(() => {});
+  }
+
+  // Sanitize message: do not expose internal paths, user identifiers, or stack traces
+  let userFacingMessage = 'Action could not be completed. Please check your connection and try again.';
+  if (errMsg.toLowerCase().includes('missing or insufficient permissions') || errMsg.toLowerCase().includes('permission-denied')) {
+    userFacingMessage = 'Access denied. You do not have permission for this campus record.';
+  } else if (errMsg.toLowerCase().includes('not-found')) {
+    userFacingMessage = 'The requested campus item or record could not be found.';
+  }
+
+  // Internal debug log only containing sanitized operation code, never auth tokens or user email
+  console.warn(`[Data Service] Operation ${operationType} on ${path?.split('/')[0] || 'resource'} failed:`, errMsg);
+  throw new Error(userFacingMessage);
 }
 
 export async function testConnection(): Promise<boolean> {
   try {
+    // Wait for initial auth state from IndexedDB to be ready
+    if (typeof auth.authStateReady === 'function') {
+      await auth.authStateReady();
+    }
+
     if (auth.currentUser) {
+      const isPassword = auth.currentUser.providerData?.some((p) => p.providerId === 'password');
+      if (isPassword) {
+        console.warn('Stale password provider session detected. Clearing from local session.');
+        await signOut(auth);
+        return false;
+      }
+
       try {
         await auth.currentUser.getIdToken(false);
       } catch (tokenError: any) {
@@ -84,7 +93,7 @@ export async function testConnection(): Promise<boolean> {
           tokenError?.code === 'auth/token-service-api-has-not-been-used'
         ) {
           console.warn(
-            'Token Service API disabled on Google Cloud project 399482156784. Enable at: https://console.developers.google.com/apis/api/securetoken.googleapis.com/overview?project=399482156784'
+            'Token Service API disabled on Google Cloud project 399482156784. Signing out stale session.'
           );
           await signOut(auth);
           return false;
@@ -103,7 +112,7 @@ export async function testConnection(): Promise<boolean> {
       error?.message?.includes('securetoken.googleapis.com')
     ) {
       console.warn(
-        'Token Service API disabled on Google Cloud project 399482156784. Enable at: https://console.developers.google.com/apis/api/securetoken.googleapis.com/overview?project=399482156784'
+        'Token Service API disabled on Google Cloud project 399482156784. Signing out stale session.'
       );
       if (auth.currentUser) {
         await signOut(auth);

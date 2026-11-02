@@ -2,12 +2,12 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * 
- * NileFound Admin Panel
- * Layout: Operational summary metrics, claims approval queue, custody ledger, and post moderation in Nile Blue & White.
- * Main Action: Review verification answers, approve/reject claims, and audit physical custody items.
+ * NileFound Admin Panel - Built specially for ayomide2289@gmail.com
+ * Layout: Primary administrator dashboard in Deep Navy (#0B1020), Muted Cards (#141B33), and Electric Lime (#C6FF3D).
+ * Main Action: Review verification answers, approve/reject claims, audit physical custody at university gates, and manage campus roles.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, 
   CheckCircle, 
@@ -16,11 +16,23 @@ import {
   Archive, 
   Download, 
   Check, 
-  KeyRound
+  KeyRound,
+  ShieldCheck,
+  UserCheck,
+  Plus,
+  RefreshCw,
+  Clock,
+  MapPin,
+  HelpCircle
 } from 'lucide-react';
 import { CampusItem, ClaimRecord, User } from '../types/index.ts';
 import { generateCampusAuditReport } from '../utils/admin.ts';
 import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
+import { 
+  fetchAllRoles, 
+  assignUserRole, 
+  UserRoleRecord 
+} from '../services/firestoreService.ts';
 
 interface AdminPanelProps {
   currentUser: User | null;
@@ -45,11 +57,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onExpireOldItems,
   onNavigateToLogin
 }) => {
-  const [activeTab, setActiveTab] = useState<'claims' | 'custody' | 'all_items'>('claims');
+  const [activeTab, setActiveTab] = useState<'claims' | 'custody' | 'all_items' | 'roles'>('claims');
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
-  // Check permissions
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin;
+  // Role management state
+  const [roleRecords, setRoleRecords] = useState<UserRoleRecord[]>([]);
+  const [isLoadingRoles, setIsLoadingRoles] = useState(false);
+  const [newTargetUid, setNewTargetUid] = useState('');
+  const [newTargetEmail, setNewTargetEmail] = useState('');
+  const [newTargetRole, setNewTargetRole] = useState<'admin' | 'security'>('security');
+  const [isSavingRole, setIsSavingRole] = useState(false);
+
+  const isOwnerEmail = currentUser?.email?.trim().toLowerCase() === 'ayomide2289@gmail.com';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwnerEmail;
   const isSecurity = currentUser?.role === 'security';
   const hasAccess = isAdmin || isSecurity;
 
@@ -64,12 +84,59 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const showNotification = (msg: string) => {
     setActionNotice(msg);
-    setTimeout(() => setActionNotice(null), 3000);
+    setTimeout(() => setActionNotice(null), 3500);
+  };
+
+  const loadRoles = async () => {
+    setIsLoadingRoles(true);
+    try {
+      const records = await fetchAllRoles();
+      setRoleRecords(records);
+    } catch {
+      showNotification('Could not load roles. Please check network.');
+    } finally {
+      setIsLoadingRoles(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'roles' && hasAccess) {
+      loadRoles();
+    }
+  }, [activeTab, hasAccess]);
+
+  const handleCreateOrUpdateRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isOwnerEmail) {
+      showNotification('Unauthorized: Only ayomide2289@gmail.com can provision new roles.');
+      return;
+    }
+    if (!newTargetUid.trim() || !newTargetEmail.trim()) {
+      showNotification('Please fill in both the user ID and Nile email.');
+      return;
+    }
+    setIsSavingRole(true);
+    try {
+      await assignUserRole(
+        newTargetUid.trim(),
+        newTargetEmail.trim().toLowerCase(),
+        newTargetRole,
+        currentUser?.email || 'ayomide2289@gmail.com'
+      );
+      showNotification(`Assigned ${newTargetRole} role to ${newTargetEmail.trim()}.`);
+      setNewTargetUid('');
+      setNewTargetEmail('');
+      await loadRoles();
+    } catch (err: any) {
+      showNotification(err?.message || 'Could not save role. Check permissions.');
+    } finally {
+      setIsSavingRole(false);
+    }
   };
 
   const exportAuditLogCsv = () => {
     const headers = ['ID', 'Type', 'Title', 'Category', 'Location', 'Holding Desk', 'Status', 'Date Reported'];
-    const rows = items.map(i => [
+    const rows = items.map((i) => [
       i.id,
       i.type,
       `"${i.title.replace(/"/g, '""')}"`,
@@ -88,24 +155,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showNotification('Audit log exported as CSV for Student Affairs.');
+    showNotification('Audit log exported as CSV for Nile University Student Affairs.');
   };
 
   if (!hasAccess || !currentUser) {
     return (
-      <div className="max-w-md mx-auto my-12 p-6 bg-white rounded-xl border border-slate-200 text-center space-y-4">
-        <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center mx-auto">
-          <ShieldAlert className="w-6 h-6" />
+      <div className="max-w-md mx-auto my-12 p-8 bg-[#141B33] rounded-[20px] border border-[#1E294B] text-center space-y-5 shadow-2xl">
+        <div className="w-14 h-14 rounded-2xl bg-[#1E294B] text-[#C6FF3D] flex items-center justify-center mx-auto border border-[#2A3B66]">
+          <ShieldAlert className="w-7 h-7" />
         </div>
-        <h3 className="font-bold text-slate-900 text-base">Restricted Administrator Area</h3>
-        <p className="text-xs text-slate-600 leading-relaxed">
-          This panel is restricted to verified administrators and Nile University Campus Security officers with provisioned roles.
-        </p>
+        <div className="space-y-1.5">
+          <h3 className="font-extrabold text-[#F4F6FF] text-lg tracking-tight">Restricted Administrator Area</h3>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            This administration portal is specially configured for <strong className="text-[#C6FF3D]">ayomide2289@gmail.com</strong> and designated Nile University campus security personnel.
+          </p>
+        </div>
         <button
           onClick={onNavigateToLogin}
-          className="bg-blue-900 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors"
+          className="bg-[#C6FF3D] text-[#0B1020] text-xs font-extrabold px-6 py-3 rounded-full hover:bg-[#b8f52f] transition-all min-h-[44px] shadow-[0_0_15px_rgba(198,255,61,0.2)] cursor-pointer"
         >
-          Sign In to Authorized Account
+          Sign In with Admin Account
         </button>
       </div>
     );
@@ -113,130 +182,152 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="bg-blue-950 text-white rounded-xl p-5 border border-blue-900 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider mb-1">
-            <KeyRound className="w-4 h-4" />
-            <span>Admin Panel</span>
+      {/* Top Banner Dedicated to Ayomide */}
+      <div className="bg-[#141B33] text-[#F4F6FF] rounded-[20px] p-6 border border-[#1E294B] shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#C6FF3D]/5 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
+            <span className="bg-[#C6FF3D] text-[#0B1020] font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full tracking-wide flex items-center gap-1 shadow-xs">
+              <ShieldCheck className="w-3.5 h-3.5 stroke-[3]" />
+              {isOwnerEmail ? 'System Owner & Primary Admin' : 'Campus Administrator'}
+            </span>
+            <span className="text-xs text-[#C6FF3D]/90 font-mono">
+              ayomide2289@gmail.com
+            </span>
           </div>
-          <h2 className="text-lg font-bold">Campus Custody & Verification Management</h2>
-          <p className="text-xs text-blue-200/90 mt-0.5 leading-relaxed">
-            Signed in as <strong>{currentUser.name}</strong> ({currentUser.email}). Verify claims, audit gate-held items, and export records.
+
+          <h2 className="text-xl font-extrabold text-[#F4F6FF] tracking-tight">
+            NileFound Operations & Custody Desk
+          </h2>
+          <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
+            Full administrative control over campus items, claim approvals, security gate custody, and authorized campus staff roles.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0">
           <button
             onClick={exportAuditLogCsv}
-            className="flex items-center gap-1.5 bg-blue-900 hover:bg-blue-800 text-white text-xs font-semibold px-3 py-2 rounded-lg border border-blue-800 transition-colors"
+            className="flex items-center gap-2 bg-[#1E294B] hover:bg-[#2A3B66] text-[#F4F6FF] text-xs font-bold px-4 py-2.5 rounded-full border border-[#2A3B66] transition-colors min-h-[44px] cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-4 h-4 text-[#C6FF3D]" />
             <span>Export CSV</span>
           </button>
           <button
             onClick={() => {
               onExpireOldItems();
-              showNotification('Evaluated items: posts older than 60 days marked as expired.');
+              showNotification('Evaluated items: posts older than 30 days marked as expired.');
             }}
-            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
-            title="Auto-expire posts older than 60 days"
+            className="flex items-center gap-2 bg-[#0B1020] hover:bg-slate-900 text-slate-300 text-xs font-bold px-4 py-2.5 rounded-full border border-[#1E294B] transition-colors min-h-[44px] cursor-pointer"
+            title="Auto-expire posts older than 30 days"
           >
-            <Archive className="w-3.5 h-3.5" />
-            <span>Auto-Expire (&gt;60d)</span>
+            <Archive className="w-4 h-4 text-slate-400" />
+            <span>Auto-Expire (&gt;30d)</span>
           </button>
         </div>
       </div>
 
       {actionNotice && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-950 text-xs p-3 rounded-lg flex items-center gap-2">
-          <Check className="w-4 h-4 text-blue-800 shrink-0" />
+        <div className="bg-[#C6FF3D]/10 border border-[#C6FF3D]/30 text-[#C6FF3D] text-xs p-3.5 rounded-xl flex items-center gap-2.5 shadow-sm">
+          <Check className="w-4 h-4 text-[#C6FF3D] shrink-0" />
           <span>{actionNotice}</span>
         </div>
       )}
 
       {/* KPI Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 text-left">
-          <span className="text-[11px] font-bold text-slate-500 uppercase">Pending Claims</span>
-          <div className="text-2xl font-extrabold text-amber-600 font-mono mt-1">
-            {claims.length === 0 ? 'No data yet' : stats.pendingClaims}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="bg-[#141B33] p-5 rounded-[20px] border border-[#1E294B] text-left hover:border-[#C6FF3D]/30 transition-colors shadow-lg">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pending Claims</span>
+          <div className="text-3xl font-extrabold text-[#C6FF3D] font-mono mt-1">
+            {pendingClaims.length}
           </div>
-          <span className="text-[10px] text-slate-400">
-            {claims.length === 0 ? 'No claims submitted' : 'Awaiting review'}
+          <span className="text-[10px] text-slate-400 mt-0.5 block">
+            {pendingClaims.length === 0 ? 'Queue is clear' : 'Awaiting admin review'}
           </span>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 text-left">
-          <span className="text-[11px] font-bold text-slate-500 uppercase">At Main Gate Desk</span>
-          <div className="text-2xl font-extrabold text-blue-900 font-mono mt-1">
-            {items.length === 0 ? 'No data yet' : stats.heldAtGate}
+        <div className="bg-[#141B33] p-5 rounded-[20px] border border-[#1E294B] text-left hover:border-[#C6FF3D]/30 transition-colors shadow-lg">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Physical Custody</span>
+          <div className="text-3xl font-extrabold text-[#F4F6FF] font-mono mt-1">
+            {physicalCustodyItems.length}
           </div>
-          <span className="text-[10px] text-slate-400">
-            {items.length === 0 ? 'No items recorded' : 'Physical custody'}
+          <span className="text-[10px] text-slate-400 mt-0.5 block">
+            At Security Gate & Desks
           </span>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 text-left">
-          <span className="text-[11px] font-bold text-slate-500 uppercase">Reunited Items</span>
-          <div className="text-2xl font-extrabold text-slate-900 font-mono mt-1">
-            {items.length === 0 ? 'No data yet' : stats.totalReturned}
+        <div className="bg-[#141B33] p-5 rounded-[20px] border border-[#1E294B] text-left hover:border-[#C6FF3D]/30 transition-colors shadow-lg">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Reunited Items</span>
+          <div className="text-3xl font-extrabold text-emerald-400 font-mono mt-1">
+            {stats.totalReturned}
           </div>
-          <span className="text-[10px] text-slate-400">
-            {items.length === 0 ? 'No returns yet' : 'Verified handovers'}
+          <span className="text-[10px] text-slate-400 mt-0.5 block">
+            Confirmed returned
           </span>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 text-left">
-          <span className="text-[11px] font-bold text-slate-500 uppercase">Return Rate</span>
-          <div className="text-2xl font-extrabold text-blue-900 font-mono mt-1">
-            {stats.totalFound === 0 ? 'No data yet' : `${stats.returnRate}%`}
+        <div className="bg-[#141B33] p-5 rounded-[20px] border border-[#1E294B] text-left hover:border-[#C6FF3D]/30 transition-colors shadow-lg">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Tracked</span>
+          <div className="text-3xl font-extrabold text-[#F4F6FF] font-mono mt-1">
+            {items.length}
           </div>
-          <span className="text-[10px] text-slate-400">
-            Target: &gt;= 45% (to be validated)
+          <span className="text-[10px] text-slate-400 mt-0.5 block">
+            Lost and found posts
           </span>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 text-xs">
+      {/* Admin Tabs */}
+      <div className="flex border-b border-[#1E294B] gap-2 text-xs overflow-x-auto scrollbar-none">
         <button
           onClick={() => setActiveTab('claims')}
-          className={`py-2 px-3 font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+          className={`py-3 px-4 font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${
             activeTab === 'claims'
-              ? 'border-blue-900 text-blue-950 font-bold'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'border-[#C6FF3D] text-[#C6FF3D]'
+              : 'border-transparent text-slate-400 hover:text-[#F4F6FF]'
           }`}
         >
           <span>Claim Requests Queue</span>
-          <span className="bg-amber-100 text-amber-900 font-mono text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+          <span className="bg-[#C6FF3D]/20 text-[#C6FF3D] font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
             {pendingClaims.length}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('custody')}
-          className={`py-2 px-3 font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+          className={`py-3 px-4 font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${
             activeTab === 'custody'
-              ? 'border-blue-900 text-blue-950 font-bold'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'border-[#C6FF3D] text-[#C6FF3D]'
+              : 'border-transparent text-slate-400 hover:text-[#F4F6FF]'
           }`}
         >
-          <span>Gate & Facility Custody Ledger</span>
-          <span className="bg-slate-100 text-slate-700 font-mono text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+          <span>Gate Custody Ledger</span>
+          <span className="bg-[#1E294B] text-slate-300 font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
             {physicalCustodyItems.length}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('all_items')}
-          className={`py-2 px-3 font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+          className={`py-3 px-4 font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${
             activeTab === 'all_items'
-              ? 'border-blue-900 text-blue-950 font-bold'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'border-[#C6FF3D] text-[#C6FF3D]'
+              : 'border-transparent text-slate-400 hover:text-[#F4F6FF]'
           }`}
         >
           <span>All Campus Items ({items.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('roles')}
+          className={`py-3 px-4 font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${
+            activeTab === 'roles'
+              ? 'border-[#C6FF3D] text-[#C6FF3D]'
+              : 'border-transparent text-slate-400 hover:text-[#F4F6FF]'
+          }`}
+        >
+          <UserCheck className="w-4 h-4 text-[#C6FF3D]" />
+          <span>Staff Roles & Security</span>
         </button>
       </div>
 
@@ -244,233 +335,331 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {activeTab === 'claims' && (
         <div className="space-y-4">
           {pendingClaims.length === 0 ? (
-            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center space-y-2">
-              <CheckCircle className="w-8 h-8 text-blue-800 mx-auto" />
-              <h4 className="font-bold text-slate-800 text-sm">No pending claims</h4>
-              <p className="text-xs text-slate-500">All submitted claims have been processed.</p>
+            <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-10 text-center space-y-2 shadow-lg">
+              <CheckCircle className="w-10 h-10 text-[#C6FF3D] mx-auto" />
+              <h4 className="font-extrabold text-[#F4F6FF] text-base">No pending claims</h4>
+              <p className="text-xs text-slate-400">All submitted claims have been processed.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3">
-              {pendingClaims.map((claim) => {
-                const item = items.find((i) => i.id === claim.itemId);
-                return (
-                  <div key={claim.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                      <div>
-                        <span className="text-[10px] font-bold text-amber-800 uppercase bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                          Claim for: {claim.itemTitle}
+            pendingClaims.map((claim) => {
+              const matchedItem = items.find((i) => i.id === claim.itemId);
+              return (
+                <div
+                  key={claim.id}
+                  className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-5 space-y-4 shadow-xl hover:border-[#C6FF3D]/30 transition-all"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1E294B] pb-4">
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-extrabold text-[#F4F6FF] text-base">{claim.itemTitle}</span>
+                        <span className="text-[10px] font-mono font-bold uppercase bg-amber-400/10 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full">
+                          Pending Review
                         </span>
-                        <div className="text-xs text-slate-600 mt-1">
-                          Claimant: <strong className="text-slate-900">{claim.claimantName}</strong> ({claim.claimantEmail})
-                        </div>
                       </div>
-
-                      <span className="text-[11px] text-slate-400">
-                        {formatDateDDMMYYYY(claim.createdAt)}
-                      </span>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Claimed by <strong className="text-[#F4F6FF]">{claim.claimantName}</strong> ({claim.claimantEmail}) on {formatDateDDMMYYYY(claim.createdAt)}
+                      </p>
                     </div>
 
-                    {/* Compare question vs claimant answer */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                          Finder's Verification Question:
-                        </span>
-                        <p className="text-slate-800 font-medium mt-0.5">
-                          "{item?.verificationQuestion || 'No question set'}"
-                        </p>
-                      </div>
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <button
+                        onClick={() => {
+                          onApproveClaim(claim.id, claim.itemId);
+                          showNotification(`Approved claim for ${claim.claimantName}. Item marked as returned.`);
+                        }}
+                        className="flex items-center gap-2 bg-[#C6FF3D] hover:bg-[#b8f52f] text-[#0B1020] text-xs font-extrabold px-4 py-2.5 rounded-full shadow-[0_0_15px_rgba(198,255,61,0.2)] transition-all min-h-[44px] cursor-pointer"
+                      >
+                        <CheckCircle className="w-4 h-4 stroke-[3]" />
+                        <span>Approve & Return</span>
+                      </button>
 
-                      <div>
-                        <span className="text-[10px] font-bold text-blue-900 uppercase block">
-                          Claimant's Submitted Answer:
-                        </span>
-                        <p className="text-slate-900 font-bold bg-white p-2 rounded border border-slate-200 mt-0.5">
-                          "{claim.submittedAnswer}"
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Admin Actions */}
-                    <div className="flex items-center justify-end gap-2 pt-1">
                       <button
                         onClick={() => {
                           onRejectClaim(claim.id);
                           showNotification(`Rejected claim from ${claim.claimantName}.`);
                         }}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition-colors"
+                        className="flex items-center gap-2 bg-[#0B1020] hover:bg-rose-950/40 text-rose-300 text-xs font-bold px-4 py-2.5 rounded-full border border-rose-500/40 transition-colors min-h-[44px] cursor-pointer"
                       >
-                        <XCircle className="w-3.5 h-3.5" />
-                        <span>Reject Claim</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          onApproveClaim(claim.id, claim.itemId);
-                          showNotification(`Approved! ${claim.claimantName} verified as rightful owner.`);
-                        }}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold rounded-lg shadow-xs transition-colors"
-                      >
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        <span>Approve & Verify Ownership</span>
+                        <XCircle className="w-4 h-4" />
+                        <span>Reject</span>
                       </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Verification QA Comparison */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-[#0B1020] p-4 rounded-xl border border-[#1E294B]">
+                    <div>
+                      <span className="font-bold text-slate-400 block mb-1.5 uppercase text-[10px] tracking-wider">Item Details & Question:</span>
+                      <p className="text-slate-300 leading-relaxed">{matchedItem?.description || 'No public description.'}</p>
+                      {matchedItem?.verificationQuestion && (
+                        <p className="mt-2 text-[#C6FF3D] font-medium">
+                          <strong>Question:</strong> {matchedItem.verificationQuestion}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <span className="font-bold text-slate-400 block mb-1.5 uppercase text-[10px] tracking-wider">Claimant Submitted Answer:</span>
+                      <p className="bg-[#141B33] p-3 rounded-xl border border-[#1E294B] text-[#F4F6FF] font-mono text-xs leading-relaxed">
+                        {claim.submittedAnswer || 'No verification answer provided.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       )}
 
-      {/* TAB 2: Physical Custody Ledger */}
+      {/* TAB 2: Gate Custody Ledger */}
       {activeTab === 'custody' && (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-          <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+        <div className="space-y-4">
+          <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-5 shadow-lg flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-slate-900 text-sm">Physical Gate & Facility Custody Ledger</h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Items deposited in physical storage (Main Gate Security desk, Library desk, Student Affairs).
+              <h3 className="font-extrabold text-[#F4F6FF] text-base">Nile University Gate Custody Ledger</h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Physical inventory logged at security checkpoints and administration desks.
               </p>
             </div>
-            <span className="text-xs bg-blue-50 text-blue-900 font-bold px-2 py-1 rounded border border-blue-200">
-              {physicalCustodyItems.length} Physical Records
+            <span className="text-xs bg-[#C6FF3D]/10 text-[#C6FF3D] border border-[#C6FF3D]/30 font-mono font-bold px-3 py-1 rounded-full">
+              {physicalCustodyItems.length} Held Items
             </span>
           </div>
 
-          {physicalCustodyItems.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-500">
-              No items currently held in physical campus facility custody.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-700 border-b border-slate-200">
-                    <th className="py-2.5 px-3 font-semibold">Item</th>
-                    <th className="py-2.5 px-3 font-semibold">Custody Desk</th>
-                    <th className="py-2.5 px-3 font-semibold">Campus Location</th>
-                    <th className="py-2.5 px-3 font-semibold">Status</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {physicalCustodyItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/70">
-                      <td className="py-3 px-3 font-semibold text-slate-900">
-                        {item.title}
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded text-[11px] font-medium">
-                          {item.holdingLocation === 'security_main_gate'
-                            ? 'Main Gate Security'
-                            : item.holdingLocation === 'student_affairs_office'
-                            ? 'Student Affairs'
-                            : 'Library Desk'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-slate-600">{item.location}</td>
-                      <td className="py-3 px-3">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                          item.status === 'returned'
-                            ? 'bg-blue-100 text-blue-900'
-                            : item.status === 'claim_requested'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}>
-                          {item.status.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        {item.status !== 'returned' ? (
-                          <button
-                            onClick={() => {
-                              onUpdateItemStatus(item.id, 'returned');
-                              showNotification(`Marked "${item.title}" as physically returned.`);
-                            }}
-                            className="bg-blue-900 hover:bg-blue-800 text-white text-[11px] font-bold px-2.5 py-1 rounded transition-colors"
-                          >
-                            Mark Handed Over
-                          </button>
-                        ) : (
-                          <span className="text-[11px] text-blue-900 font-semibold flex items-center justify-end gap-1">
-                            <Check className="w-3.5 h-3.5" /> Reunited
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {physicalCustodyItems.map((item) => (
+              <div
+                key={item.id}
+                className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-5 space-y-3 shadow-lg hover:border-[#C6FF3D]/30 transition-all"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-extrabold text-[#F4F6FF] text-sm">{item.title}</span>
+                  <span className="text-[10px] font-mono uppercase bg-[#1E294B] text-[#C6FF3D] border border-[#C6FF3D]/30 px-2.5 py-0.5 rounded-full font-bold">
+                    {item.holdingLocation.replace(/_/g, ' ')}
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">{item.description}</p>
+
+                <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-[#1E294B]">
+                  <span className="flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-[#C6FF3D]" />
+                    <span>{item.location}</span>
+                  </span>
+                  <span>Logged: {formatDateDDMMYYYY(item.dateLostOrFound)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* TAB 3: All Items Moderation */}
+      {/* TAB 3: All Campus Items (Master Moderation) */}
       {activeTab === 'all_items' && (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-          <div className="p-4 border-b border-slate-200">
-            <h3 className="font-bold text-slate-900 text-sm">Post Moderation & Management</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Review campus reports and update item statuses.
-            </p>
-          </div>
+        <div className="space-y-4">
+          <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-[#1E294B] flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-[#F4F6FF] text-base">Master Inventory Control</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Update status or purge listings from the system.</p>
+              </div>
+              <span className="text-xs text-slate-400 font-mono">Total: {items.length}</span>
+            </div>
 
-          {items.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-500">
-              No campus items reported yet.
+            <div className="divide-y divide-[#1E294B] text-xs">
+              {items.length === 0 ? (
+                <div className="p-8 text-center text-slate-400">No items currently logged.</div>
+              ) : (
+                items.map((item) => (
+                  <div key={item.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#0B1020]/40 transition-colors">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase ${
+                          item.type === 'found' ? 'bg-[#C6FF3D]/10 text-[#C6FF3D]' : 'bg-amber-400/10 text-amber-300'
+                        }`}>
+                          {item.type}
+                        </span>
+                        <span className="font-bold text-[#F4F6FF] text-sm">{item.title}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        {item.location} • Status: <strong className="text-slate-300">{item.status}</strong>
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      <select
+                        value={item.status}
+                        onChange={(e) => onUpdateItemStatus(item.id, e.target.value as CampusItem['status'])}
+                        className="bg-[#0B1020] text-[#F4F6FF] border border-[#1E294B] rounded-xl px-3 py-2 text-xs focus:border-[#C6FF3D] focus:outline-hidden min-h-[44px] cursor-pointer"
+                      >
+                        <option value="open">Open</option>
+                        <option value="claim_requested">Claim Pending</option>
+                        <option value="returned">Returned / Reunited</option>
+                        <option value="expired">Expired</option>
+                      </select>
+
+                      <button
+                        onClick={() => {
+                          if (confirm(`Permanently delete "${item.title}"?`)) {
+                            onDeleteItem(item.id);
+                            showNotification(`Removed item ${item.title}.`);
+                          }
+                        }}
+                        className="text-slate-400 hover:text-rose-400 p-2 min-h-[44px] flex items-center justify-center transition-colors cursor-pointer"
+                        title="Delete item"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: Staff Roles & Security Provisioning */}
+      {activeTab === 'roles' && (
+        <div className="space-y-6">
+          {isOwnerEmail ? (
+            <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-6 shadow-2xl space-y-4">
+              <div>
+                <h3 className="font-extrabold text-[#F4F6FF] text-base">Provision Staff or Security Role</h3>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                  As the primary system owner, grant campus administrators or security officers role access to review verification answers and manage custody desks.
+                </p>
+              </div>
+
+              <form onSubmit={handleCreateOrUpdateRole} className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1.5">
+                    User Firebase UID
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. skBaRQGJm..."
+                    value={newTargetUid}
+                    onChange={(e) => setNewTargetUid(e.target.value)}
+                    className="w-full text-xs p-3 rounded-xl border border-[#1E294B] bg-[#0B1020] text-[#F4F6FF] focus:border-[#C6FF3D] focus:outline-hidden min-h-[44px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1.5">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="officer@nileuniversity.edu.ng"
+                    value={newTargetEmail}
+                    onChange={(e) => setNewTargetEmail(e.target.value)}
+                    className="w-full text-xs p-3 rounded-xl border border-[#1E294B] bg-[#0B1020] text-[#F4F6FF] focus:border-[#C6FF3D] focus:outline-hidden min-h-[44px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1.5">
+                    Role
+                  </label>
+                  <select
+                    value={newTargetRole}
+                    onChange={(e) => setNewTargetRole(e.target.value as 'admin' | 'security')}
+                    className="w-full text-xs p-3 rounded-xl border border-[#1E294B] bg-[#0B1020] text-[#F4F6FF] focus:border-[#C6FF3D] focus:outline-hidden min-h-[44px] cursor-pointer"
+                  >
+                    <option value="security">Campus Security Officer</option>
+                    <option value="admin">Administrator</option>
+                  </select>
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    type="submit"
+                    disabled={isSavingRole}
+                    className="w-full min-h-[44px] bg-[#C6FF3D] hover:bg-[#b8f52f] disabled:opacity-50 text-[#0B1020] font-extrabold text-xs py-3 px-4 rounded-full transition-all shadow-[0_0_15px_rgba(198,255,61,0.2)] flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" />
+                    <span>{isSavingRole ? 'Saving...' : 'Assign Role'}</span>
+                  </button>
+                </div>
+              </form>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
-              {items.map((item) => (
-                <div key={item.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded uppercase ${
-                        item.type === 'found' ? 'bg-blue-100 text-blue-900' : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        {item.type}
-                      </span>
-                      <span className="font-bold text-xs text-slate-900">{item.title}</span>
-                      <span className="text-[11px] text-slate-400">({item.location})</span>
-                    </div>
-                    <p className="text-xs text-slate-600 line-clamp-1">{item.description}</p>
-                    <span className="text-[10px] text-slate-400">Date: {formatDateDDMMYYYY(item.dateLostOrFound)}</span>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <select
-                      value={item.status}
-                      onChange={(e) => {
-                        onUpdateItemStatus(item.id, e.target.value as CampusItem['status']);
-                        showNotification(`Updated status for "${item.title}" to ${e.target.value}.`);
-                      }}
-                      className="text-xs py-1 px-2 border border-slate-200 rounded-md bg-white font-medium"
-                    >
-                      <option value="open">Open</option>
-                      <option value="claim_requested">Claim Requested</option>
-                      <option value="verified">Verified</option>
-                      <option value="returned">Returned</option>
-                      <option value="expired">Expired</option>
-                    </select>
-
-                    <button
-                      onClick={() => {
-                        onDeleteItem(item.id);
-                        showNotification(`Deleted item "${item.title}".`);
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                      title="Delete item"
-                      aria-label="Delete item"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+            <div className="bg-amber-400/10 border border-amber-400/30 text-amber-300 p-5 rounded-[20px] text-xs">
+              <span className="font-bold">Role Provisioning Restricted:</span> Only the primary system owner (ayomide2289@gmail.com) is authorized to assign new administrator or campus security roles.
             </div>
           )}
+
+          {/* Existing Roles List */}
+          <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-[#1E294B] flex items-center justify-between">
+              <div>
+                <h4 className="font-extrabold text-[#F4F6FF] text-sm uppercase tracking-wide">
+                  Active System Roles (/roles)
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">Persisted in Cloud Firestore security rules</p>
+              </div>
+              <button
+                onClick={loadRoles}
+                className="text-xs text-[#C6FF3D] font-bold hover:underline flex items-center gap-1.5 min-h-[44px] px-3 cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingRoles ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+            </div>
+
+            <div className="divide-y divide-[#1E294B] text-xs">
+              {/* Permanent Owner Entry */}
+              <div className="p-4 sm:p-5 flex items-center justify-between bg-[#0B1020]/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-[#C6FF3D] text-[#0B1020] font-extrabold flex items-center justify-center text-xs shadow-md">
+                    A
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-[#F4F6FF]">Ayomide (System Lead)</span>
+                      <span className="bg-[#C6FF3D]/15 text-[#C6FF3D] border border-[#C6FF3D]/30 text-[9px] font-mono font-bold px-2 py-0.5 rounded-full uppercase">
+                        Master Admin
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-mono mt-0.5">ayomide2289@gmail.com</p>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-[11px] text-[#C6FF3D] font-mono font-semibold">Active & Root</span>
+                </div>
+              </div>
+
+              {/* Dynamic Database Roles */}
+              {roleRecords.length === 0 ? (
+                <div className="p-6 text-center text-slate-400">
+                  No additional staff roles provisioned yet.
+                </div>
+              ) : (
+                roleRecords.map((r) => (
+                  <div key={r.uid} className="p-4 sm:p-5 flex items-center justify-between hover:bg-[#0B1020]/30 transition-colors">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-[#F4F6FF]">{r.email || r.uid}</span>
+                        <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full uppercase bg-[#1E294B] text-slate-300 border border-[#2A3B66]">
+                          {r.role}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-mono">UID: {r.uid}</p>
+                    </div>
+
+                    <div className="text-right text-[11px] text-slate-400">
+                      <span>Assigned by {r.assignedBy || 'Admin'}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

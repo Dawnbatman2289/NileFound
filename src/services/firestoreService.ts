@@ -28,11 +28,42 @@ const CLAIMS_COLLECTION = 'claims';
 const USERS_COLLECTION = 'users';
 const ROLES_COLLECTION = 'roles';
 
+export interface UserRoleRecord {
+  uid: string;
+  email?: string;
+  role: 'admin' | 'security' | 'student';
+  assignedAt?: string;
+  assignedBy?: string;
+}
+
 /**
  * Fetch role document from /roles/{uid}
+ * Specifically designates ayomide2289@gmail.com as Administrator
  */
 export async function fetchUserRole(uid: string): Promise<'admin' | 'security' | 'student'> {
   if (!uid) return 'student';
+
+  const currentEmail = auth.currentUser?.email?.trim().toLowerCase();
+  if (currentEmail === 'ayomide2289@gmail.com') {
+    // Automatically guarantee admin role document exists in /roles/{uid}
+    try {
+      const roleRef = doc(db, ROLES_COLLECTION, uid);
+      await setDoc(
+        roleRef,
+        {
+          role: 'admin',
+          email: 'ayomide2289@gmail.com',
+          name: 'Ayomide (Lead Admin)',
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.debug('Admin self-registration sync:', e);
+    }
+    return 'admin';
+  }
+
   try {
     const roleDocRef = doc(db, ROLES_COLLECTION, uid);
     const snap = await getDoc(roleDocRef);
@@ -47,6 +78,60 @@ export async function fetchUserRole(uid: string): Promise<'admin' | 'security' |
     console.debug('Role check:', error);
   }
   return 'student';
+}
+
+/**
+ * Assign or update a user role in /roles/{uid} (Admin only)
+ */
+export async function assignUserRole(
+  targetUid: string,
+  targetEmail: string,
+  newRole: 'admin' | 'security' | 'student',
+  assignedByEmail: string = 'ayomide2289@gmail.com'
+): Promise<void> {
+  const currentEmail = auth.currentUser?.email?.trim().toLowerCase();
+  if (currentEmail !== 'ayomide2289@gmail.com') {
+    throw new Error('Unauthorized: Only ayomide2289@gmail.com is authorized to provision campus administrator and security roles.');
+  }
+
+  const path = `${ROLES_COLLECTION}/${targetUid}`;
+  try {
+    const roleDocRef = doc(db, ROLES_COLLECTION, targetUid);
+    await setDoc(
+      roleDocRef,
+      {
+        role: newRole,
+        email: targetEmail.trim().toLowerCase(),
+        assignedAt: new Date().toISOString(),
+        assignedBy: assignedByEmail,
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Fetch all role records from /roles (Admin only)
+ */
+export async function fetchAllRoles(): Promise<UserRoleRecord[]> {
+  try {
+    const snap = await getDocs(collection(db, ROLES_COLLECTION));
+    return snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        uid: d.id,
+        email: data.email || '',
+        role: data.role || 'student',
+        assignedAt: data.assignedAt || data.updatedAt,
+        assignedBy: data.assignedBy,
+      };
+    });
+  } catch (error) {
+    console.warn('Could not fetch roles collection:', error);
+    return [];
+  }
 }
 
 /**
@@ -103,11 +188,15 @@ export function subscribeToRealtimeItems(
  * Create a new item document in Firestore
  * If item has a verification answer, store it separately in /items/{itemId}/secrets/verification
  */
-export async function saveItemToFirestore(item: CampusItem, user?: User | null): Promise<string> {
-  const currentUid = auth.currentUser?.uid || user?.id || `user-anon-${Date.now()}`;
-  const authorEmail = auth.currentUser?.email || user?.email || 'student@nileuniversity.edu.ng';
-  const authorName = auth.currentUser?.displayName || user?.name || 'Nile Member';
+export async function saveItemToFirestore(item: CampusItem, _user?: User | null): Promise<string> {
+  if (!auth.currentUser) {
+    throw new Error('You must be signed in with a verified Nile account to report an item.');
+  }
+  const currentUid = auth.currentUser.uid;
+  const authorEmail = auth.currentUser.email || 'student@nileuniversity.edu.ng';
+  const authorName = auth.currentUser.displayName || authorEmail.split('@')[0];
 
+  const nowIso = new Date().toISOString();
   const payload: Record<string, any> = {
     title: item.title.trim().slice(0, 100),
     type: item.type,
@@ -115,13 +204,13 @@ export async function saveItemToFirestore(item: CampusItem, user?: User | null):
     description: item.description.trim().slice(0, 1000),
     location: item.location.slice(0, 100),
     dateLostOrFound: item.dateLostOrFound,
-    status: item.status || 'open',
+    status: 'open',
     holdingLocation: item.holdingLocation,
     authorId: currentUid,
     authorName: authorName.slice(0, 100),
     authorEmail: authorEmail.slice(0, 100),
-    createdAt: item.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: nowIso,
+    updatedAt: nowIso,
   };
 
   if (item.imageUrl) {
@@ -238,20 +327,27 @@ export function subscribeToRealtimeClaims(
  */
 export async function saveClaimToFirestore(
   claim: ClaimRecord,
-  user?: User | null,
+  _user?: User | null,
   finderId?: string
 ): Promise<string> {
-  const currentUid = auth.currentUser?.uid || user?.id || `claimant-${Date.now()}`;
+  if (!auth.currentUser) {
+    throw new Error('You must be signed in with a verified Nile account to submit a claim.');
+  }
+  const currentUid = auth.currentUser.uid;
+  const claimantEmail = auth.currentUser.email || claim.claimantEmail.slice(0, 100);
+  const claimantName = auth.currentUser.displayName || claim.claimantName.slice(0, 100);
+  const nowIso = new Date().toISOString();
+
   const payload: Record<string, any> = {
     itemId: claim.itemId,
     itemTitle: claim.itemTitle.slice(0, 100),
     claimantId: currentUid,
-    claimantName: claim.claimantName.slice(0, 100),
-    claimantEmail: claim.claimantEmail.slice(0, 100),
+    claimantName,
+    claimantEmail,
     submittedAnswer: claim.submittedAnswer.slice(0, 500),
     status: 'pending',
-    createdAt: claim.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: nowIso,
+    updatedAt: nowIso,
   };
 
   if (finderId) {

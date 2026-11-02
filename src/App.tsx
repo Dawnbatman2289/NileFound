@@ -11,10 +11,6 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar, AppTab } from './components/Navbar.tsx';
 import { FeedView } from './components/FeedView.tsx';
-import { ResearchKitView } from './components/ResearchKitView.tsx';
-import { MetricsView } from './components/MetricsView.tsx';
-import { CareerGuideView } from './components/CareerGuideView.tsx';
-import { SystemDesignView } from './components/SystemDesignView.tsx';
 import { AdminPanel } from './components/AdminPanel.tsx';
 import { LoginPage } from './components/LoginPage.tsx';
 import { ReportModal } from './components/ReportModal.tsx';
@@ -41,11 +37,6 @@ export default function App() {
   // Demo Mode toggle: Real mode starts empty by default
   const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
     return localStorage.getItem('nilefound_demo_mode') === 'true';
-  });
-
-  // Builder mode gating: Accessible only via ?builder=1 or footer link
-  const [builderMode, setBuilderMode] = useState<boolean>(() => {
-    return window.location.search.includes('builder=1');
   });
 
   const [items, setItems] = useState<CampusItem[]>(() => {
@@ -176,18 +167,45 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser && fbUser.email) {
+        // If a password provider user is detected, purge session to prevent Token Service API errors
+        const isPasswordProvider = fbUser.providerData?.some((p) => p.providerId === 'password');
+        if (isPasswordProvider) {
+          console.warn('Stale password session detected. Signing out.');
+          await signOut(auth);
+          if (!isDemoMode) {
+            setCurrentUser(null);
+          }
+          return;
+        }
+
+        // Pre-validate token retrieval before setting active state
+        try {
+          await fbUser.getIdToken(false);
+        } catch (tokenErr: any) {
+          console.warn('Token validation failed. Signing out stale session:', tokenErr);
+          await signOut(auth);
+          if (!isDemoMode) {
+            setCurrentUser(null);
+          }
+          return;
+        }
+
         const email = fbUser.email.trim().toLowerCase();
+        const isOwner = email === 'ayomide2289@gmail.com';
         // Check role in /roles/{uid}
         const assignedRole = await fetchUserRole(fbUser.uid);
-        const isStaffOrAdmin = assignedRole === 'admin' || assignedRole === 'security';
+        const isStaffOrAdmin = isOwner || assignedRole === 'admin' || assignedRole === 'security';
+        const role = isOwner ? 'admin' : (isStaffOrAdmin ? assignedRole : 'student');
 
         const user: User = {
           id: fbUser.uid,
-          name: fbUser.displayName || email.split('@')[0],
+          name: isOwner ? 'Ayomide' : (fbUser.displayName || email.split('@')[0]),
           email,
-          role: isStaffOrAdmin ? assignedRole : 'student',
-          isAdmin: assignedRole === 'admin',
-          department: isStaffOrAdmin
+          role,
+          isAdmin: role === 'admin',
+          department: isOwner
+            ? 'System Owner & University Administration'
+            : isStaffOrAdmin
             ? (assignedRole === 'security' ? 'Campus Security & Safety' : 'University Administration')
             : 'Nile University Member',
         };
@@ -376,8 +394,8 @@ export default function App() {
   const pendingClaimsCount = claims.filter((c) => c.status === 'pending').length;
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-900 selection:bg-blue-200">
-      {/* Top App Bar & Navigation (Nile Blue #002B66 / #0F3D78) */}
+    <div className="min-h-screen bg-[#0B1020] text-[#F4F6FF] flex flex-col font-sans selection:bg-[#C6FF3D] selection:text-[#0B1020]">
+      {/* Top App Bar & Navigation */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -386,7 +404,6 @@ export default function App() {
         setLowDataMode={setLowDataMode}
         isDemoMode={isDemoMode}
         setIsDemoMode={handleToggleDemoMode}
-        builderMode={builderMode}
         onOpenReportModal={() => setIsReportModalOpen(true)}
         savedDraftCount={savedDraftCount}
         currentUser={currentUser}
@@ -394,7 +411,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 transition-opacity duration-200">
         {activeTab === 'feed' && (
           <FeedView
             items={items}
@@ -435,15 +452,8 @@ export default function App() {
             onLogout={() => setCurrentUser(null)}
             onNavigateToFeed={() => setActiveTab('feed')}
             isDemoMode={isDemoMode}
-            builderMode={builderMode}
           />
         )}
-
-        {/* Builder Scaffolding Views (Only rendered if ?builder=1) */}
-        {builderMode && activeTab === 'prototype' && <SystemDesignView />}
-        {builderMode && activeTab === 'research' && <ResearchKitView />}
-        {builderMode && activeTab === 'metrics' && <MetricsView />}
-        {builderMode && activeTab === 'career' && <CareerGuideView />}
       </main>
 
       {/* Modals */}
@@ -466,29 +476,20 @@ export default function App() {
       />
 
       {/* Footer */}
-      <footer className="bg-white border-t border-slate-200 mt-12 py-5 px-4 text-xs text-slate-500">
+      <footer className="bg-[#0B1020] border-t border-[#1E294B] mt-16 py-6 px-4 text-xs text-slate-400">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-800">NileFound</span>
-            <span>•</span>
-            <span>Nile University of Nigeria, Abuja</span>
+            <span className="font-bold text-[#F4F6FF] tracking-tight">NileFound</span>
+            <span className="text-[#C6FF3D]">•</span>
+            <span className="text-slate-400">Nile University of Nigeria, Abuja</span>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-slate-600">
+          <div className="flex items-center gap-2 text-[11px] text-slate-400">
             <button
               onClick={() => setIsPrivacyModalOpen(true)}
-              className="text-blue-900 hover:text-blue-950 underline font-medium"
+              className="text-[#C6FF3D] hover:underline font-medium cursor-pointer"
             >
               Built with privacy in mind
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 text-slate-400 text-[11px]">
-            <button
-              onClick={() => setBuilderMode(!builderMode)}
-              className="text-slate-400 hover:text-slate-600 underline"
-            >
-              {builderMode ? 'Hide Builder Notes' : 'Builder Notes'}
             </button>
           </div>
         </div>
