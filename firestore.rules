@@ -51,9 +51,9 @@ service cloud.firestore {
       return isAdmin() || isSecurity();
     }
 
-    // Access permitted for verified Nile students or authorized campus staff/admins
+    // Access permitted for any signed-in user while email constraints are relaxed
     function isNileMember() {
-      return isNileVerified() || isStaffOrAdmin();
+      return isSignedIn();
     }
 
     function isValidItem(data) {
@@ -93,7 +93,8 @@ service cloud.firestore {
 
     // Items collection (Feed of lost and found items)
     match /items/{itemId} {
-      allow get, list: if isValidId(itemId) && isNileMember();
+      allow get: if isValidId(itemId) && isNileMember();
+      allow list: if isNileMember();
       allow create: if isValidId(itemId) && isNileMember()
         && isValidItem(incoming())
         && incoming().authorId == request.auth.uid;

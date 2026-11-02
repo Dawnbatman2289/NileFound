@@ -176,47 +176,23 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser && fbUser.email) {
-        // Enforce verified institutional email requirement
-        if (!fbUser.emailVerified) {
-          if (!isDemoMode) {
-            setCurrentUser(null);
-          }
-          return;
-        }
-
         const email = fbUser.email.trim().toLowerCase();
         // Check role in /roles/{uid}
         const assignedRole = await fetchUserRole(fbUser.uid);
         const isStaffOrAdmin = assignedRole === 'admin' || assignedRole === 'security';
-        const isNileDomain = email.endsWith('@nileuniversity.edu.ng');
 
-        if (isStaffOrAdmin) {
-          const user: User = {
-            id: fbUser.uid,
-            name: fbUser.displayName || 'Campus Staff',
-            email,
-            role: assignedRole,
-            isAdmin: assignedRole === 'admin',
-            department: assignedRole === 'security' ? 'Campus Security & Safety' : 'University Administration',
-          };
-          setCurrentUser(user);
-          syncUserProfile(user).catch((e) => console.debug('Profile sync:', e));
-        } else if (isNileDomain) {
-          const user: User = {
-            id: fbUser.uid,
-            name: fbUser.displayName || 'Nile Member',
-            email,
-            role: 'student',
-            isAdmin: false,
-            department: 'Nile University of Nigeria',
-          };
-          setCurrentUser(user);
-          syncUserProfile(user).catch((e) => console.debug('Profile sync:', e));
-        } else {
-          // Reject non-Nile accounts without an administrative role
-          await signOut(auth);
-          setCurrentUser(null);
-        }
+        const user: User = {
+          id: fbUser.uid,
+          name: fbUser.displayName || email.split('@')[0],
+          email,
+          role: isStaffOrAdmin ? assignedRole : 'student',
+          isAdmin: assignedRole === 'admin',
+          department: isStaffOrAdmin
+            ? (assignedRole === 'security' ? 'Campus Security & Safety' : 'University Administration')
+            : 'Nile University Member',
+        };
+        setCurrentUser(user);
+        syncUserProfile(user).catch((e) => console.debug('Profile sync:', e));
       } else {
         if (!isDemoMode) {
           setCurrentUser(null);
@@ -459,6 +435,7 @@ export default function App() {
             onLogout={() => setCurrentUser(null)}
             onNavigateToFeed={() => setActiveTab('feed')}
             isDemoMode={isDemoMode}
+            builderMode={builderMode}
           />
         )}
 

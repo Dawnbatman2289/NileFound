@@ -108,7 +108,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-blue-900 hover:bg-blue-800 text-white px-5 py-2.5 rounded-lg text-xs font-bold shadow-xs transition-colors"
           >
             <LogIn className="w-4 h-4" />
-            <span>Sign in with Nile Email</span>
+            <span>Sign in with Google</span>
           </button>
         </div>
       </div>

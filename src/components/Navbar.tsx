@@ -67,19 +67,21 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* Demo Data Mode Toggle */}
-          <button
-            onClick={() => setIsDemoMode(!isDemoMode)}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-              isDemoMode
-                ? 'bg-amber-400 text-slate-900 font-bold'
-                : 'bg-blue-800 text-blue-200 hover:bg-blue-700'
-            }`}
-            title="Switch between Real Empty Pilot and Sample Demo Data"
-          >
-            <Database className="w-3 h-3" />
-            <span>Demo Data: {isDemoMode ? 'ON' : 'OFF'}</span>
-          </button>
+          {/* Demo Data Mode Toggle - visible only in builder mode (?builder=1) */}
+          {builderMode && (
+            <button
+              onClick={() => setIsDemoMode(!isDemoMode)}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                isDemoMode
+                  ? 'bg-amber-400 text-slate-900 font-bold'
+                  : 'bg-blue-800 text-blue-200 hover:bg-blue-700'
+              }`}
+              title="Switch between Real Empty Pilot and Sample Demo Data"
+            >
+              <Database className="w-3 h-3" />
+              <span>Demo Data: {isDemoMode ? 'ON' : 'OFF'}</span>
+            </button>
+          )}
 
           {/* Low Data Mode Toggle */}
           <button
