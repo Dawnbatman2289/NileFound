@@ -167,6 +167,7 @@ The current implementation includes:
 - Firestore and Storage rules requiring authenticated, verified Nile users, with default deny behavior, bounded fields, enum validation, owner checks, admin checks, and UID-path upload restrictions.
 - Admin-only item detail views for reporter contact information, private verification data, claim details, resolve actions, and deletion confirmation.
 - Curated Nile campus location options and client-side image compression before upload.
+- Feed search now supports type, category, campus location, status, and date-range filters, with restrained motion transitions for item cards.
 - TypeScript validation, production build, and utility tests available through `npm run lint`, `npm run build`, and `npm test`.
 
 This repository is a React/Vite application. It does not contain a Next.js API route or Cloud Function for server-side OTP email dispatch; Firebase email verification is used instead, which is compatible with the Firebase Spark/no-Cloud-Functions architecture.

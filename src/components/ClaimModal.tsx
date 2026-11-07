@@ -10,6 +10,7 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Lock, AlertCircle, MessageCircle, X, CheckCircle2 } from 'lucide-react';
 import { CampusItem, ClaimRecord } from '../types/index.ts';
+import { validateNileEmail } from '../utils/authValidation.ts';
 
 interface ClaimModalProps {
   item: CampusItem | null;
@@ -35,13 +36,12 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
     const sanitizedEmail = claimantEmail.trim().toLowerCase().slice(0, 100);
     const sanitizedAnswer = verificationAnswer.trim().slice(0, 500);
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!sanitizedName || !sanitizedEmail) {
       setErrorMsg('Please enter your full name and student email.');
       return;
     }
-    if (!emailRegex.test(sanitizedEmail)) {
-      setErrorMsg('Please enter a valid email address.');
+    if (!validateNileEmail(sanitizedEmail)) {
+      setErrorMsg('Use your Nile University email address (@nileuniversity.edu.ng).');
       return;
     }
     if (item.verificationQuestion && !sanitizedAnswer) {

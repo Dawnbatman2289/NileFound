@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { motion } from 'motion/react';
 import { 
   Search, 
   MapPin, 
@@ -50,6 +51,8 @@ export const FeedView: React.FC<FeedViewProps> = ({
   const [selectedType, setSelectedType] = useState<'all' | ItemType>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<'all' | 'active' | 'claimed' | 'resolved'>('all');
+  const [selectedDateRange, setSelectedDateRange] = useState<'all' | '24h' | '7d'>('all');
   const [selectedLostItemForMatch, setSelectedLostItemForMatch] = useState<CampusItem | null>(null);
   const [includeDemoSeed, setIncludeDemoSeed] = useState(false);
 
@@ -70,6 +73,14 @@ export const FeedView: React.FC<FeedViewProps> = ({
       if (selectedType !== 'all' && item.type !== selectedType) return false;
       if (selectedCategory !== 'all' && item.category !== selectedCategory) return false;
       if (selectedLocation !== 'all' && item.location !== selectedLocation) return false;
+      if (selectedStatus === 'active' && item.status !== 'open') return false;
+      if (selectedStatus === 'claimed' && item.status !== 'claim_requested') return false;
+      if (selectedStatus === 'resolved' && item.status !== 'returned') return false;
+      if (selectedDateRange !== 'all') {
+        const ageMs = Date.now() - new Date(item.createdAt).getTime();
+        const rangeMs = selectedDateRange === '24h' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+        if (ageMs < 0 || ageMs > rangeMs) return false;
+      }
       
       if (searchTerm.trim()) {
         const query = searchTerm.toLowerCase();
@@ -82,7 +93,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
       }
       return true;
     });
-  }, [displayableItems, selectedType, selectedCategory, selectedLocation, searchTerm]);
+  }, [displayableItems, selectedType, selectedCategory, selectedLocation, selectedStatus, selectedDateRange, searchTerm]);
 
   // Separate lost vs found
   const lostItems = useMemo(() => displayableItems.filter(i => i.type === 'lost'), [displayableItems]);
@@ -202,6 +213,35 @@ export const FeedView: React.FC<FeedViewProps> = ({
               })}
             </select>
           </div>
+          <div>
+            <label className="block text-[11px] font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
+              Status:
+            </label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value as typeof selectedStatus)}
+              className="w-full text-xs px-3 py-2 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] focus:border-[#0F6E6E] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] focus:outline-hidden min-h-[44px] cursor-pointer"
+            >
+              <option value="all">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="claimed">Claimed</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
+              Date:
+            </label>
+            <select
+              value={selectedDateRange}
+              onChange={(e) => setSelectedDateRange(e.target.value as typeof selectedDateRange)}
+              className="w-full text-xs px-3 py-2 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] focus:border-[#0F6E6E] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] focus:outline-hidden min-h-[44px] cursor-pointer"
+            >
+              <option value="all">All Time</option>
+              <option value="24h">Last 24 Hours</option>
+              <option value="7d">Last 7 Days</option>
+            </select>
+          </div>
 
           <div>
             <label className="block text-[11px] font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
@@ -247,13 +287,17 @@ export const FeedView: React.FC<FeedViewProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            {(searchTerm || selectedCategory !== 'all' || selectedLocation !== 'all' || selectedType !== 'all') && (
+            {(searchTerm || selectedCategory !== 'all' || selectedLocation !== 'all' || selectedType !== 'all' || selectedStatus !== 'all' || selectedDateRange !== 'all') && (
               <button
                 onClick={() => {
                   setSearchTerm('');
                   setSelectedCategory('all');
                   setSelectedLocation('all');
                   setSelectedType('all');
+                  setSelectedStatus('all');
+                  setSelectedDateRange('all');
+                  setSelectedStatus('all');
+                  setSelectedDateRange('all');
                 }}
                 className="text-[11px] font-medium text-[#0F6E6E] dark:text-[#199595] hover:underline cursor-pointer"
               >
@@ -316,9 +360,12 @@ export const FeedView: React.FC<FeedViewProps> = ({
               const displayTitle = isFoundIdCard ? 'A student ID card was found' : item.title;
 
               return (
-                <article
+                <motion.article
                   key={item.id}
                   id={`item-${item.id}`}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, delay: Math.min(filteredItems.indexOf(item) * 0.03, 0.24) }}
                   className={`notice-card flex flex-col justify-between overflow-hidden ${
                     isReturned ? 'opacity-65' : ''
                   }`}
@@ -433,7 +480,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
                       </div>
                     )}
                   </div>
-                </article>
+                </motion.article>
               );
             })}
           </div>
