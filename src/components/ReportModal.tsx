@@ -50,6 +50,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<ItemCategory>('calculator');
   const [location, setLocation] = useState<string>(NILE_CAMPUS_LOCATIONS[0]);
+  const [locationDetails, setLocationDetails] = useState('');
   const [description, setDescription] = useState('');
   const [dateLostOrFound, setDateLostOrFound] = useState(() => new Date().toISOString().split('T')[0]);
   const [holdingLocation, setHoldingLocation] = useState<HoldingLocation>('finder_holding');
@@ -89,6 +90,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             setTitle(parsed.title || '');
             setCategory(parsed.category || 'calculator');
             setLocation(parsed.location || NILE_CAMPUS_LOCATIONS[0]);
+            setLocationDetails(parsed.locationDetails || '');
             setDescription(parsed.description || '');
             setDateLostOrFound(parsed.dateLostOrFound || new Date().toISOString().split('T')[0]);
             setHoldingLocation(parsed.holdingLocation || 'finder_holding');
@@ -110,6 +112,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       title,
       category,
       location,
+      locationDetails,
       description,
       dateLostOrFound,
       holdingLocation,
@@ -178,6 +181,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       category,
       description: description.trim(),
       location,
+      locationDetails,
       dateLostOrFound,
       status: 'open',
       holdingLocation: effectiveHoldingLocation,
@@ -417,6 +421,23 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1.5">
+                Specific Spot <span className="text-[10px] font-normal text-[#7A7266]">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={locationDetails}
+                onChange={(e) => {
+                  setLocationDetails(e.target.value.slice(0, 160));
+                  saveDraftLocally();
+                }}
+                placeholder="e.g. Room 205, Ground Floor Corridor"
+                maxLength={160}
+                className="w-full text-xs px-3.5 py-2.5 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] focus:border-[#0F6E6E] focus:outline-hidden min-h-[44px]"
+              />
             </div>
 
             <div>

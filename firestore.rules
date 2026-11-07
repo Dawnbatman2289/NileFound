@@ -67,6 +67,7 @@ service cloud.firestore {
         && data.category in ['student_id', 'phone_tech', 'power_bank', 'calculator', 'flash_drive', 'keys', 'bag_backpack', 'lab_coat_clothing', 'books_notes', 'other']
         && data.description is string && data.description.size() <= 1000
         && data.location is string && data.location.size() >= 2 && data.location.size() <= 100
+        && (!('locationDetails' in data) || (data.locationDetails is string && data.locationDetails.size() <= 160))
         && data.status in ['open', 'claim_requested', 'verified', 'returned', 'expired']
         && data.holdingLocation in ['finder_holding', 'security_main_gate', 'student_affairs_office', 'faculty_officer', 'library_desk']
         && data.authorId is string && data.authorId.size() <= 128

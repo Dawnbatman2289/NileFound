@@ -1,4 +1,3 @@
-// UNVERIFIED – confirm each name with the university
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -9,18 +8,31 @@
  */
 
 export const NILE_CAMPUS_LOCATIONS = [
+  'Congo House (Engineering & Computing)',
+  'Volta Building (Health Sciences)',
+  'Limpopo Bay (Law & Postgrad)',
+  'Niger House',
+  'Ubangi House (STEM Labs)',
+  'Block A',
+  'Block B',
+  'Block C',
   'Red Volta Hostel',
-  'White Volta Hostel',
   'Blue Nile Hostel',
-  'Faculty of Engineering',
-  'Faculty of Law',
-  'Faculty of Natural & Applied Sciences',
-  'University Library',
-  'Central Cafeteria',
-  'Student Center',
+  'Orange Hostel',
+  'Zambezi Hostel',
+  'Lake Chad Hostel',
+  'Asokoro Hostel',
+  'Victoria Estate Hostels',
+  'Moat Haven Estate',
+  'Nile House (Admin)',
+  'Nile Main Library',
+  'University Clinic',
+  'Student Centre',
   'Sports Complex',
-  'Administrative Block',
-  'Other Campus Location',
+  'Central Cafeteria',
+  'Picnic Arena & Love Garden',
+  'Mini Marts',
+  'Main Campus Gate',
 ] as const;
 
 export const NILE_LOCATIONS = NILE_CAMPUS_LOCATIONS;

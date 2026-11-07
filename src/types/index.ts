@@ -38,6 +38,7 @@ export interface CampusItem {
   category: ItemCategory;
   description: string;
   location: string;
+  locationDetails?: string;
   dateLostOrFound: string; // ISO date string
   status: ItemStatus;
   holdingLocation: HoldingLocation;

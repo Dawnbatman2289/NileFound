@@ -159,6 +159,7 @@ export function subscribeToRealtimeItems(
           category: data.category || 'other',
           description: data.description || '',
           location: data.location || '',
+          locationDetails: data.locationDetails || undefined,
           dateLostOrFound: data.dateLostOrFound || data.createdAt || new Date().toISOString(),
           status: data.status || 'open',
           holdingLocation: data.holdingLocation || 'finder_holding',
@@ -207,6 +208,10 @@ export async function saveItemToFirestore(item: CampusItem, _user?: User | null)
     createdAt: nowIso,
     updatedAt: nowIso,
   };
+
+  if (item.locationDetails?.trim()) {
+    payload.locationDetails = item.locationDetails.trim().slice(0, 160);
+  }
 
   if (item.imageUrl) {
     payload.imageUrl = item.imageUrl;

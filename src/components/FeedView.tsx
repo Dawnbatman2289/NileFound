@@ -88,7 +88,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
         const displayTitle = isFoundIdCard ? 'A student ID card was found' : item.title;
         const matchTitle = displayTitle.toLowerCase().includes(query);
         const matchDesc = item.description.toLowerCase().includes(query);
-        const matchLoc = item.location.toLowerCase().includes(query);
+        const matchLoc = `${item.location} ${item.locationDetails || ''}`.toLowerCase().includes(query);
         if (!matchTitle && !matchDesc && !matchLoc) return false;
       }
       return true;
@@ -425,7 +425,9 @@ export const FeedView: React.FC<FeedViewProps> = ({
                       <div className="space-y-1.5 text-xs text-[#7A7266] dark:text-[#857D71] pt-2 border-t border-[#E6DFD2] dark:border-[#2E2A24]">
                         <div className="flex items-center gap-1.5 text-[#544E45] dark:text-[#B8B0A2]">
                           <MapPin className="w-3.5 h-3.5 text-[#0F6E6E] dark:text-[#199595] shrink-0" />
-                          <span className="font-medium truncate">{item.location}</span>
+                          <span className="font-medium truncate">
+                            {item.location}{item.locationDetails ? ` · ${item.locationDetails}` : ''}
+                          </span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 shrink-0" />

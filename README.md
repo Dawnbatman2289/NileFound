@@ -167,6 +167,7 @@ The current implementation includes:
 - Firestore and Storage rules requiring authenticated, verified Nile users, with default deny behavior, bounded fields, enum validation, owner checks, admin checks, and UID-path upload restrictions.
 - Admin-only item detail views for reporter contact information, private verification data, claim details, resolve actions, and deletion confirmation.
 - Curated Nile campus location options and client-side image compression before upload.
+- Location selection uses official academic, hostel, administration, and student-life points, with an optional room/spot detail saved separately from the campus location.
 - Feed search now supports type, category, campus location, status, and date-range filters, with restrained motion transitions for item cards.
 - TypeScript validation, production build, and utility tests available through `npm run lint`, `npm run build`, and `npm test`.
 
