@@ -14,7 +14,7 @@ import { CampusItem, ClaimRecord } from '../types/index.ts';
 interface ClaimModalProps {
   item: CampusItem | null;
   onClose: () => void;
-  onSuccessClaim: (claim: ClaimRecord) => void;
+  onSuccessClaim: (claim: ClaimRecord) => Promise<void> | void;
 }
 
 export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccessClaim }) => {
@@ -27,13 +27,24 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
 
   if (!item) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!claimantName.trim() || !claimantEmail.trim()) {
+    if (isSubmitting) return;
+
+    const sanitizedName = claimantName.trim().slice(0, 100);
+    const sanitizedEmail = claimantEmail.trim().toLowerCase().slice(0, 100);
+    const sanitizedAnswer = verificationAnswer.trim().slice(0, 500);
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!sanitizedName || !sanitizedEmail) {
       setErrorMsg('Please enter your full name and student email.');
       return;
     }
-    if (item.verificationQuestion && !verificationAnswer.trim()) {
+    if (!emailRegex.test(sanitizedEmail)) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+    if (item.verificationQuestion && !sanitizedAnswer) {
       setErrorMsg('Please answer the finder’s secret verification question.');
       return;
     }
@@ -45,18 +56,22 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
       id: `claim-${Date.now()}`,
       itemId: item.id,
       itemTitle: item.title,
-      claimantName: claimantName.trim(),
-      claimantEmail: claimantEmail.trim(),
-      submittedAnswer: verificationAnswer.trim(),
+      claimantName: sanitizedName,
+      claimantEmail: sanitizedEmail,
+      submittedAnswer: sanitizedAnswer,
       status: 'pending',
       createdAt: new Date().toISOString()
     };
 
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      await onSuccessClaim(newClaim);
       setIsVerifiedDemo(true);
-      onSuccessClaim(newClaim);
-    }, 600);
+    } catch (err: any) {
+      console.error('Failed to submit claim:', err);
+      setErrorMsg(err?.message || 'Could not save your claim to the database. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

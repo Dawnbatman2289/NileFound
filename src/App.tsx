@@ -515,7 +515,7 @@ export default function App() {
         await saveClaimToFirestore(newClaim, currentUser, matchingItem?.id);
       } catch (err) {
         console.error('Error saving claim to Firestore:', err);
-        setClaims((prev) => [{ ...newClaim, claimantId: currentUid }, ...prev]);
+        throw err;
       }
     }
 
