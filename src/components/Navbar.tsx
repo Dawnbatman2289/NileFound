@@ -92,7 +92,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Action Controls & Report Item Button */}
-        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 max-w-full shrink-0">
           {/* Dark Mode Toggle */}
           {onToggleDarkMode && (
             <button
@@ -180,7 +180,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="max-w-[100px] truncate hidden sm:inline">{currentUser.name}</span>
               {isAdmin && (
                 <span className="bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] text-[9px] font-bold px-1.5 py-0.5 rounded-[4px] border border-[#0F6E6E]/30">
-                  Admin
+                  <span className="hidden sm:inline">Admin</span>
                 </span>
               )}
             </button>

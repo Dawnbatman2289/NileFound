@@ -851,7 +851,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           onClick={() => setSelectedItemForDetail(null)}
         >
           <div
-            className="bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] shadow-xl w-[min(100% - 24px,672px)] max-h-[100dvh] overflow-hidden my-3 sm:my-6 flex flex-col min-w-0"
+            className="w-full max-w-[672px] bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] shadow-xl max-h-[100dvh] overflow-hidden my-3 sm:my-6 flex flex-col min-w-0"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}

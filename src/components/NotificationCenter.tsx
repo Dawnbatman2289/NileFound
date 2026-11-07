@@ -109,7 +109,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end p-2 sm:p-4 bg-[#0B1020]/80 backdrop-blur-md">
       <div 
-        className="w-[min(100% - 24px,512px)] max-h-[100dvh] bg-[#141B33] text-[#F4F6FF] rounded-[20px] shadow-2xl border border-[#1E294B] flex flex-col overflow-hidden my-auto sm:my-2 min-w-0"
+        className="w-full max-w-[512px] max-h-[100dvh] bg-[#141B33] text-[#F4F6FF] rounded-[20px] shadow-2xl border border-[#1E294B] flex flex-col overflow-hidden my-auto sm:my-2 min-w-0"
         role="dialog"
         aria-label="Campus Notification Center"
       >
