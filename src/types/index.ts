@@ -41,6 +41,7 @@ export interface CampusItem {
   dateLostOrFound: string; // ISO date string
   status: ItemStatus;
   holdingLocation: HoldingLocation;
+  authorId?: string;
   imageUrl?: string;
   isSensitiveId?: boolean; // If true, photos are blurred/partial
   // Hidden verification question set by finder
@@ -84,8 +85,44 @@ export interface ClaimRecord {
   itemTitle: string;
   claimantName: string;
   claimantEmail: string;
+  claimantId?: string;
   submittedAnswer: string;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
+}
+
+export type NotificationType =
+  | 'claim_received'
+  | 'claim_approved'
+  | 'claim_rejected'
+  | 'match_alert'
+  | 'item_returned'
+  | 'admin_review'
+  | 'claim_submitted'
+  | 'item_reported_lost'
+  | 'item_reported_found'
+  | 'admin_alert';
+
+export interface CampusNotification {
+  id: string;
+  recipientUid: string; // user UID or 'admin'
+  fromUid: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+  itemId?: string;
+  // UI and display helpers
+  itemTitle?: string;
+  itemType?: ItemType;
+  location?: string;
+  category?: ItemCategory;
+  recipientEmail?: string;
+  forAdminOnly?: boolean;
+  priority?: 'normal' | 'high' | 'urgent';
+  linkTab?: 'feed' | 'admin';
+  reporterName?: string;
+  reporterEmail?: string;
 }
 

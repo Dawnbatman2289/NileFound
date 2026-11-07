@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  * 
  * NileFound Authentication Screen
- * Layout: Modern dark card in Deep Navy (#0B1020), Muted Card (#141B33), and Electric Lime (#C6FF3D).
- * Main Action: Sign in with Google with no email domain restrictions, syncing user profile and roles to Firestore.
+ * Layout: Clean, standard sign-in interface in Deep Navy (#0B1020), Muted Card (#141B33), and Electric Lime (#C6FF3D).
+ * Main Action: Normal Google Sign-In with standard campus wording.
  */
 
 import React, { useState } from 'react';
@@ -41,8 +41,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Preset accounts for Demo Mode testing only (completely isolated from real Firestore)
+  const isMasterAdmin = currentUser?.email?.trim().toLowerCase() === 'ayomide2289@gmail.com';
+  const isAdminSimulation = isDemoMode && !!currentUser;
+  const canViewDemoAccounts = isMasterAdmin || isAdminSimulation;
+
+  // Master Admin & Test Personas strictly restricted to ayomide2289@gmail.com
   const DEMO_ACCOUNTS: User[] = [
+    {
+      id: 'master-ayomide',
+      name: 'Ayomide (Master Admin)',
+      email: 'ayomide2289@gmail.com',
+      role: 'admin',
+      isAdmin: true,
+      department: 'System Owner & University Administration',
+    },
     {
       id: 'demo-admin',
       name: 'Campus Administrator',
@@ -54,7 +66,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     },
     {
       id: 'demo-student-chidera',
-      name: 'Chidera Eze',
+      name: 'Chidera Eze (Student)',
       email: 'chidera@nileuniversity.edu.ng',
       role: 'student',
       matricNumber: '23/ENG/0481',
@@ -77,12 +89,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   };
 
   const handleSelectDemoAccount = (preset: User) => {
+    if (!canViewDemoAccounts) {
+      setErrorMessage('Unauthorized: Demo accounts are strictly reserved for ayomide2289@gmail.com.');
+      return;
+    }
     onLogin(preset);
-    setSuccessMessage(`Active demo account: ${preset.name}`);
+    setSuccessMessage(`Switched active persona to ${preset.name} (${preset.role})`);
   };
 
   /**
-   * Handle standard Google Sign-In with popup (no email domain constraints)
+   * Handle standard Google Sign-In with popup
    */
   const handleGoogleSignIn = async () => {
     clearFeedback();
@@ -152,40 +168,40 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     <div className="max-w-xl mx-auto py-6 space-y-6">
       {/* Current Active Session Banner */}
       {currentUser && (
-        <div className="bg-[#141B33] text-[#F4F6FF] rounded-[20px] p-5 border border-[#1E294B] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+        <div className="bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] p-5 border border-[#E6DFD2] dark:border-[#2E2A24] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-full bg-[#C6FF3D] text-[#0B1020] font-extrabold flex items-center justify-center text-sm shadow-md">
+            <div className="w-10 h-10 rounded-full bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] font-bold flex items-center justify-center text-sm border border-[#0F6E6E]/20">
               {currentUser.name.charAt(0)}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-sm text-[#F4F6FF]">{currentUser.name}</span>
+                <span className="font-bold text-sm">{currentUser.name}</span>
                 <span
-                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase ${
+                  className={`text-[10px] font-sans font-medium px-2 py-0.5 rounded-[4px] border ${
                     currentUser.role === 'admin'
-                      ? 'bg-[#C6FF3D]/15 text-[#C6FF3D] border border-[#C6FF3D]/30'
+                      ? 'bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border-[#0F6E6E]/30'
                       : currentUser.role === 'security'
-                      ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
-                      : 'bg-[#1E294B] text-slate-300'
+                      ? 'bg-[#EDF7F1] dark:bg-[#0E2417] text-[#1B5633] dark:text-[#75CE9A] border-[#2F7D4F]/30'
+                      : 'bg-[#FAF6EF] dark:bg-[#141311] text-[#544E45] dark:text-[#B8B0A2] border-[#E6DFD2] dark:border-[#2E2A24]'
                   }`}
                 >
                   {currentUser.role}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 font-mono mt-0.5">{currentUser.email}</p>
+              <p className="text-xs text-[#7A7266] dark:text-[#857D71] mt-0.5">{currentUser.email}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={onNavigateToFeed}
-              className="bg-[#1E294B] hover:bg-[#2A3B66] text-[#F4F6FF] text-xs font-bold px-4 py-2.5 rounded-full border border-[#2A3B66] transition-colors min-h-[44px] cursor-pointer"
+              className="bg-[#0F6E6E] hover:bg-[#0C5656] text-white text-xs font-medium px-4 py-2 rounded-[10px] transition-colors min-h-[44px] cursor-pointer btn-campus shadow-xs"
             >
               Go to Feed
             </button>
             <button
               onClick={handleSignOut}
-              className="bg-[#0B1020] hover:bg-slate-900 text-slate-300 text-xs font-bold px-4 py-2.5 rounded-full border border-[#1E294B] transition-colors min-h-[44px] cursor-pointer"
+              className="bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] dark:hover:bg-[#332E27] text-[#544E45] dark:text-[#B8B0A2] text-xs font-medium px-4 py-2 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] transition-colors min-h-[44px] cursor-pointer btn-campus"
             >
               Sign Out
             </button>
@@ -194,71 +210,80 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       )}
 
       {/* Main Authentication Card */}
-      <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] shadow-2xl overflow-hidden hover:border-[#C6FF3D]/30 transition-all duration-200">
+      <div className="bg-white dark:bg-[#1E1C18] rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] shadow-xs overflow-hidden">
         {/* Header Notice */}
-        <div className="bg-[#0B1020] px-5 py-3.5 border-b border-[#1E294B] flex items-center justify-between">
+        <div className="bg-[#FAF6EF] dark:bg-[#141311] px-5 py-3.5 border-b border-[#E6DFD2] dark:border-[#2E2A24] flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-[#C6FF3D]" />
-            <span className="font-bold text-xs uppercase tracking-wider text-[#F4F6FF]">
-              {isDemoMode ? 'Demo Mode Sign-In' : 'NileFound Campus Sign-In'}
+            <Shield className="w-4 h-4 text-[#0F6E6E] dark:text-[#199595]" />
+            <span className="font-medium text-xs text-[#1F1B16] dark:text-[#F5F1EA]">
+              NileFound Campus Sign-In
             </span>
           </div>
-          <span className="text-[10px] bg-[#C6FF3D]/10 text-[#C6FF3D] border border-[#C6FF3D]/30 font-mono font-bold px-2 py-0.5 rounded-full">
-            {isDemoMode ? 'Demo Simulation' : 'Live Google Auth'}
+          <span className="text-[10px] bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border border-[#0F6E6E]/20 font-sans font-medium px-2 py-0.5 rounded-[4px]">
+            Nile University Account
           </span>
         </div>
 
-        <div className="p-6 space-y-5">
-          {/* Plain explanation */}
-          <div className="text-xs text-slate-400 leading-relaxed space-y-1.5">
-            <p className="font-bold text-[#F4F6FF] text-sm">
-              Sign in with your Google account to access listings, report items, and submit claims.
-            </p>
-            <p>
-              Standard accounts browse listings and file reports. The primary administrator account (<span className="font-mono text-[#C6FF3D] font-medium">ayomide2289@gmail.com</span>) automatically opens the Operations & Custody Desk.
+        <div className="p-6 sm:p-8 space-y-6">
+          <div className="space-y-1.5 text-center sm:text-left">
+            <h2 className="font-serif text-lg sm:text-xl font-bold text-[#1F1B16] dark:text-[#F5F1EA] tracking-tight">
+              Sign in to your campus account
+            </h2>
+            <p className="text-xs sm:text-sm text-[#544E45] dark:text-[#B8B0A2] leading-relaxed">
+              Sign in with your Google account to browse lost and found items, report misplaced belongings, and submit ownership verification claims across Nile University.
             </p>
           </div>
 
           {/* Feedback Messages */}
           {errorMessage && (
-            <div className="bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs p-3.5 rounded-xl flex items-center gap-2.5">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <div className="bg-[#FDF2F2] dark:bg-[#2B0E0E] border border-[#F87171]/40 text-[#9B1C1C] dark:text-[#F87171] text-xs p-3.5 rounded-[10px] flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-[#9B1C1C] shrink-0" />
               <span>{errorMessage}</span>
             </div>
           )}
 
           {successMessage && (
-            <div className="bg-[#C6FF3D]/10 border border-[#C6FF3D]/30 text-[#C6FF3D] text-xs p-3.5 rounded-xl flex items-center gap-2.5">
-              <Check className="w-4 h-4 text-[#C6FF3D] shrink-0" />
+            <div className="bg-[#EDF7F1] dark:bg-[#0E2417] border border-[#2F7D4F]/30 text-[#1B5633] dark:text-[#75CE9A] text-xs p-3.5 rounded-[10px] flex items-center gap-2.5">
+              <Check className="w-4 h-4 text-[#2F7D4F] shrink-0" />
               <span>{successMessage}</span>
             </div>
           )}
 
-          {/* Live Single-Tap Google Sign-In */}
-          <div className="space-y-3 pt-2">
+          {/* Standard Single-Tap Google Sign-In */}
+          <div className="space-y-3 pt-1">
             <button
               type="button"
               onClick={handleGoogleSignIn}
               disabled={isSigningIn}
-              className="w-full min-h-[48px] py-3.5 px-5 bg-[#C6FF3D] hover:bg-[#b8f52f] disabled:opacity-50 text-[#0B1020] rounded-full text-sm font-extrabold shadow-[0_0_20px_rgba(198,255,61,0.25)] hover:shadow-[0_0_25px_rgba(198,255,61,0.4)] transition-all flex items-center justify-center gap-3 cursor-pointer active:scale-95"
+              className="w-full min-h-[48px] py-3 px-6 bg-[#0F6E6E] hover:bg-[#0C5656] disabled:opacity-50 text-white rounded-[10px] text-sm font-medium shadow-xs transition-colors flex items-center justify-center gap-2.5 cursor-pointer active:scale-98 btn-campus"
             >
-              <LogIn className="w-5 h-5 text-[#0B1020]" />
-              <span>{isSigningIn ? 'Signing in with Google...' : 'Sign in with Google'}</span>
+              <LogIn className="w-4 h-4 text-white" />
+              <span>{isSigningIn ? 'Connecting to Google...' : 'Sign in with Google'}</span>
             </button>
 
-            <p className="text-[11px] text-slate-400 text-center">
-              Uses Google Authentication. No password or email verification link needed.
+            <p className="text-[11px] text-[#7A7266] dark:text-[#857D71] text-center">
+              Fast, secure sign-in with your Google account. No password or email link required.
             </p>
           </div>
 
-          {/* DEMO MODE ONLY: Simulated accounts when demo toggle is enabled in navbar */}
-          {isDemoMode && (
-            <div className="pt-4 border-t border-[#1E294B] space-y-3">
-              <div className="bg-amber-400/10 border border-amber-400/30 text-amber-300 p-3 rounded-xl text-xs">
-                <span className="font-bold">Demo Mode active:</span> Choose a simulated campus account below for offline testing.
+          {/* Root Admin Persona Switcher (For Ayomide) */}
+          {canViewDemoAccounts && (
+            <div className="pt-5 border-t border-[#E6DFD2] dark:border-[#2E2A24] space-y-3">
+              <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] p-3.5 rounded-[10px] text-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[#0F6E6E] dark:text-[#199595] flex items-center gap-1.5">
+                    <Shield className="w-4 h-4" /> Admin Persona Simulation
+                  </span>
+                  <span className="text-[10px] bg-white dark:bg-[#1E1C18] text-[#544E45] dark:text-[#B8B0A2] px-2 py-0.5 rounded-[4px] border border-[#E6DFD2] dark:border-[#2E2A24]">
+                    ayomide2289@gmail.com
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#544E45] dark:text-[#B8B0A2]">
+                  Switch between demo personas to test how students, security officers, and administrators experience NileFound.
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-2.5">
+              <div className="grid grid-cols-1 gap-2">
                 {DEMO_ACCOUNTS.map((account) => {
                   const isActive = currentUser?.email === account.email;
                   return (
@@ -266,43 +291,37 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       key={account.id}
                       type="button"
                       onClick={() => handleSelectDemoAccount(account)}
-                      className={`w-full min-h-[44px] p-3 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                      className={`w-full min-h-[44px] p-3 rounded-[10px] border text-left transition-colors flex items-center justify-between cursor-pointer btn-campus ${
                         isActive
-                          ? 'border-[#C6FF3D] bg-[#C6FF3D]/10 ring-1 ring-[#C6FF3D]'
-                          : 'border-[#1E294B] bg-[#0B1020] hover:border-[#2A3B66]'
+                          ? 'border-[#0F6E6E] bg-[#E7F3F3] dark:bg-[#0D2D2D]'
+                          : 'border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] hover:bg-[#FAF6EF] dark:hover:bg-[#1E1C18]'
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
-                            account.role === 'admin'
-                              ? 'bg-[#C6FF3D] text-[#0B1020]'
-                              : account.role === 'security'
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-[#1E294B] text-slate-300'
-                          }`}
+                          className="w-7 h-7 rounded-[6px] flex items-center justify-center font-bold text-xs bg-[#FAF6EF] dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] border border-[#E6DFD2] dark:border-[#2E2A24]"
                         >
-                          {account.role === 'admin' ? 'A' : account.role === 'security' ? 'S' : 'U'}
+                          {account.name.charAt(0)}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs text-[#F4F6FF]">{account.name}</span>
-                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded uppercase bg-[#141B33] text-slate-400 border border-[#1E294B]">
+                            <span className="font-medium text-xs text-[#1F1B16] dark:text-[#F5F1EA]">{account.name}</span>
+                            <span className="text-[9px] font-sans font-medium px-1.5 py-0.2 rounded-[4px] uppercase bg-[#FAF6EF] dark:bg-[#1E1C18] text-[#544E45] dark:text-[#B8B0A2] border border-[#E6DFD2] dark:border-[#2E2A24]">
                               {account.role}
                             </span>
                           </div>
-                          <span className="text-[10px] text-slate-400">{account.email}</span>
+                          <span className="text-[10px] text-[#7A7266] dark:text-[#857D71]">{account.email}</span>
                         </div>
                       </div>
 
                       <div className="text-right">
                         {isActive ? (
-                          <span className="text-xs font-bold text-[#C6FF3D] flex items-center gap-1">
+                          <span className="text-xs font-medium text-[#0F6E6E] dark:text-[#199595] flex items-center gap-1">
                             <UserCheck className="w-3.5 h-3.5" /> Active
                           </span>
                         ) : (
-                          <span className="text-xs font-semibold text-slate-400 hover:text-[#F4F6FF]">
-                            Select →
+                          <span className="text-xs text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]">
+                            Switch →
                           </span>
                         )}
                       </div>

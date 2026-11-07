@@ -23,7 +23,12 @@ import {
   RefreshCw,
   Clock,
   MapPin,
-  HelpCircle
+  HelpCircle,
+  X,
+  Mail,
+  User as UserIcon,
+  Calendar,
+  Tag
 } from 'lucide-react';
 import { CampusItem, ClaimRecord, User } from '../types/index.ts';
 import { generateCampusAuditReport } from '../utils/admin.ts';
@@ -31,7 +36,9 @@ import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
 import { 
   fetchAllRoles, 
   assignUserRole, 
-  UserRoleRecord 
+  UserRoleRecord,
+  fetchItemPrivateDetails,
+  ItemPrivateDetails
 } from '../services/firestoreService.ts';
 
 interface AdminPanelProps {
@@ -44,6 +51,7 @@ interface AdminPanelProps {
   onRejectClaim: (claimId: string) => void;
   onExpireOldItems: () => void;
   onNavigateToLogin: () => void;
+  onSwitchPersona?: (user: User) => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -55,10 +63,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onApproveClaim,
   onRejectClaim,
   onExpireOldItems,
-  onNavigateToLogin
+  onNavigateToLogin,
+  onSwitchPersona
 }) => {
-  const [activeTab, setActiveTab] = useState<'claims' | 'custody' | 'all_items' | 'roles'>('claims');
+  const [activeTab, setActiveTab] = useState<'claims' | 'custody' | 'all_items' | 'roles' | 'personas'>('claims');
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [selectedItemForDetail, setSelectedItemForDetail] = useState<CampusItem | null>(null);
+  const [privateDetails, setPrivateDetails] = useState<ItemPrivateDetails>({});
+  const [isLoadingPrivate, setIsLoadingPrivate] = useState(false);
+
+  useEffect(() => {
+    if (!selectedItemForDetail) {
+      setPrivateDetails({});
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingPrivate(true);
+    fetchItemPrivateDetails(selectedItemForDetail.id)
+      .then((details) => {
+        if (!cancelled) setPrivateDetails(details);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingPrivate(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedItemForDetail]);
 
   // Role management state
   const [roleRecords, setRoleRecords] = useState<UserRoleRecord[]>([]);
@@ -160,19 +191,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   if (!hasAccess || !currentUser) {
     return (
-      <div className="max-w-md mx-auto my-12 p-8 bg-[#141B33] rounded-[20px] border border-[#1E294B] text-center space-y-5 shadow-2xl">
-        <div className="w-14 h-14 rounded-2xl bg-[#1E294B] text-[#C6FF3D] flex items-center justify-center mx-auto border border-[#2A3B66]">
-          <ShieldAlert className="w-7 h-7" />
+      <div className="max-w-md mx-auto my-12 p-8 bg-white dark:bg-[#1E1C18] rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] text-center space-y-4 shadow-xs">
+        <div className="w-12 h-12 rounded-[10px] bg-[#FAF6EF] dark:bg-[#141311] text-[#0F6E6E] dark:text-[#199595] flex items-center justify-center mx-auto border border-[#E6DFD2] dark:border-[#2E2A24]">
+          <ShieldAlert className="w-6 h-6" />
         </div>
-        <div className="space-y-1.5">
-          <h3 className="font-extrabold text-[#F4F6FF] text-lg tracking-tight">Restricted Administrator Area</h3>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            This administration portal is specially configured for <strong className="text-[#C6FF3D]">ayomide2289@gmail.com</strong> and designated Nile University campus security personnel.
+        <div className="space-y-1">
+          <h3 className="font-serif font-bold text-[#1F1B16] dark:text-[#F5F1EA] text-base tracking-tight">Restricted Administrator Area</h3>
+          <p className="text-xs text-[#544E45] dark:text-[#B8B0A2] leading-relaxed">
+            This administration portal is specially configured for <strong className="text-[#0F6E6E] dark:text-[#199595]">ayomide2289@gmail.com</strong> and designated Nile University campus security personnel.
           </p>
         </div>
         <button
           onClick={onNavigateToLogin}
-          className="bg-[#C6FF3D] text-[#0B1020] text-xs font-extrabold px-6 py-3 rounded-full hover:bg-[#b8f52f] transition-all min-h-[44px] shadow-[0_0_15px_rgba(198,255,61,0.2)] cursor-pointer"
+          className="bg-[#0F6E6E] text-white text-xs font-semibold px-5 py-2.5 rounded-[10px] hover:bg-[#0C5656] transition-colors min-h-[44px] cursor-pointer btn-campus shadow-xs"
         >
           Sign In with Admin Account
         </button>
@@ -183,34 +214,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner Dedicated to Ayomide */}
-      <div className="bg-[#141B33] text-[#F4F6FF] rounded-[20px] p-6 border border-[#1E294B] shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[#C6FF3D]/5 rounded-full blur-3xl pointer-events-none" />
-
+      <div className="bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] p-6 border border-[#E6DFD2] dark:border-[#2E2A24] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-5">
         <div className="space-y-1.5">
-          <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
-            <span className="bg-[#C6FF3D] text-[#0B1020] font-extrabold text-[10px] uppercase px-2.5 py-0.5 rounded-full tracking-wide flex items-center gap-1 shadow-xs">
-              <ShieldCheck className="w-3.5 h-3.5 stroke-[3]" />
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className="bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] font-semibold text-[11px] px-2.5 py-0.5 rounded-[4px] border border-[#0F6E6E]/20 flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5" />
               {isOwnerEmail ? 'System Owner & Primary Admin' : 'Campus Administrator'}
             </span>
-            <span className="text-xs text-[#C6FF3D]/90 font-mono">
+            <span className="text-xs text-[#7A7266] dark:text-[#857D71] font-mono">
               ayomide2289@gmail.com
             </span>
           </div>
 
-          <h2 className="text-xl font-extrabold text-[#F4F6FF] tracking-tight">
+          <h2 className="font-serif text-xl font-bold tracking-tight">
             NileFound Operations & Custody Desk
           </h2>
-          <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
-            Full administrative control over campus items, claim approvals, security gate custody, and authorized campus staff roles.
+          <p className="text-xs text-[#544E45] dark:text-[#B8B0A2] max-w-xl leading-relaxed">
+            Administrative control over campus items, claim approvals, security gate custody, and authorized campus staff roles.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={exportAuditLogCsv}
-            className="flex items-center gap-2 bg-[#1E294B] hover:bg-[#2A3B66] text-[#F4F6FF] text-xs font-bold px-4 py-2.5 rounded-full border border-[#2A3B66] transition-colors min-h-[44px] cursor-pointer"
+            className="flex items-center gap-1.5 bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] dark:hover:bg-[#332E27] text-[#1F1B16] dark:text-[#F5F1EA] text-xs font-medium px-3.5 py-2 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] transition-colors min-h-[44px] cursor-pointer btn-campus"
           >
-            <Download className="w-4 h-4 text-[#C6FF3D]" />
+            <Download className="w-4 h-4 text-[#0F6E6E] dark:text-[#199595]" />
             <span>Export CSV</span>
           </button>
           <button
@@ -218,101 +247,101 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               onExpireOldItems();
               showNotification('Evaluated items: posts older than 30 days marked as expired.');
             }}
-            className="flex items-center gap-2 bg-[#0B1020] hover:bg-slate-900 text-slate-300 text-xs font-bold px-4 py-2.5 rounded-full border border-[#1E294B] transition-colors min-h-[44px] cursor-pointer"
+            className="flex items-center gap-1.5 bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] dark:hover:bg-[#332E27] text-[#544E45] dark:text-[#B8B0A2] text-xs font-medium px-3.5 py-2 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] transition-colors min-h-[44px] cursor-pointer btn-campus"
             title="Auto-expire posts older than 30 days"
           >
-            <Archive className="w-4 h-4 text-slate-400" />
+            <Archive className="w-4 h-4 text-[#7A7266]" />
             <span>Auto-Expire (&gt;30d)</span>
           </button>
         </div>
       </div>
 
       {actionNotice && (
-        <div className="bg-[#C6FF3D]/10 border border-[#C6FF3D]/30 text-[#C6FF3D] text-xs p-3.5 rounded-xl flex items-center gap-2.5 shadow-sm">
-          <Check className="w-4 h-4 text-[#C6FF3D] shrink-0" />
+        <div className="bg-[#EDF7F1] dark:bg-[#0E2417] border border-[#2F7D4F]/30 text-[#1B5633] dark:text-[#75CE9A] text-xs p-3.5 rounded-[10px] flex items-center gap-2.5 shadow-xs">
+          <Check className="w-4 h-4 text-[#2F7D4F] shrink-0" />
           <span>{actionNotice}</span>
         </div>
       )}
 
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-[#141B33] p-5 rounded-[20px] border border-[#1E294B] text-left hover:border-[#C6FF3D]/30 transition-colors shadow-lg">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pending Claims</span>
-          <div className="text-3xl font-extrabold text-[#C6FF3D] font-mono mt-1">
+        <div className="bg-white dark:bg-[#1E1C18] p-4 sm:p-5 rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] text-left shadow-xs">
+          <span className="text-[11px] font-medium text-[#7A7266] dark:text-[#857D71]">Pending Claims</span>
+          <div className="text-2xl sm:text-3xl font-serif font-bold text-[#E8A317] mt-1">
             {pendingClaims.length}
           </div>
-          <span className="text-[10px] text-slate-400 mt-0.5 block">
-            {pendingClaims.length === 0 ? 'Queue is clear' : 'Awaiting admin review'}
+          <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] mt-0.5 block">
+            {pendingClaims.length === 0 ? 'Queue is clear' : 'Awaiting review'}
           </span>
         </div>
 
-        <div className="bg-[#141B33] p-5 rounded-[20px] border border-[#1E294B] text-left hover:border-[#C6FF3D]/30 transition-colors shadow-lg">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Physical Custody</span>
-          <div className="text-3xl font-extrabold text-[#F4F6FF] font-mono mt-1">
+        <div className="bg-white dark:bg-[#1E1C18] p-4 sm:p-5 rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] text-left shadow-xs">
+          <span className="text-[11px] font-medium text-[#7A7266] dark:text-[#857D71]">Physical Custody</span>
+          <div className="text-2xl sm:text-3xl font-serif font-bold text-[#0F6E6E] dark:text-[#199595] mt-1">
             {physicalCustodyItems.length}
           </div>
-          <span className="text-[10px] text-slate-400 mt-0.5 block">
+          <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] mt-0.5 block">
             At Security Gate & Desks
           </span>
         </div>
 
-        <div className="bg-[#141B33] p-5 rounded-[20px] border border-[#1E294B] text-left hover:border-[#C6FF3D]/30 transition-colors shadow-lg">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Reunited Items</span>
-          <div className="text-3xl font-extrabold text-emerald-400 font-mono mt-1">
+        <div className="bg-white dark:bg-[#1E1C18] p-4 sm:p-5 rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] text-left shadow-xs">
+          <span className="text-[11px] font-medium text-[#7A7266] dark:text-[#857D71]">Reunited Items</span>
+          <div className="text-2xl sm:text-3xl font-serif font-bold text-[#2F7D4F] dark:text-[#75CE9A] mt-1">
             {stats.totalReturned}
           </div>
-          <span className="text-[10px] text-slate-400 mt-0.5 block">
+          <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] mt-0.5 block">
             Confirmed returned
           </span>
         </div>
 
-        <div className="bg-[#141B33] p-5 rounded-[20px] border border-[#1E294B] text-left hover:border-[#C6FF3D]/30 transition-colors shadow-lg">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Tracked</span>
-          <div className="text-3xl font-extrabold text-[#F4F6FF] font-mono mt-1">
+        <div className="bg-white dark:bg-[#1E1C18] p-4 sm:p-5 rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] text-left shadow-xs">
+          <span className="text-[11px] font-medium text-[#7A7266] dark:text-[#857D71]">Total Tracked</span>
+          <div className="text-2xl sm:text-3xl font-serif font-bold text-[#1F1B16] dark:text-[#F5F1EA] mt-1">
             {items.length}
           </div>
-          <span className="text-[10px] text-slate-400 mt-0.5 block">
+          <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] mt-0.5 block">
             Lost and found posts
           </span>
         </div>
       </div>
 
       {/* Admin Tabs */}
-      <div className="flex border-b border-[#1E294B] gap-2 text-xs overflow-x-auto scrollbar-none">
+      <div className="flex border-b border-[#E6DFD2] dark:border-[#2E2A24] gap-2 text-xs overflow-x-auto scrollbar-none">
         <button
           onClick={() => setActiveTab('claims')}
-          className={`py-3 px-4 font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${
+          className={`py-3 px-4 font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${
             activeTab === 'claims'
-              ? 'border-[#C6FF3D] text-[#C6FF3D]'
-              : 'border-transparent text-slate-400 hover:text-[#F4F6FF]'
+              ? 'border-[#0F6E6E] text-[#0F6E6E] dark:text-[#199595] font-bold'
+              : 'border-transparent text-[#7A7266] dark:text-[#857D71] hover:text-[#1F1B16]'
           }`}
         >
           <span>Claim Requests Queue</span>
-          <span className="bg-[#C6FF3D]/20 text-[#C6FF3D] font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
+          <span className="bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C] text-[10px] px-2 py-0.5 rounded-full font-bold">
             {pendingClaims.length}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('custody')}
-          className={`py-3 px-4 font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${
+          className={`py-3 px-4 font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${
             activeTab === 'custody'
-              ? 'border-[#C6FF3D] text-[#C6FF3D]'
-              : 'border-transparent text-slate-400 hover:text-[#F4F6FF]'
+              ? 'border-[#0F6E6E] text-[#0F6E6E] dark:text-[#199595] font-bold'
+              : 'border-transparent text-[#7A7266] dark:text-[#857D71] hover:text-[#1F1B16]'
           }`}
         >
           <span>Gate Custody Ledger</span>
-          <span className="bg-[#1E294B] text-slate-300 font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
+          <span className="bg-[#FAF6EF] dark:bg-[#141311] text-[#544E45] dark:text-[#B8B0A2] text-[10px] px-2 py-0.5 rounded-full font-medium">
             {physicalCustodyItems.length}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('all_items')}
-          className={`py-3 px-4 font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${
+          className={`py-3 px-4 font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${
             activeTab === 'all_items'
-              ? 'border-[#C6FF3D] text-[#C6FF3D]'
-              : 'border-transparent text-slate-400 hover:text-[#F4F6FF]'
+              ? 'border-[#0F6E6E] text-[#0F6E6E] dark:text-[#199595] font-bold'
+              : 'border-transparent text-[#7A7266] dark:text-[#857D71] hover:text-[#1F1B16]'
           }`}
         >
           <span>All Campus Items ({items.length})</span>
@@ -320,15 +349,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         <button
           onClick={() => setActiveTab('roles')}
-          className={`py-3 px-4 font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${
+          className={`py-3 px-4 font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${
             activeTab === 'roles'
-              ? 'border-[#C6FF3D] text-[#C6FF3D]'
-              : 'border-transparent text-slate-400 hover:text-[#F4F6FF]'
+              ? 'border-[#0F6E6E] text-[#0F6E6E] dark:text-[#199595] font-bold'
+              : 'border-transparent text-[#7A7266] dark:text-[#857D71] hover:text-[#1F1B16]'
           }`}
         >
-          <UserCheck className="w-4 h-4 text-[#C6FF3D]" />
+          <UserCheck className="w-4 h-4 text-[#0F6E6E] dark:text-[#199595]" />
           <span>Staff Roles & Security</span>
         </button>
+
+        {isOwnerEmail && (
+          <button
+            onClick={() => setActiveTab('personas')}
+            className={`py-3 px-4 font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${
+              activeTab === 'personas'
+                ? 'border-[#0F6E6E] text-[#0F6E6E] dark:text-[#199595] font-bold'
+                : 'border-transparent text-[#7A7266] dark:text-[#857D71] hover:text-[#1F1B16]'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 text-[#0F6E6E] dark:text-[#199595]" />
+            <span>Test Personas (ayomide2289@gmail.com only)</span>
+          </button>
+        )}
       </div>
 
       {/* TAB 1: Claims Review Queue */}
@@ -472,7 +515,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div className="p-8 text-center text-slate-400">No items currently logged.</div>
               ) : (
                 items.map((item) => (
-                  <div key={item.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#0B1020]/40 transition-colors">
+                  <div
+                    key={item.id}
+                    onClick={() => setSelectedItemForDetail(item)}
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#0B1020]/60 transition-colors cursor-pointer"
+                  >
                     <div>
                       <div className="flex items-center gap-2">
                         <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase ${
@@ -483,11 +530,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <span className="font-bold text-[#F4F6FF] text-sm">{item.title}</span>
                       </div>
                       <p className="text-[11px] text-slate-400 mt-1">
-                        {item.location} • Status: <strong className="text-slate-300">{item.status}</strong>
+                        {item.location} • Status: <strong className="text-slate-300">{item.status}</strong> • <span className="text-[#C6FF3D] underline">Click to inspect full details</span>
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
                       <select
                         value={item.status}
                         onChange={(e) => onUpdateItemStatus(item.id, e.target.value as CampusItem['status'])}
@@ -658,6 +705,376 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: Test Personas (Strictly for ayomide2289@gmail.com) */}
+      {activeTab === 'personas' && isOwnerEmail && (
+        <div className="space-y-6">
+          <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-6 shadow-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-[#F4F6FF] text-base flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-[#C6FF3D]" />
+                Root Admin Persona Switcher & Test Accounts
+              </h3>
+              <span className="text-[10px] bg-[#C6FF3D]/10 text-[#C6FF3D] border border-[#C6FF3D]/30 font-mono font-bold px-2 py-0.5 rounded-full">
+                ayomide2289@gmail.com Only
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              These test personas allow you, as the primary administrator, to preview and audit the portal from the perspective of students, security gate personnel, and departmental staff. All other users cannot see or access these accounts.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Persona 1: Student Chidera */}
+            <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-5 space-y-4 hover:border-[#C6FF3D]/30 transition-all flex flex-col justify-between">
+              <div className="space-y-2.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-sm border border-purple-500/30">
+                  U
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-[#F4F6FF] text-sm">Chidera Eze</h4>
+                  <span className="text-[10px] font-mono text-purple-300 font-bold uppercase">Student</span>
+                  <p className="text-[11px] text-slate-400 font-mono">chidera@nileuniversity.edu.ng</p>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Test reporting items with challenge questions, filtering the campus feed, and submitting ownership claim verification answers.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onSwitchPersona) {
+                    onSwitchPersona({
+                      id: 'demo-student-chidera',
+                      name: 'Chidera Eze (Student)',
+                      email: 'chidera@nileuniversity.edu.ng',
+                      role: 'student',
+                      matricNumber: '23/ENG/0481',
+                      department: 'Computer Engineering',
+                      isAdmin: false,
+                    });
+                    showNotification('Switched persona to Chidera Eze (Student).');
+                  }
+                }}
+                className="w-full py-2.5 px-4 bg-[#1E294B] hover:bg-[#2A3B66] text-[#F4F6FF] rounded-full text-xs font-bold border border-[#2A3B66] transition-all cursor-pointer min-h-[44px]"
+              >
+                Switch to Student Persona
+              </button>
+            </div>
+
+            {/* Persona 2: Security Musa */}
+            <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-5 space-y-4 hover:border-[#C6FF3D]/30 transition-all flex flex-col justify-between">
+              <div className="space-y-2.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-300 flex items-center justify-center font-bold text-sm border border-blue-500/30">
+                  S
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-[#F4F6FF] text-sm">Officer Musa</h4>
+                  <span className="text-[10px] font-mono text-blue-300 font-bold uppercase">Security Guard</span>
+                  <p className="text-[11px] text-slate-400 font-mono">security.gate@nileuniversity.edu.ng</p>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Test physical custody logging at Main Gate, in-person claimant verification handovers, and security desk custody records.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onSwitchPersona) {
+                    onSwitchPersona({
+                      id: 'demo-security-musa',
+                      name: 'Officer Musa (Main Gate)',
+                      email: 'security.gate@nileuniversity.edu.ng',
+                      role: 'security',
+                      department: 'Campus Security & Safety',
+                      isAdmin: false,
+                    });
+                    showNotification('Switched persona to Officer Musa (Main Gate).');
+                  }
+                }}
+                className="w-full py-2.5 px-4 bg-[#1E294B] hover:bg-[#2A3B66] text-[#F4F6FF] rounded-full text-xs font-bold border border-[#2A3B66] transition-all cursor-pointer min-h-[44px]"
+              >
+                Switch to Security Persona
+              </button>
+            </div>
+
+            {/* Persona 3: Campus Administrator */}
+            <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-5 space-y-4 hover:border-[#C6FF3D]/30 transition-all flex flex-col justify-between">
+              <div className="space-y-2.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-sm border border-amber-500/30">
+                  A
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-[#F4F6FF] text-sm">Campus Administrator</h4>
+                  <span className="text-[10px] font-mono text-amber-300 font-bold uppercase">Admin</span>
+                  <p className="text-[11px] text-slate-400 font-mono">admin@nileuniversity.edu.ng</p>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Test claim resolution workflows, CSV audit exporting, auto-expiring old posts, and general campus operations.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onSwitchPersona) {
+                    onSwitchPersona({
+                      id: 'demo-admin',
+                      name: 'Campus Administrator',
+                      email: 'admin@nileuniversity.edu.ng',
+                      role: 'admin',
+                      matricNumber: 'ADMIN-01',
+                      department: 'Student Affairs',
+                      isAdmin: true,
+                    });
+                    showNotification('Switched persona to Campus Administrator.');
+                  }
+                }}
+                className="w-full py-2.5 px-4 bg-[#1E294B] hover:bg-[#2A3B66] text-[#F4F6FF] rounded-full text-xs font-bold border border-[#2A3B66] transition-all cursor-pointer min-h-[44px]"
+              >
+                Switch to Campus Admin
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Item Detail Panel Modal */}
+      {selectedItemForDetail && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/50 backdrop-blur-xs overflow-y-auto"
+          onClick={() => setSelectedItemForDetail(null)}
+        >
+          <div
+            className="bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] shadow-xl max-w-2xl w-full overflow-hidden my-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-[#FAF6EF] dark:bg-[#141311] px-5 sm:px-6 py-4 border-b border-[#E6DFD2] dark:border-[#2E2A24] flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className={selectedItemForDetail.type === 'found' ? 'stamp-found' : 'stamp-lost'}>
+                  {selectedItemForDetail.type}
+                </span>
+                <h3 className="font-serif font-bold text-base text-[#1F1B16] dark:text-[#F5F1EA] truncate">
+                  {selectedItemForDetail.title}
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedItemForDetail(null)}
+                className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] p-1.5 rounded-[6px] cursor-pointer"
+                aria-label="Close item details"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
+              {/* Full-size Photo */}
+              {selectedItemForDetail.imageUrl && (
+                <div className="rounded-[10px] overflow-hidden bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24]">
+                  <img
+                    src={selectedItemForDetail.imageUrl}
+                    alt={selectedItemForDetail.title}
+                    className="w-full max-h-96 object-contain mx-auto"
+                  />
+                </div>
+              )}
+
+              {/* Full Description */}
+              <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-4 space-y-1.5">
+                <span className="text-[10px] font-sans font-medium uppercase text-[#7A7266] dark:text-[#857D71]">Full Description</span>
+                <p className="text-sm text-[#1F1B16] dark:text-[#F5F1EA] leading-relaxed whitespace-pre-wrap">
+                  {selectedItemForDetail.description}
+                </p>
+              </div>
+
+              {/* Metadata Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 space-y-1">
+                  <span className="text-[10px] uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
+                    <Tag className="w-3 h-3 text-[#0F6E6E] dark:text-[#199595]" /> Category
+                  </span>
+                  <p className="font-semibold text-[#1F1B16] dark:text-[#F5F1EA]">{selectedItemForDetail.category}</p>
+                </div>
+
+                <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 space-y-1">
+                  <span className="text-[10px] uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
+                    <MapPin className="w-3 h-3 text-[#0F6E6E] dark:text-[#199595]" /> Campus Location
+                  </span>
+                  <p className="font-semibold text-[#1F1B16] dark:text-[#F5F1EA]">{selectedItemForDetail.location}</p>
+                </div>
+
+                <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 space-y-1">
+                  <span className="text-[10px] uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
+                    <Calendar className="w-3 h-3 text-[#0F6E6E] dark:text-[#199595]" /> Date Lost / Found
+                  </span>
+                  <p className="font-semibold text-[#1F1B16] dark:text-[#F5F1EA]">
+                    {formatDateDDMMYYYY(selectedItemForDetail.dateLostOrFound)}
+                  </p>
+                </div>
+
+                <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 space-y-1">
+                  <span className="text-[10px] uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
+                    <ShieldCheck className="w-3 h-3 text-[#0F6E6E] dark:text-[#199595]" /> Held-At Location
+                  </span>
+                  <p className="font-semibold text-[#1F1B16] dark:text-[#F5F1EA]">{selectedItemForDetail.holdingLocation}</p>
+                </div>
+
+                <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 space-y-1">
+                  <span className="text-[10px] uppercase text-[#7A7266] dark:text-[#857D71] font-medium">Status</span>
+                  <p className="font-semibold text-[#0F6E6E] dark:text-[#199595] uppercase">{selectedItemForDetail.status}</p>
+                </div>
+
+                <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 space-y-1">
+                  <span className="text-[10px] uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
+                    <Clock className="w-3 h-3 text-[#0F6E6E] dark:text-[#199595]" /> Created Time
+                  </span>
+                  <p className="font-mono text-[#1F1B16] dark:text-[#F5F1EA]">
+                    {new Date(selectedItemForDetail.createdAt).toLocaleString('en-GB')}
+                  </p>
+                </div>
+              </div>
+
+              {/* Admin-Only Private Reporter Details & Verification Answer */}
+              <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#0F6E6E]/30 rounded-[10px] p-4 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-sans font-bold uppercase text-[#0F6E6E] dark:text-[#199595]">
+                    Admin-Only Private Reporter & Verification Details
+                  </span>
+                  {isLoadingPrivate && (
+                    <span className="text-[10px] text-[#7A7266] dark:text-[#857D71]">Loading...</span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] flex items-center gap-1">
+                      <UserIcon className="w-3 h-3" /> Reporter Name
+                    </span>
+                    <p className="font-semibold text-[#1F1B16] dark:text-[#F5F1EA] mt-0.5">
+                      {privateDetails.authorName || 'Not recorded'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] flex items-center gap-1">
+                      <Mail className="w-3 h-3" /> Reporter Email
+                    </span>
+                    <p className="font-mono text-[#1F1B16] dark:text-[#F5F1EA] mt-0.5">
+                      {privateDetails.authorEmail || 'Not recorded'}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedItemForDetail.verificationQuestion && (
+                  <div className="pt-2 border-t border-[#E6DFD2] dark:border-[#2E2A24] space-y-1">
+                    <p className="text-[#544E45] dark:text-[#B8B0A2]">
+                      <strong className="text-[#1F1B16] dark:text-[#F5F1EA]">Verification Question:</strong>{' '}
+                      {selectedItemForDetail.verificationQuestion}
+                    </p>
+                    <p className="text-[#0F6E6E] dark:text-[#199595]">
+                      <strong>Expected Answer:</strong>{' '}
+                      {privateDetails.expectedAnswer || 'Not recorded'}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Claims for this Item */}
+              <div className="space-y-2.5">
+                <h4 className="font-serif font-bold text-sm text-[#1F1B16] dark:text-[#F5F1EA]">
+                  Ownership Claims ({claims.filter((c) => c.itemId === selectedItemForDetail.id).length})
+                </h4>
+                {claims.filter((c) => c.itemId === selectedItemForDetail.id).length === 0 ? (
+                  <p className="text-[#7A7266] dark:text-[#857D71] bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5">
+                    No claims submitted for this item yet.
+                  </p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {claims
+                      .filter((c) => c.itemId === selectedItemForDetail.id)
+                      .map((claim) => (
+                        <div
+                          key={claim.id}
+                          className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-semibold text-[#1F1B16] dark:text-[#F5F1EA]">{claim.claimantName}</span>
+                              <span className="text-[#7A7266] ml-2 font-mono text-[11px]">
+                                ({claim.claimantEmail})
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-sans font-semibold uppercase px-2 py-0.5 rounded-[4px] bg-white dark:bg-[#1E1C18] border border-[#E6DFD2] dark:border-[#2E2A24] text-[#0F6E6E] dark:text-[#199595]">
+                              {claim.status}
+                            </span>
+                          </div>
+                          <p className="text-[#544E45] dark:text-[#B8B0A2]">
+                            <strong className="text-[#1F1B16] dark:text-[#F5F1EA]">Submitted Answer:</strong>{' '}
+                            {claim.submittedAnswer}
+                          </p>
+                          {claim.status === 'pending' && (
+                            <div className="flex items-center gap-2 pt-1">
+                              <button
+                                onClick={() => {
+                                  onApproveClaim(claim.id, selectedItemForDetail.id);
+                                  showNotification(`Approved claim for ${selectedItemForDetail.title}.`);
+                                }}
+                                className="bg-[#2F7D4F] hover:bg-[#266841] text-white font-medium px-3 py-1.5 rounded-[8px] text-xs cursor-pointer btn-campus shadow-xs"
+                              >
+                                Approve Claim
+                              </button>
+                              <button
+                                onClick={() => {
+                                  onRejectClaim(claim.id);
+                                  showNotification(`Rejected claim.`);
+                                }}
+                                className="bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] text-[#9B1C1C] dark:text-[#F87171] border border-[#F87171]/40 font-medium px-3 py-1.5 rounded-[8px] text-xs cursor-pointer btn-campus"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="bg-[#FAF6EF] dark:bg-[#141311] px-5 sm:px-6 py-4 border-t border-[#E6DFD2] dark:border-[#2E2A24] flex flex-wrap items-center justify-between gap-3">
+              <button
+                onClick={() => {
+                  onUpdateItemStatus(selectedItemForDetail.id, 'returned');
+                  setSelectedItemForDetail({ ...selectedItemForDetail, status: 'returned' });
+                  showNotification(`Marked "${selectedItemForDetail.title}" as Resolved / Returned.`);
+                }}
+                disabled={selectedItemForDetail.status === 'returned'}
+                className="bg-[#2F7D4F] hover:bg-[#266841] disabled:opacity-50 text-white font-medium px-4 py-2.5 rounded-[10px] text-xs flex items-center gap-2 cursor-pointer min-h-[44px] btn-campus shadow-xs"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>
+                  {selectedItemForDetail.status === 'returned' ? 'Resolved (Returned)' : 'Mark Resolved'}
+                </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (confirm(`Permanently delete "${selectedItemForDetail.title}"?`)) {
+                    onDeleteItem(selectedItemForDetail.id);
+                    showNotification(`Removed item ${selectedItemForDetail.title}.`);
+                    setSelectedItemForDetail(null);
+                  }
+                }}
+                className="bg-white dark:bg-[#28241F] hover:bg-rose-50 dark:hover:bg-rose-950/20 text-[#9B1C1C] dark:text-[#F87171] border border-[#F87171]/40 font-medium px-4 py-2.5 rounded-[10px] text-xs flex items-center gap-2 cursor-pointer min-h-[44px] btn-campus"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </button>
             </div>
           </div>
         </div>

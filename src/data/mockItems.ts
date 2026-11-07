@@ -136,6 +136,6 @@ export const DEMO_CLAIMS: ClaimRecord[] = [
   }
 ];
 
-// In real pilot mode, items and claims start empty
-export const INITIAL_ITEMS: CampusItem[] = [];
-export const INITIAL_CLAIMS: ClaimRecord[] = [];
+// Seed campus records for realistic Nile University lost and found feed
+export const INITIAL_ITEMS: CampusItem[] = DEMO_ITEMS;
+export const INITIAL_CLAIMS: ClaimRecord[] = DEMO_CLAIMS;

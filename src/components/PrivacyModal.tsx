@@ -19,17 +19,17 @@ export const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onClose }) =
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#0B1020]/80 backdrop-blur-md overflow-y-auto">
-      <div className="bg-[#141B33] text-[#F4F6FF] rounded-[20px] shadow-2xl max-w-lg w-full overflow-hidden border border-[#1E294B] my-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
+      <div className="bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] shadow-xl max-w-lg w-full overflow-hidden border border-[#E6DFD2] dark:border-[#2E2A24] my-6">
         {/* Header */}
-        <div className="bg-[#0B1020] px-6 py-4 border-b border-[#1E294B] flex items-center justify-between">
+        <div className="bg-[#FAF6EF] dark:bg-[#141311] px-6 py-4 border-b border-[#E6DFD2] dark:border-[#2E2A24] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <ShieldCheck className="w-5 h-5 text-[#C6FF3D]" />
-            <h3 className="font-extrabold text-base tracking-tight text-[#F4F6FF]">Privacy & Data Practices</h3>
+            <ShieldCheck className="w-5 h-5 text-[#0F6E6E] dark:text-[#199595]" />
+            <h3 className="font-serif font-bold text-base tracking-tight text-[#1F1B16] dark:text-[#F5F1EA]">Privacy & Data Practices</h3>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-[#F4F6FF] transition-colors p-1 rounded-lg cursor-pointer"
+            className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] transition-colors p-1 rounded-[6px] cursor-pointer"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -37,56 +37,56 @@ export const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onClose }) =
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4 text-xs text-slate-300 leading-relaxed max-h-[75vh] overflow-y-auto">
-          <p className="font-medium text-[#F4F6FF]">
+        <div className="p-6 space-y-4 text-xs text-[#544E45] dark:text-[#B8B0A2] leading-relaxed max-h-[75vh] overflow-y-auto">
+          <p className="font-medium text-[#1F1B16] dark:text-[#F5F1EA]">
             NileFound is designed for Nile University students and staff. We do not track devices, sell data, or use advertising cookies.
           </p>
 
           {/* Section 1: Data Collected */}
-          <div className="border border-[#1E294B] rounded-xl p-4 bg-[#0B1020] space-y-2">
-            <div className="flex items-center gap-2 font-bold text-[#C6FF3D] text-xs">
-              <Database className="w-4 h-4 text-[#C6FF3D]" />
+          <div className="border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-4 bg-[#FAF6EF] dark:bg-[#141311] space-y-2">
+            <div className="flex items-center gap-2 font-semibold text-[#0F6E6E] dark:text-[#199595] text-xs">
+              <Database className="w-4 h-4 shrink-0" />
               <span>What data is collected</span>
             </div>
-            <ul className="list-disc list-inside space-y-1.5 pl-1 text-slate-400">
-              <li><strong className="text-slate-200">Item descriptions:</strong> category, physical description, and campus location.</li>
-              <li><strong className="text-slate-200">No public contact details:</strong> phone numbers, matric numbers, and emails are blocked from public listings.</li>
-              <li><strong className="text-slate-200">Found Student ID cards:</strong> names and matric numbers are never displayed on public feeds. Photos of ID cards are completely disabled.</li>
-              <li><strong className="text-slate-200">Verification answers:</strong> private questions and answers are stored separately in protected records and accessible only during verified ownership checks.</li>
+            <ul className="list-disc list-inside space-y-1.5 pl-1 text-[#544E45] dark:text-[#B8B0A2]">
+              <li><strong className="text-[#1F1B16] dark:text-[#F5F1EA]">Item descriptions:</strong> category, physical description, and campus location.</li>
+              <li><strong className="text-[#1F1B16] dark:text-[#F5F1EA]">No public contact details:</strong> phone numbers, matric numbers, and emails are blocked from public listings.</li>
+              <li><strong className="text-[#1F1B16] dark:text-[#F5F1EA]">Found Student ID cards:</strong> names and matric numbers are never displayed on public feeds. Photos of ID cards are completely disabled.</li>
+              <li><strong className="text-[#1F1B16] dark:text-[#F5F1EA]">Verification answers:</strong> private questions and answers are stored separately in protected records and accessible only during verified ownership checks.</li>
             </ul>
           </div>
 
           {/* Section 2: Retention */}
-          <div className="border border-[#1E294B] rounded-xl p-4 bg-[#0B1020] space-y-1.5">
-            <div className="flex items-center gap-2 font-bold text-[#C6FF3D] text-xs">
-              <Clock className="w-4 h-4 text-[#C6FF3D]" />
+          <div className="border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-4 bg-[#FAF6EF] dark:bg-[#141311] space-y-1.5">
+            <div className="flex items-center gap-2 font-semibold text-[#0F6E6E] dark:text-[#199595] text-xs">
+              <Clock className="w-4 h-4 shrink-0" />
               <span>How long data is kept</span>
             </div>
-            <p className="text-slate-400">
-              Records are retained for a maximum of <strong className="text-slate-200">60 days</strong>. After 60 days, unclaimed or completed records are automatically purged to prevent stale campus records.
+            <p className="text-[#544E45] dark:text-[#B8B0A2]">
+              Records are retained for a maximum of <strong className="text-[#1F1B16] dark:text-[#F5F1EA]">60 days</strong>. After 60 days, unclaimed or completed records are automatically purged to prevent stale campus records.
             </p>
           </div>
 
           {/* Section 3: Deletion */}
-          <div className="border border-[#1E294B] rounded-xl p-4 bg-[#0B1020] space-y-1.5">
-            <div className="flex items-center gap-2 font-bold text-[#C6FF3D] text-xs">
-              <Trash2 className="w-4 h-4 text-[#C6FF3D]" />
+          <div className="border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-4 bg-[#FAF6EF] dark:bg-[#141311] space-y-1.5">
+            <div className="flex items-center gap-2 font-semibold text-[#0F6E6E] dark:text-[#199595] text-xs">
+              <Trash2 className="w-4 h-4 shrink-0" />
               <span>How to request deletion</span>
             </div>
-            <p className="text-slate-400">
+            <p className="text-[#544E45] dark:text-[#B8B0A2]">
               You can request immediate removal of any report or claim at any time:
             </p>
-            <ul className="list-disc list-inside space-y-1 pl-1 text-slate-400">
+            <ul className="list-disc list-inside space-y-1 pl-1 text-[#544E45] dark:text-[#B8B0A2]">
               <li>Speak to the duty officer at the Main Campus Gate security post.</li>
               <li>Visit the Student Affairs office in Nile House.</li>
-              <li>Or email the campus administrator at <code className="bg-[#141B33] px-1.5 py-0.5 rounded text-[#C6FF3D] font-mono border border-[#1E294B]">studentaffairs@nileuniversity.edu.ng</code>.</li>
+              <li>Or email the campus administrator at <code className="bg-white dark:bg-[#1E1C18] px-1.5 py-0.5 rounded text-[#0F6E6E] dark:text-[#199595] font-mono border border-[#E6DFD2] dark:border-[#2E2A24]">studentaffairs@nileuniversity.edu.ng</code>.</li>
             </ul>
           </div>
 
           <div className="pt-2 flex justify-end">
             <button
               onClick={onClose}
-              className="bg-[#C6FF3D] hover:bg-[#b8f52f] text-[#0B1020] font-extrabold px-6 py-2.5 rounded-full text-xs transition-all shadow-[0_0_15px_rgba(198,255,61,0.2)] cursor-pointer"
+              className="bg-[#0F6E6E] hover:bg-[#0C5656] text-white font-medium px-6 py-2.5 rounded-[10px] text-xs transition-colors shadow-xs cursor-pointer btn-campus"
             >
               Understood
             </button>

@@ -8,16 +8,19 @@
 
 import React from 'react';
 import { 
-  Sparkles, 
   Wifi, 
   WifiOff, 
   Zap, 
   Search, 
   Plus,
   KeyRound,
-  User as UserIcon
+  User as UserIcon,
+  Bell,
+  Sun,
+  Moon
 } from 'lucide-react';
-import { User } from '../types/index.ts';
+import { User, CampusNotification } from '../types/index.ts';
+import { NotificationDropdown } from './NotificationDropdown.tsx';
 
 export type AppTab = 'feed' | 'admin' | 'login';
 
@@ -33,6 +36,12 @@ interface NavbarProps {
   savedDraftCount: number;
   currentUser: User | null;
   pendingClaimsCount: number;
+  notifications?: CampusNotification[];
+  onMarkAllAsRead?: () => void;
+  onMarkAsRead?: (id: string) => void;
+  onSelectNotificationItem?: (itemId?: string, type?: string) => void;
+  isDarkMode?: boolean;
+  onToggleDarkMode?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -46,59 +55,112 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenReportModal,
   savedDraftCount,
   currentUser,
-  pendingClaimsCount
+  pendingClaimsCount,
+  notifications = [],
+  onMarkAllAsRead = () => {},
+  onMarkAsRead = () => {},
+  onSelectNotificationItem,
+  isDarkMode = false,
+  onToggleDarkMode,
 }) => {
+  const [isNotifOpen, setIsNotifOpen] = React.useState(false);
   const isOwnerEmail = currentUser?.email?.trim().toLowerCase() === 'ayomide2289@gmail.com';
   const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwnerEmail;
   const isSecurity = currentUser?.role === 'security';
   const canAccessAdmin = isAdmin || isSecurity;
 
+  // Accurate unread count directly from notification state
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
   return (
-    <header className="sticky top-0 z-30 bg-[#0B1020]/95 backdrop-blur-md border-b border-[#1E294B] text-[#F4F6FF]">
-      {/* Slim Minimal Top Bar */}
-      <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
-        {/* Brand & BETA Tag */}
+    <header className="sticky top-0 z-30 bg-[#FAF6EF]/95 dark:bg-[#141311]/95 backdrop-blur-sm border-b border-[#E6DFD2] dark:border-[#2E2A24] text-[#1F1B16] dark:text-[#F5F1EA] transition-colors">
+      {/* Simple, left-aligned notice board header */}
+      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+        {/* Brand & Small Beta Tag */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <h1 className="font-extrabold text-xl leading-none tracking-tight text-[#F4F6FF]">
+            <h1 className="font-serif font-bold text-xl leading-none tracking-tight text-[#1F1B16] dark:text-[#F5F1EA]">
               NileFound
             </h1>
-            <span className="bg-[#C6FF3D]/10 text-[#C6FF3D] border border-[#C6FF3D]/40 text-[10px] font-mono px-2 py-0.5 rounded-full font-bold tracking-wider">
-              BETA
+            <span className="bg-[#E6DFD2]/60 dark:bg-[#2E2A24] text-[#544E45] dark:text-[#B8B0A2] border border-[#D1C7B7] dark:border-[#3F3A32] text-[10px] font-sans font-medium px-2 py-0.5 rounded-[4px] tracking-wide">
+              Beta
             </span>
           </div>
-          <span className="hidden md:inline text-xs text-slate-400 font-medium border-l border-[#1E294B] pl-3">
-            Nile University of Nigeria
+          <span className="hidden md:inline text-xs text-[#7A7266] dark:text-[#857D71] border-l border-[#E6DFD2] dark:border-[#2E2A24] pl-3">
+            Nile University Campus Board
           </span>
         </div>
 
         {/* Action Controls & Report Item Button */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
-          {/* Low-Data Toggle (Micro pill) */}
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Dark Mode Toggle */}
+          {onToggleDarkMode && (
+            <button
+              onClick={onToggleDarkMode}
+              className="p-2.5 bg-white dark:bg-[#1E1C18] text-[#544E45] dark:text-[#B8B0A2] hover:text-[#0F6E6E] dark:hover:text-[#199595] rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center btn-campus"
+              title={isDarkMode ? 'Switch to light paper theme' : 'Switch to dark theme'}
+              aria-label="Toggle theme"
+            >
+              {isDarkMode ? <Sun className="w-4 h-4 text-[#F0B336]" /> : <Moon className="w-4 h-4" />}
+            </button>
+          )}
+
+          {/* Notification Center Trigger & Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setIsNotifOpen((prev) => !prev)}
+              className="relative p-2.5 bg-white dark:bg-[#1E1C18] text-[#544E45] dark:text-[#B8B0A2] hover:text-[#0F6E6E] dark:hover:text-[#199595] rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center btn-campus"
+              title="Campus Notifications"
+              aria-label={`Campus Notifications (${unreadCount} unread)`}
+              aria-expanded={isNotifOpen}
+            >
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-[#E8A317] text-[#1F1B16] text-[10px] font-bold font-sans w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            <NotificationDropdown
+              isOpen={isNotifOpen}
+              onClose={() => setIsNotifOpen(false)}
+              notifications={notifications}
+              onMarkAllAsRead={onMarkAllAsRead}
+              onMarkAsRead={onMarkAsRead}
+              onSelectItem={(itemId, type) => {
+                if (onSelectNotificationItem) {
+                  onSelectNotificationItem(itemId, type);
+                }
+              }}
+            />
+          </div>
+
+          {/* Low-Data Toggle */}
           <button
             onClick={() => setLowDataMode(!lowDataMode)}
-            className={`hidden xs:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors cursor-pointer min-h-[36px] ${
+            className={`hidden xs:flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-xs font-medium border transition-colors cursor-pointer min-h-[44px] btn-campus ${
               lowDataMode
-                ? 'bg-[#C6FF3D]/15 text-[#C6FF3D] border-[#C6FF3D]/40'
-                : 'bg-[#141B33] text-slate-400 border-[#1E294B] hover:text-[#F4F6FF]'
+                ? 'bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border-[#0F6E6E]/40'
+                : 'bg-white dark:bg-[#1E1C18] text-[#544E45] dark:text-[#B8B0A2] border-[#E6DFD2] dark:border-[#2E2A24] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
             }`}
             title="Saves mobile data by hiding photos"
           >
-            <Zap className="w-3 h-3 text-[#C6FF3D]" />
+            <Zap className="w-3.5 h-3.5 text-[#0F6E6E] dark:text-[#199595]" />
             <span className="hidden sm:inline">Low-Data:</span> {lowDataMode ? 'ON' : 'OFF'}
           </button>
 
           {/* Connection Status indicator */}
-          <div className="flex items-center text-[11px] text-slate-400">
+          <div className="hidden sm:flex items-center text-xs text-[#7A7266] dark:text-[#857D71]">
             {isOnline ? (
-              <span className="flex items-center gap-1 text-slate-300" title="Connected">
-                <span className="w-2 h-2 rounded-full bg-[#C6FF3D]" />
-                <span className="hidden sm:inline text-[11px]">Online</span>
+              <span className="flex items-center gap-1.5 text-[#544E45] dark:text-[#B8B0A2]" title="Connected to campus network">
+                <span className="w-2 h-2 rounded-full bg-[#2F7D4F]" />
+                <span className="text-xs">Online</span>
               </span>
             ) : (
-              <span className="flex items-center gap-1 text-amber-400 font-medium" title="Offline">
+              <span className="flex items-center gap-1 text-[#E8A317] font-medium" title="Offline - saving reports locally">
                 <WifiOff className="w-3.5 h-3.5" />
-                <span className="text-[11px]">Offline</span>
+                <span className="text-xs">Offline</span>
               </span>
             )}
           </div>
@@ -107,39 +169,38 @@ export const Navbar: React.FC<NavbarProps> = ({
           {currentUser ? (
             <button
               onClick={() => setActiveTab('login')}
-              className="flex items-center gap-2 bg-[#141B33] hover:bg-[#1A2342] text-[#F4F6FF] px-3 py-1.5 rounded-full text-xs font-medium border border-[#1E294B] transition-colors min-h-[44px] cursor-pointer"
+              className="flex items-center gap-2 bg-white dark:bg-[#1E1C18] hover:bg-[#F5EFE4] dark:hover:bg-[#28241F] text-[#1F1B16] dark:text-[#F5F1EA] px-3 py-2 rounded-[10px] text-xs font-medium border border-[#E6DFD2] dark:border-[#2E2A24] transition-colors min-h-[44px] cursor-pointer btn-campus"
               title="Account Settings"
             >
-              <div className="w-6 h-6 rounded-full bg-[#C6FF3D] text-[#0B1020] font-bold flex items-center justify-center text-xs">
+              <div className="w-6 h-6 rounded-full bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] font-bold flex items-center justify-center text-xs border border-[#0F6E6E]/20">
                 {currentUser.name.charAt(0)}
               </div>
               <span className="max-w-[100px] truncate hidden sm:inline">{currentUser.name}</span>
               {isAdmin && (
-                <span className="bg-[#C6FF3D]/20 text-[#C6FF3D] text-[9px] font-bold px-1.5 py-0.2 rounded font-mono">
-                  ADMIN
+                <span className="bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] text-[9px] font-bold px-1.5 py-0.5 rounded-[4px] border border-[#0F6E6E]/30">
+                  Admin
                 </span>
               )}
             </button>
           ) : (
             <button
               onClick={() => setActiveTab('login')}
-              className="flex items-center gap-1.5 bg-[#141B33] hover:bg-[#1A2342] text-[#F4F6FF] px-3.5 py-2 rounded-full text-xs font-medium border border-[#1E294B] transition-colors min-h-[44px] cursor-pointer"
+              className="flex items-center gap-1.5 bg-white dark:bg-[#1E1C18] hover:bg-[#F5EFE4] dark:hover:bg-[#28241F] text-[#1F1B16] dark:text-[#F5F1EA] px-3.5 py-2 rounded-[10px] text-xs font-medium border border-[#E6DFD2] dark:border-[#2E2A24] transition-colors min-h-[44px] cursor-pointer btn-campus"
             >
-              <UserIcon className="w-3.5 h-3.5 text-slate-300" />
+              <UserIcon className="w-3.5 h-3.5 text-[#544E45] dark:text-[#B8B0A2]" />
               <span>Sign In</span>
             </button>
           )}
 
-          {/* Report Item Button: Lime, Pill-Shaped with Subtle Radar Ping */}
+          {/* Report Item Button: Solid Deep Teal (#0F6E6E), 10px Radius, Normal Size */}
           <button
             onClick={onOpenReportModal}
-            className="relative inline-flex items-center gap-2 bg-[#C6FF3D] hover:bg-[#b8f52f] text-[#0B1020] font-extrabold text-xs sm:text-sm px-4 sm:px-5 py-2.5 rounded-full shadow-[0_0_20px_rgba(198,255,61,0.25)] hover:shadow-[0_0_25px_rgba(198,255,61,0.4)] transition-all min-h-[44px] cursor-pointer active:scale-95"
+            className="inline-flex items-center gap-2 bg-[#0F6E6E] hover:bg-[#0C5656] text-white font-medium text-xs sm:text-sm px-4 sm:px-5 py-2 rounded-[10px] shadow-xs transition-colors min-h-[44px] cursor-pointer btn-campus active:scale-98"
           >
-            <span className="radar-ping-ring" aria-hidden="true" />
-            <Plus className="w-4 h-4 stroke-[3]" />
+            <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Report Item</span>
             {savedDraftCount > 0 && (
-              <span className="bg-[#0B1020] text-[#C6FF3D] text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">
+              <span className="bg-[#0C5656] text-white text-[10px] px-1.5 py-0.2 rounded font-sans font-medium">
                 1 draft
               </span>
             )}
@@ -148,13 +209,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Navigation Tabs Bar */}
-      <nav className="max-w-7xl mx-auto px-4 flex gap-2 overflow-x-auto text-xs border-t border-[#1E294B]/80 scrollbar-none">
+      <nav className="max-w-7xl mx-auto px-4 flex gap-4 overflow-x-auto text-xs border-t border-[#E6DFD2] dark:border-[#2E2A24]">
         <button
           onClick={() => setActiveTab('feed')}
-          className={`flex items-center gap-1.5 px-3 py-2.5 border-b-2 font-medium whitespace-nowrap transition-colors min-h-[44px] cursor-pointer ${
+          className={`flex items-center gap-1.5 py-2.5 border-b-2 font-medium whitespace-nowrap transition-colors min-h-[44px] cursor-pointer ${
             activeTab === 'feed'
-              ? 'border-[#C6FF3D] text-[#C6FF3D] font-bold'
-              : 'border-transparent text-slate-400 hover:text-[#F4F6FF]'
+              ? 'border-[#0F6E6E] text-[#0F6E6E] dark:text-[#199595] font-bold'
+              : 'border-transparent text-[#7A7266] dark:text-[#857D71] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
           }`}
         >
           <Search className="w-3.5 h-3.5" />
@@ -165,16 +226,16 @@ export const Navbar: React.FC<NavbarProps> = ({
         {canAccessAdmin && (
           <button
             onClick={() => setActiveTab('admin')}
-            className={`flex items-center gap-1.5 px-3 py-2.5 border-b-2 font-medium whitespace-nowrap transition-colors min-h-[44px] cursor-pointer ${
+            className={`flex items-center gap-1.5 py-2.5 border-b-2 font-medium whitespace-nowrap transition-colors min-h-[44px] cursor-pointer ${
               activeTab === 'admin'
-                ? 'border-[#C6FF3D] text-[#C6FF3D] font-bold bg-[#141B33]/60'
-                : 'border-transparent text-slate-400 hover:text-[#F4F6FF]'
+                ? 'border-[#0F6E6E] text-[#0F6E6E] dark:text-[#199595] font-bold'
+                : 'border-transparent text-[#7A7266] dark:text-[#857D71] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
             }`}
           >
-            <KeyRound className="w-3.5 h-3.5 text-[#C6FF3D]" />
+            <KeyRound className="w-3.5 h-3.5 text-[#0F6E6E] dark:text-[#199595]" />
             <span>Admin Control Center</span>
             {pendingClaimsCount > 0 && (
-              <span className="bg-[#C6FF3D] text-[#0B1020] font-mono text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
+              <span className="bg-[#E8A317] text-[#1F1B16] font-sans text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
                 {pendingClaimsCount}
               </span>
             )}
@@ -184,3 +245,4 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
+

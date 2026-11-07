@@ -17,16 +17,18 @@ import {
   query,
   orderBy,
   where,
+  limit,
   getDocs,
   Unsubscribe,
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase.ts';
-import { CampusItem, ClaimRecord, User } from '../types/index.ts';
+import { CampusItem, ClaimRecord, User, CampusNotification } from '../types/index.ts';
 
 const ITEMS_COLLECTION = 'items';
 const CLAIMS_COLLECTION = 'claims';
 const USERS_COLLECTION = 'users';
 const ROLES_COLLECTION = 'roles';
+const NOTIFICATIONS_COLLECTION = 'notifications';
 
 export interface UserRoleRecord {
   uid: string;
@@ -142,12 +144,6 @@ export function subscribeToRealtimeItems(
   onSuccess: (items: CampusItem[]) => void,
   onError?: (err: Error) => void
 ): Unsubscribe {
-  // If client is not signed in to Firebase Auth, do not execute query
-  if (!auth.currentUser) {
-    onSuccess([]);
-    return () => {};
-  }
-
   const itemsRef = collection(db, ITEMS_COLLECTION);
   const q = query(itemsRef, orderBy('createdAt', 'desc'));
 
@@ -170,6 +166,7 @@ export function subscribeToRealtimeItems(
           isSensitiveId: data.isSensitiveId || false,
           verificationQuestion: data.verificationQuestion || undefined,
           reportedByEmailDomain: data.authorEmail ? data.authorEmail.split('@')[1] : 'nileuniversity.edu.ng',
+          authorId: data.authorId || undefined,
           createdAt: data.createdAt || new Date().toISOString(),
         };
       });
@@ -207,8 +204,6 @@ export async function saveItemToFirestore(item: CampusItem, _user?: User | null)
     status: 'open',
     holdingLocation: item.holdingLocation,
     authorId: currentUid,
-    authorName: authorName.slice(0, 100),
-    authorEmail: authorEmail.slice(0, 100),
     createdAt: nowIso,
     updatedAt: nowIso,
   };
@@ -226,6 +221,16 @@ export async function saveItemToFirestore(item: CampusItem, _user?: User | null)
   try {
     const docRef = await addDoc(collection(db, ITEMS_COLLECTION), payload);
 
+    // Store reporter contact details in private subcollection (readable only by owner & admin)
+    const privateRef = doc(db, ITEMS_COLLECTION, docRef.id, 'private', 'details');
+    await setDoc(privateRef, {
+      itemId: docRef.id,
+      authorId: currentUid,
+      authorName: authorName.slice(0, 100),
+      authorEmail: authorEmail.slice(0, 100),
+      createdAt: nowIso,
+    });
+
     // If there is an expected verification answer, save into protected subcollection
     if (item.verificationAnswerHash && item.type === 'found') {
       const secretRef = doc(db, ITEMS_COLLECTION, docRef.id, 'secrets', 'verification');
@@ -233,7 +238,7 @@ export async function saveItemToFirestore(item: CampusItem, _user?: User | null)
         itemId: docRef.id,
         authorId: currentUid,
         expectedAnswer: item.verificationAnswerHash.slice(0, 500),
-        createdAt: new Date().toISOString(),
+        createdAt: nowIso,
       });
     }
 
@@ -241,6 +246,42 @@ export async function saveItemToFirestore(item: CampusItem, _user?: User | null)
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, ITEMS_COLLECTION);
   }
+}
+
+export interface ItemPrivateDetails {
+  authorName?: string;
+  authorEmail?: string;
+  expectedAnswer?: string;
+}
+
+/**
+ * Fetch private reporter details and verification answer for an item (Admin / Owner only)
+ */
+export async function fetchItemPrivateDetails(itemId: string): Promise<ItemPrivateDetails> {
+  const result: ItemPrivateDetails = {};
+  try {
+    const privateRef = doc(db, ITEMS_COLLECTION, itemId, 'private', 'details');
+    const privateSnap = await getDoc(privateRef);
+    if (privateSnap.exists()) {
+      const d = privateSnap.data();
+      result.authorName = d.authorName;
+      result.authorEmail = d.authorEmail;
+    }
+  } catch (err) {
+    console.debug('Could not fetch private details:', err);
+  }
+
+  try {
+    const secretRef = doc(db, ITEMS_COLLECTION, itemId, 'secrets', 'verification');
+    const secretSnap = await getDoc(secretRef);
+    if (secretSnap.exists()) {
+      result.expectedAnswer = secretSnap.data().expectedAnswer;
+    }
+  } catch (err) {
+    console.debug('Could not fetch secret verification:', err);
+  }
+
+  return result;
 }
 
 /**
@@ -308,6 +349,7 @@ export function subscribeToRealtimeClaims(
           claimantEmail: data.claimantEmail || '',
           submittedAnswer: data.submittedAnswer || '',
           status: data.status || 'pending',
+          claimantId: data.claimantId || undefined,
           createdAt: data.createdAt || new Date().toISOString(),
         };
       });
@@ -410,5 +452,114 @@ export async function syncUserProfile(user: User): Promise<void> {
     );
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Subscribe to real-time campus & admin notifications
+ * Complies with Spark free-tier: Single onSnapshot limited to latest 20 documents.
+ * Unsubscribes on unmount.
+ */
+export function subscribeToRealtimeNotifications(
+  currentUser: User | null,
+  onSuccess: (notifications: CampusNotification[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  if (!auth.currentUser || !currentUser) {
+    onSuccess([]);
+    return () => {};
+  }
+
+  const notifsRef = collection(db, NOTIFICATIONS_COLLECTION);
+  const isMasterAdmin = currentUser.email?.trim().toLowerCase() === 'ayomide2289@gmail.com';
+  const isAdmin = isMasterAdmin || currentUser.role === 'admin' || currentUser.isAdmin;
+
+  // Single onSnapshot listener limited to latest 20 items (free-tier constraint)
+  const q = isAdmin
+    ? query(notifsRef, where('recipientUid', 'in', [currentUser.id, 'admin']), limit(20))
+    : query(notifsRef, where('recipientUid', '==', currentUser.id), limit(20));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const notifications: CampusNotification[] = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          recipientUid: data.recipientUid || '',
+          fromUid: data.fromUid || '',
+          type: data.type || 'admin_review',
+          title: data.title || 'Campus Notification',
+          message: data.message || '',
+          read: Boolean(data.read),
+          createdAt: data.createdAt || new Date().toISOString(),
+          itemId: data.itemId || undefined,
+        };
+      }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      onSuccess(notifications);
+    },
+    (error) => {
+      if (onError) onError(error);
+      console.warn('Real-time notifications sync error:', error);
+    }
+  );
+}
+
+/**
+ * Save a notification to Firestore
+ * Validates fields according to security rules:
+ * Allowed keys: recipientUid, fromUid, type, title, message, read, createdAt, itemId
+ */
+export async function saveNotificationToFirestore(
+  notification: {
+    recipientUid: string;
+    fromUid?: string;
+    type: CampusNotification['type'];
+    title: string;
+    message: string;
+    itemId?: string;
+    createdAt?: string;
+  }
+): Promise<string> {
+  const currentUid = auth.currentUser?.uid || notification.fromUid || 'system';
+  const nowIso = notification.createdAt || new Date().toISOString();
+
+  const payload: Record<string, any> = {
+    recipientUid: notification.recipientUid.slice(0, 128),
+    fromUid: currentUid.slice(0, 128),
+    type: notification.type,
+    title: notification.title.trim().slice(0, 120),
+    message: notification.message.trim().slice(0, 500),
+    read: false,
+    createdAt: nowIso.slice(0, 50),
+  };
+
+  if (notification.itemId) {
+    payload.itemId = notification.itemId.slice(0, 128);
+  }
+
+  try {
+    const docRef = await addDoc(collection(db, NOTIFICATIONS_COLLECTION), payload);
+    return docRef.id;
+  } catch (error) {
+    console.warn('Error saving notification to Firestore:', error);
+    return `local-${Date.now()}`;
+  }
+}
+
+/**
+ * Mark a notification as read
+ * Only updates the 'read' field as strictly enforced by security rules
+ */
+export async function markNotificationAsReadInFirestore(notificationId: string): Promise<void> {
+  if (!notificationId || notificationId.startsWith('local-') || notificationId.startsWith('notif-')) {
+    return;
+  }
+  try {
+    const docRef = doc(db, NOTIFICATIONS_COLLECTION, notificationId);
+    await updateDoc(docRef, { read: true });
+  } catch (error) {
+    console.debug('Error marking notification as read in Firestore:', error);
   }
 }

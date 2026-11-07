@@ -71,9 +71,7 @@ service cloud.firestore {
         && data.updatedAt is string && data.updatedAt.size() <= 50
         && (!('imageUrl' in data) || (data.imageUrl is string && (data.imageUrl.matches('^https://.*') || data.imageUrl.matches('^data:image/(jpeg|png|webp);base64,.*')) && data.imageUrl.size() <= 100000))
         && (!('verificationQuestion' in data) || (data.verificationQuestion is string && data.verificationQuestion.size() <= 300))
-        && (!('isSensitiveId' in data) || (data.isSensitiveId is bool))
-        && (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 100))
-        && (!('authorEmail' in data) || (data.authorEmail is string && data.authorEmail.size() <= 100));
+        && (!('isSensitiveId' in data) || (data.isSensitiveId is bool));
     }
 
     function isValidItemSecret(data, itemId) {
@@ -108,10 +106,10 @@ service cloud.firestore {
         && (!('matricNumber' in data) || (data.matricNumber is string && data.matricNumber.size() <= 20));
     }
 
-    // Items collection (Campus lost and found feed)
+    // Items collection (Campus lost and found feed - publicly readable)
     match /items/{itemId} {
-      allow get: if isValidId(itemId) && isVerifiedUser();
-      allow list: if isVerifiedUser();
+      allow get: if isValidId(itemId);
+      allow list: if true;
       allow create: if isValidId(itemId) && isVerifiedUser()
         && isValidItem(incoming())
         && incoming().authorId == request.auth.uid
@@ -144,6 +142,23 @@ service cloud.firestore {
         allow create: if isValidId(secretId) && isVerifiedUser()
           && isValidItemSecret(incoming(), itemId);
         allow update, delete: if isValidId(secretId) && (
+          isAdmin() ||
+          (isVerifiedUser() && resource.data.authorId == request.auth.uid)
+        );
+      }
+
+      // Private reporter details subcollection (Only item owner and admin can read)
+      match /private/{docId} {
+        allow get: if isValidId(docId) && isVerifiedUser() && (
+          isMasterAdmin() ||
+          isAdmin() ||
+          resource.data.authorId == request.auth.uid
+        );
+        allow list: if isMasterAdmin() || isAdmin();
+        allow create: if isValidId(docId) && isVerifiedUser()
+          && incoming().authorId == request.auth.uid;
+        allow update, delete: if isValidId(docId) && (
+          isMasterAdmin() ||
           isAdmin() ||
           (isVerifiedUser() && resource.data.authorId == request.auth.uid)
         );
@@ -200,6 +215,37 @@ service cloud.firestore {
         && isValidUser(incoming())
         && (incoming().role == 'student' || isMasterAdmin());
       allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // Campus and Admin Notifications
+    function isValidNotification(data) {
+      return data.keys().hasAll(['recipientUid', 'fromUid', 'type', 'title', 'message', 'read', 'createdAt'])
+        && data.keys().hasOnly(['recipientUid', 'fromUid', 'type', 'title', 'message', 'read', 'createdAt', 'itemId'])
+        && data.fromUid is string && data.fromUid == request.auth.uid
+        && data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid.size() <= 128
+        && data.type in ['claim_received', 'claim_approved', 'claim_rejected', 'match_alert', 'item_returned', 'admin_review', 'claim_submitted', 'item_reported_lost', 'item_reported_found', 'admin_alert']
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 120
+        && data.message is string && data.message.size() >= 2 && data.message.size() <= 500
+        && data.read is bool && data.read == false
+        && data.createdAt is string && data.createdAt.size() <= 50
+        && (!('itemId' in data) || (data.itemId is string && data.itemId.size() <= 128));
+    }
+
+    match /notifications/{notificationId} {
+      allow get, list: if isVerifiedUser() && (
+        resource.data.recipientUid == request.auth.uid ||
+        (isAdmin() && resource.data.recipientUid == 'admin')
+      );
+      allow create: if isValidId(notificationId) && isVerifiedUser()
+        && isValidNotification(incoming());
+      allow update: if isValidId(notificationId) && isVerifiedUser()
+        && (resource.data.recipientUid == request.auth.uid || (isAdmin() && resource.data.recipientUid == 'admin'))
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read'])
+        && incoming().read is bool;
+      allow delete: if isValidId(notificationId) && (
+        isAdmin() ||
+        (isVerifiedUser() && resource.data.recipientUid == request.auth.uid)
+      );
     }
   }
 }
