@@ -13,9 +13,9 @@ Production-grade, privacy-conscious progressive web app engineered for students,
   - **Cards & Surfaces**: Muted Navy (`#141B33`) with 20px rounded corners and faint lime hover glow
   - **Typography**: Bricolage Grotesque (headings) & Inter (body text)
   - **Contrast**: Full WCAG AA compliant with minimum 44px thumb touch targets
-- **Authentication**: Firebase Authentication (Single-Tap Google Sign-In)
+- **Authentication**: Firebase Authentication (Google popup/redirect fallback plus email/password with verified Nile University email addresses)
 - **Database**: Cloud Firestore with hardened field-level security rules
-- **Storage**: Firebase Storage with client-side image compression (<100KB) and EXIF data scrubbing
+- **Storage**: Firebase Storage with client-side JPEG compression and verified-user, size, MIME-type, and UID-path rules
 - **Hosting**: Google AI Studio Preview & Production Runtime
 
 ---
@@ -55,7 +55,7 @@ Production-grade, privacy-conscious progressive web app engineered for students,
 To prevent confusion among students and maintain clean university records:
 - **General Campus Users & Visitors**:
   - Demo accounts (Campus Administrator, Chidera Eze, Officer Musa) are **completely hidden and disabled**.
-  - General visitors only see the official **Sign in with Google** interface.
+  - General visitors only see the official sign-in interface.
 - **Master Admin (`ayomide2289@gmail.com`)**:
   - Has exclusive access to the **Admin Persona Switcher** (available on the sign-in page and inside the Admin Control Center).
   - Can switch between test personas with one click:
@@ -86,7 +86,7 @@ Instead of client-side role forgery, access is enforced through two layers:
 To prevent opportunistic theft of valuable items (phones, power banks, Casio calculators, lab coats):
 1. **Finders Create a Challenge**: When reporting a found item, the finder provides a public question (e.g. *"What is the inscription inside the battery compartment?"*) and a private answer stored in `/items/{itemId}/secrets/verification`.
 2. **Public Feed Concealment**: Genuine answers are never returned to the public feed.
-3. **Claimant Submission**: Claimants enter their answer, which is written to `/claims/{claimId}`.
+3. **Claimant Submission**: Claimants enter their answer, which is written only to `/items/{itemId}/privateClaims/{claimId}`.
 4. **Admin Review**: Only administrators and campus security can compare the submitted answer against the secret answer to approve the return.
 
 ---
@@ -103,17 +103,15 @@ To prevent opportunistic theft of valuable items (phones, power banks, Casio cal
 NileFound includes a multi-channel notification architecture designed to work reliably on campus network conditions:
 
 ### 1. In-App Notification Center & Sound Alerts
-- **Campus Bell Trigger**: Located in the top header with real-time unread badges.
+- **Campus Bell Trigger**: Visible only to signed-in, verified users and backed by a single latest-20 Firestore listener.
 - **Web Audio Chimes**: Generates pleasant, low-latency synthetic two-tone chime (`playNotificationChime()`) using the Web Audio API without downloading external audio files or consuming mobile bandwidth.
 - **Desktop & Mobile Push Alerts**: Integrates native HTML5 browser notifications with one-tap user permission.
 
-### 2. Dedicated Root Admin Desk (`ayomide2289@gmail.com`)
-- **Exclusive Operational Visibility**: High-priority alerts for new reports (e.g. sensitive ID card deposits, laptops, phones) and ownership claim submissions are marked `forAdminOnly: true`.
-- **Targeted Notification Filtering**: Standard students only see public lost & found updates. Only `ayomide2289@gmail.com` and authorized staff have access to the **Admin Alerts** tab.
-- **Direct University Email Dispatch**:
-  - One-click **Dispatch Email** formats a complete incident brief with timestamps in WAT (West Africa Time), physical custody location, reporter contact details, and direct link to the NileFound Admin Desk.
-  - Automatically addresses dispatches to `ayomide2289@gmail.com` using zero-quota client-side mailto protocols.
-  - Keeps an audit registry under the **Email Log** tab with re-open capabilities.
+### 2. Private, Recipient-Scoped Alerts
+- Notifications are created only for the intended recipient or the admin recipient.
+- Titles and messages contain no email addresses or claimant verification answers.
+- Supported events include claim received, claim approved/rejected, possible item matches, returned items, and admin review.
+- Users can mark only their own notifications as read; seeded/demo notifications are disabled.
 
 ---
 
@@ -153,3 +151,22 @@ Complete these steps in your [Firebase Console](https://console.firebase.google.
 - [ ] **Authentication Providers**: Ensure **Google** is enabled under Auth > Sign-in method.
 - [ ] **Authorized Domains**: Add your AI Studio hosting domains (`ais-dev-*.run.app`, `ais-pre-*.run.app`) under Auth > Settings > Authorized domains.
 - [ ] **API Key Restrictions**: In Google Cloud Console, restrict your Firebase Web API key (`AIzaSyCz...`) to HTTP referrers matching your application domains.
+- [ ] **Master Admin UID**: Replace `PASTE_YOUR_UID` in `firestore.rules` and `storage.rules` with the Firebase Auth UID for the master administrator before publishing.
+- [ ] **Email Verification**: Keep email verification enforcement enabled; unverified users cannot read, post, claim, or access private data.
+- [ ] **Domain Restriction**: Verify that the published rules require `@nileuniversity.edu.ng` for authenticated Firestore and Storage access.
+
+## 10. Refactor and Security Changes
+
+The current implementation includes:
+
+- Responsive mobile layouts with no horizontal overflow at phone and landscape widths.
+- Unified Google and email/password authentication with Nile-domain validation, strong sign-up passwords, verification-email flow, resend cooldown, password reset, and generic user-facing errors.
+- Empty live item/claim/notification initialization; demo data is opt-in and admin-only.
+- Privacy-safe notifications with strict types, recipient scoping, latest-20 realtime subscription, unread handling, relative timestamps, mark-all-read, and related-item navigation.
+- Root claim records containing workflow metadata only. Claimant names, emails, and verification answers are stored in item-scoped private claim documents.
+- Firestore and Storage rules requiring authenticated, verified Nile users, with default deny behavior, bounded fields, enum validation, owner checks, admin checks, and UID-path upload restrictions.
+- Admin-only item detail views for reporter contact information, private verification data, claim details, resolve actions, and deletion confirmation.
+- Curated Nile campus location options and client-side image compression before upload.
+- TypeScript validation, production build, and utility tests available through `npm run lint`, `npm run build`, and `npm test`.
+
+This repository is a React/Vite application. It does not contain a Next.js API route or Cloud Function for server-side OTP email dispatch; Firebase email verification is used instead, which is compatible with the Firebase Spark/no-Cloud-Functions architecture.
