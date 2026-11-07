@@ -244,7 +244,7 @@ service cloud.firestore {
     // Campus and Admin Notifications
     function isValidNotification(data) {
       return data.keys().hasAll(['recipientUid', 'fromUid', 'type', 'title', 'message', 'read', 'createdAt'])
-        && data.keys().hasOnly(['recipientUid', 'fromUid', 'type', 'title', 'message', 'read', 'createdAt', 'itemId'])
+        && data.keys().hasOnly(['recipientUid', 'fromUid', 'type', 'title', 'message', 'read', 'createdAt', 'itemId', 'claimId'])
         && data.fromUid is string && data.fromUid == request.auth.uid
         && data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid.size() <= 128
         && data.type in ['claim_received', 'claim_approved', 'claim_rejected', 'match_alert', 'item_returned', 'admin_review']
@@ -254,7 +254,29 @@ service cloud.firestore {
         && !data.message.matches('.*@.*')
         && data.read is bool && data.read == false
         && data.createdAt is string && data.createdAt.size() <= 50
-        && (!('itemId' in data) || (data.itemId is string && data.itemId.size() <= 128));
+        && (!('itemId' in data) || (data.itemId is string && data.itemId.size() <= 128))
+        && (!('claimId' in data) || (data.claimId is string && data.claimId.size() <= 128));
+    }
+
+    function canCreateNotification(data) {
+      return data.recipientUid == request.auth.uid
+        || (
+          data.recipientUid == 'admin'
+          && isAdmin()
+          && data.type == 'admin_review'
+        )
+        || (
+          'itemId' in data
+          && exists(/databases/$(database)/documents/items/$(data.itemId))
+          && get(/databases/$(database)/documents/items/$(data.itemId)).data.authorId == data.recipientUid
+          && data.type in ['claim_received', 'item_returned', 'match_alert']
+        )
+        || (
+          'claimId' in data
+          && exists(/databases/$(database)/documents/claims/$(data.claimId))
+          && get(/databases/$(database)/documents/claims/$(data.claimId)).data.claimantId == data.recipientUid
+          && data.type in ['claim_approved', 'claim_rejected']
+        );
     }
 
     match /notifications/{notificationId} {
@@ -263,7 +285,8 @@ service cloud.firestore {
         (isAdmin() && resource.data.recipientUid == 'admin')
       );
       allow create: if isValidId(notificationId) && isVerifiedUser()
-        && isValidNotification(incoming());
+        && isValidNotification(incoming())
+        && canCreateNotification(incoming());
       allow update: if isValidId(notificationId) && isVerifiedUser()
         && (resource.data.recipientUid == request.auth.uid || (isAdmin() && resource.data.recipientUid == 'admin'))
         && incoming().diff(existing()).affectedKeys().hasOnly(['read'])

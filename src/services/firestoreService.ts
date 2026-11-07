@@ -520,6 +520,7 @@ export function subscribeToRealtimeNotifications(
           read: Boolean(data.read),
           createdAt: data.createdAt || new Date().toISOString(),
           itemId: data.itemId || undefined,
+          claimId: data.claimId || undefined,
         };
       }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -545,6 +546,7 @@ export async function saveNotificationToFirestore(
     title: string;
     message: string;
     itemId?: string;
+    claimId?: string;
     createdAt?: string;
   }
 ): Promise<string> {
@@ -566,6 +568,9 @@ export async function saveNotificationToFirestore(
 
   if (notification.itemId) {
     payload.itemId = notification.itemId.slice(0, 128);
+  }
+  if (notification.claimId) {
+    payload.claimId = notification.claimId.slice(0, 128);
   }
 
   try {

@@ -110,6 +110,7 @@ export interface CampusNotification {
   read: boolean;
   createdAt: string;
   itemId?: string;
+  claimId?: string;
   linkTab?: 'feed' | 'admin';
   itemTitle?: string;
 }

@@ -384,7 +384,7 @@ export default function App() {
             message: `A found item in the same category was just reported at ${newItem.location}. Check the feed!`,
             read: false,
             createdAt: new Date().toISOString(),
-            itemId: finalItemId,
+            itemId: lostItem.id,
           };
           if (!isDemoMode) saveNotificationToFirestore(matchNotif).catch(console.warn);
           if (matchNotif.recipientUid === currentUser?.id) {
@@ -552,6 +552,7 @@ export default function App() {
         read: false,
         createdAt: new Date().toISOString(),
         itemId: claim.itemId,
+        claimId: claim.id,
       };
       if (!isDemoMode) saveNotificationToFirestore(approvedNotif).catch(console.warn);
       if (approvedNotif.recipientUid === currentUser?.id) {
@@ -610,6 +611,7 @@ export default function App() {
         read: false,
         createdAt: new Date().toISOString(),
         itemId: claim.itemId,
+        claimId: claim.id,
       };
       if (!isDemoMode) saveNotificationToFirestore(rejectedNotif).catch(console.warn);
       if (rejectedNotif.recipientUid === currentUser?.id) {
