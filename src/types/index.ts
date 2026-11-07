@@ -97,11 +97,7 @@ export type NotificationType =
   | 'claim_rejected'
   | 'match_alert'
   | 'item_returned'
-  | 'admin_review'
-  | 'claim_submitted'
-  | 'item_reported_lost'
-  | 'item_reported_found'
-  | 'admin_alert';
+  | 'admin_review';
 
 export interface CampusNotification {
   id: string;
@@ -113,16 +109,6 @@ export interface CampusNotification {
   read: boolean;
   createdAt: string;
   itemId?: string;
-  // UI and display helpers
-  itemTitle?: string;
-  itemType?: ItemType;
-  location?: string;
-  category?: ItemCategory;
-  recipientEmail?: string;
-  forAdminOnly?: boolean;
-  priority?: 'normal' | 'high' | 'urgent';
   linkTab?: 'feed' | 'admin';
-  reporterName?: string;
-  reporterEmail?: string;
+  itemTitle?: string;
 }
-

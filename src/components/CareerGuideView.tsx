@@ -205,19 +205,6 @@ export const CareerGuideView: React.FC = () => {
               </div>
             </div>
 
-            {/* Free-Tier Caveats (Honest Mentor Evaluation) */}
-            <div className="bg-amber-50/80 border border-amber-300 rounded-xl p-4 space-y-2">
-              <div className="flex items-center gap-1.5 text-amber-900 font-bold text-xs uppercase tracking-wider">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
-                <span>Honest Mentor Check: Free-Tier Limits & Gotchas</span>
-              </div>
-              <ul className="list-disc list-inside space-y-1 text-xs text-amber-950">
-                {selectedOption.freeTierCaveats.map((c, i) => (
-                  <li key={i} className="leading-relaxed">{c}</li>
-                ))}
-              </ul>
-            </div>
-
             {/* Pros and Cons */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">

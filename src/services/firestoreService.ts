@@ -254,6 +254,16 @@ export interface ItemPrivateDetails {
   expectedAnswer?: string;
 }
 
+async function fetchClaimPrivateDetails(itemId: string, claimId: string): Promise<Pick<ClaimRecord, 'claimantName' | 'claimantEmail' | 'submittedAnswer'>> {
+  const snap = await getDoc(doc(db, ITEMS_COLLECTION, itemId, 'privateClaims', claimId));
+  const data = snap.exists() ? snap.data() : {};
+  return {
+    claimantName: data.claimantName || 'Claimant',
+    claimantEmail: data.claimantEmail || '',
+    submittedAnswer: data.submittedAnswer || '',
+  };
+}
+
 /**
  * Fetch private reporter details and verification answer for an item (Admin / Owner only)
  */
@@ -338,21 +348,26 @@ export function subscribeToRealtimeClaims(
 
   return onSnapshot(
     q,
-    (snapshot) => {
-      const claims: ClaimRecord[] = snapshot.docs.map((docSnap) => {
+    async (snapshot) => {
+      const claims = await Promise.all(snapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
+        const privateDetails = await fetchClaimPrivateDetails(data.itemId, docSnap.id).catch(() => ({
+          claimantName: 'Claimant',
+          claimantEmail: '',
+          submittedAnswer: '',
+        }));
         return {
           id: docSnap.id,
           itemId: data.itemId,
           itemTitle: data.itemTitle || 'Item',
-          claimantName: data.claimantName || 'Claimant',
-          claimantEmail: data.claimantEmail || '',
-          submittedAnswer: data.submittedAnswer || '',
+          claimantName: privateDetails.claimantName,
+          claimantEmail: privateDetails.claimantEmail,
+          submittedAnswer: privateDetails.submittedAnswer,
           status: data.status || 'pending',
           claimantId: data.claimantId || undefined,
           createdAt: data.createdAt || new Date().toISOString(),
         };
-      });
+      }));
       onSuccess(claims);
     },
     (error) => {
@@ -384,9 +399,6 @@ export async function saveClaimToFirestore(
     itemId: claim.itemId,
     itemTitle: claim.itemTitle.slice(0, 100),
     claimantId: currentUid,
-    claimantName,
-    claimantEmail,
-    submittedAnswer: claim.submittedAnswer.slice(0, 500),
     status: 'pending',
     createdAt: nowIso,
     updatedAt: nowIso,
@@ -398,6 +410,15 @@ export async function saveClaimToFirestore(
 
   try {
     const docRef = await addDoc(collection(db, CLAIMS_COLLECTION), payload);
+    await setDoc(doc(db, ITEMS_COLLECTION, claim.itemId, 'privateClaims', docRef.id), {
+      itemId: claim.itemId,
+      claimId: docRef.id,
+      claimantId: currentUid,
+      claimantName: claimantName.slice(0, 100),
+      claimantEmail: claimantEmail.slice(0, 100),
+      submittedAnswer: claim.submittedAnswer.slice(0, 500),
+      createdAt: nowIso,
+    });
     // Also mark the item as claim_requested
     await updateItemStatusInFirestore(claim.itemId, 'claim_requested');
     return docRef.id;
@@ -522,7 +543,10 @@ export async function saveNotificationToFirestore(
     createdAt?: string;
   }
 ): Promise<string> {
-  const currentUid = auth.currentUser?.uid || notification.fromUid || 'system';
+  if (!auth.currentUser?.uid) {
+    throw new Error('You must be signed in to create a notification.');
+  }
+  const currentUid = auth.currentUser.uid;
   const nowIso = notification.createdAt || new Date().toISOString();
 
   const payload: Record<string, any> = {
@@ -544,7 +568,7 @@ export async function saveNotificationToFirestore(
     return docRef.id;
   } catch (error) {
     console.warn('Error saving notification to Firestore:', error);
-    return `local-${Date.now()}`;
+    throw new Error('Could not save notification. Please try again.');
   }
 }
 

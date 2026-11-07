@@ -75,8 +75,8 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-      <div className="bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] shadow-xl max-w-lg w-full overflow-hidden border border-[#E6DFD2] dark:border-[#2E2A24] my-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
+      <div className="bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] shadow-xl w-[min(100% - 24px,480px)] max-h-[100dvh] overflow-hidden border border-[#E6DFD2] dark:border-[#2E2A24] my-3 sm:my-6 flex flex-col min-w-0">
         {/* Header */}
         <div className="bg-[#FAF6EF] dark:bg-[#141311] px-6 py-4 border-b border-[#E6DFD2] dark:border-[#2E2A24] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -93,7 +93,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
         </div>
 
         {/* Content */}
-        <div className="p-6 max-w-md mx-auto">
+        <div className="p-5 sm:p-6 max-w-md mx-auto min-h-0 flex-1 overflow-y-auto">
           {!isVerifiedDemo ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 text-xs text-[#544E45] dark:text-[#B8B0A2]">

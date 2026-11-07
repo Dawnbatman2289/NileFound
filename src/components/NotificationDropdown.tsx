@@ -84,10 +84,6 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         return 'Returned';
       case 'admin_review':
         return 'Admin Review';
-      case 'item_reported_lost':
-        return 'Lost Report';
-      case 'item_reported_found':
-        return 'Found Item';
       default:
         return 'Campus Alert';
     }
@@ -112,8 +108,8 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   return (
     <div
       ref={dropdownRef}
-      className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-sm bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] shadow-lg border border-[#E6DFD2] dark:border-[#2E2A24] z-50 overflow-hidden flex flex-col"
-      style={{ maxHeight: 'min(500px, 80vh)' }}
+      className="fixed left-3 right-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96 sm:max-w-sm bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] shadow-lg border border-[#E6DFD2] dark:border-[#2E2A24] z-50 overflow-hidden flex flex-col min-w-0"
+      style={{ maxHeight: '70dvh' }}
       role="region"
       aria-label="Campus Notifications Dropdown"
     >
@@ -217,7 +213,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                     {notif.title}
                   </h4>
 
-                  <p className="text-[11px] text-[#7A7266] dark:text-[#857D71] line-clamp-2 leading-relaxed">
+                  <p className="text-[11px] text-[#7A7266] dark:text-[#857D71] line-clamp-2 leading-relaxed [overflow-wrap:anywhere]">
                     {notif.message}
                   </p>
                 </div>

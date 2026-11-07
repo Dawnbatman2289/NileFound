@@ -19,8 +19,18 @@ import {
 } from 'lucide-react';
 import { User, UserRole } from '../types/index.ts';
 import { auth, googleProvider } from '../lib/firebase.ts';
-import { signInWithPopup, signOut } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+  updateProfile,
+} from 'firebase/auth';
 import { fetchUserRole, syncUserProfile } from '../services/firestoreService.ts';
+import { validateNileEmail, validatePassword } from '../utils/authValidation.ts';
 
 interface LoginPageProps {
   currentUser: User | null;
@@ -40,6 +50,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showInbox, setShowInbox] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
 
   const isMasterAdmin = currentUser?.email?.trim().toLowerCase() === 'ayomide2289@gmail.com';
   const isAdminSimulation = isDemoMode && !!currentUser;
@@ -88,6 +103,34 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setSuccessMessage(null);
   };
 
+  const friendlyAuthError = (error: any) => {
+    if (error?.code === 'auth/account-exists-with-different-credential') {
+      return 'An account already exists with another sign-in method. Try Google or use the email address already linked to your account.';
+    }
+    if (error?.code === 'auth/invalid-credential' || error?.code === 'auth/invalid-login-credentials') {
+      return 'The email or password is not correct.';
+    }
+    if (error?.code === 'auth/email-already-in-use') return 'An account already exists for this email.';
+    if (error?.code === 'auth/weak-password') return 'Choose a stronger password with at least six characters.';
+    if (error?.code === 'auth/too-many-requests') return 'Too many attempts. Please wait a moment and try again.';
+    return 'Could not complete sign in. Please try again.';
+  };
+
+  const userFromFirebase = async (fbUser: import('firebase/auth').User): Promise<User> => {
+    const userEmail = (fbUser.email || '').trim().toLowerCase();
+    const assignedRole = await fetchUserRole(fbUser.uid);
+    const isOwner = userEmail === 'ayomide2289@gmail.com';
+    const role: UserRole = isOwner ? 'admin' : assignedRole;
+    return {
+      id: fbUser.uid,
+      name: isOwner ? 'Ayomide' : (fbUser.displayName || userEmail.split('@')[0] || 'Campus User').split(' ')[0],
+      email: userEmail,
+      role,
+      isAdmin: role === 'admin',
+      department: isOwner ? 'System Owner & University Administration' : 'Nile University Member',
+    };
+  };
+
   const handleSelectDemoAccount = (preset: User) => {
     if (!canViewDemoAccounts) {
       setErrorMessage('Unauthorized: Demo accounts are strictly reserved for ayomide2289@gmail.com.');
@@ -105,28 +148,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setIsSigningIn(true);
 
     try {
-      const result = await signInWithPopup(auth, googleProvider);
+      let result;
+      try {
+        result = await signInWithPopup(auth, googleProvider);
+      } catch (popupError: any) {
+        if (popupError?.code === 'auth/popup-blocked' || popupError?.code === 'auth/operation-not-supported-in-this-environment') {
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        }
+        throw popupError;
+      }
       const fbUser = result.user;
-      const email = (fbUser.email || '').trim().toLowerCase();
-      const uid = fbUser.uid;
-
-      // Check role in /roles/{uid}
-      const assignedRole = await fetchUserRole(uid);
-      const isOwner = email === 'ayomide2289@gmail.com';
-      const isStaffOrAdmin = isOwner || assignedRole === 'admin' || assignedRole === 'security';
-      const role: UserRole = isOwner ? 'admin' : (isStaffOrAdmin ? assignedRole : 'student');
-      const isAdmin = role === 'admin';
-
-      const loggedUser: User = {
-        id: uid,
-        name: isOwner ? 'Ayomide' : (fbUser.displayName || email.split('@')[0] || 'Campus User'),
-        email,
-        role,
-        isAdmin,
-        department: isOwner
-          ? 'System Owner & University Administration'
-          : (role === 'security' ? 'Campus Security & Safety' : 'Nile University of Nigeria'),
-      };
+      if (!validateNileEmail(fbUser.email || '')) {
+        await signOut(auth);
+        setErrorMessage('Use your Nile University email address (@nileuniversity.edu.ng).');
+        return;
+      }
+      const loggedUser = await userFromFirebase(fbUser);
 
       try {
         await syncUserProfile(loggedUser);
@@ -136,18 +174,92 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
       onLogin(loggedUser);
       setSuccessMessage(`Signed in as ${loggedUser.name}`);
-      if (isAdmin) {
-        onLogin(loggedUser);
-      } else {
-        onNavigateToFeed();
-      }
+      onNavigateToFeed();
     } catch (err: any) {
       if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {
-        console.error('Sign-in error:', err);
-        setErrorMessage(err?.message || 'Could not complete sign in. Please try again.');
+        setErrorMessage(friendlyAuthError(err));
       }
     } finally {
       setIsSigningIn(false);
+    }
+  };
+
+  const handleEmailAuth = async (event: React.FormEvent) => {
+    event.preventDefault();
+    clearFeedback();
+    setIsSigningIn(true);
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      if (!validateNileEmail(normalizedEmail)) {
+        setErrorMessage('Use your Nile University email address (@nileuniversity.edu.ng).');
+        return;
+      }
+      if (mode === 'sign-up' && !validatePassword(password)) {
+        setErrorMessage('Password must be at least 8 characters and include a letter and a number.');
+        return;
+      }
+      const result = mode === 'sign-up'
+        ? await createUserWithEmailAndPassword(auth, normalizedEmail, password)
+        : await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      if (mode === 'sign-up') {
+        await updateProfile(result.user, { displayName: email.trim().split('@')[0] });
+        await sendEmailVerification(result.user);
+        setShowInbox(true);
+        setSuccessMessage('Verification email sent. Check your inbox before continuing.');
+      } else if (!result.user.emailVerified) {
+        setShowInbox(true);
+      } else {
+        onLogin(await userFromFirebase(result.user));
+        onNavigateToFeed();
+      }
+    } catch (err: any) {
+      setErrorMessage(friendlyAuthError(err));
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
+  const resendVerification = async () => {
+    if (!auth.currentUser || cooldown > 0) return;
+    try {
+      await sendEmailVerification(auth.currentUser);
+      setCooldown(60);
+      const timer = window.setInterval(() => {
+        setCooldown((value) => {
+          if (value <= 1) {
+            window.clearInterval(timer);
+            return 0;
+          }
+          return value - 1;
+        });
+      }, 1000);
+      setSuccessMessage('Verification email sent again.');
+    } catch {
+      setErrorMessage('Could not resend the verification email. Please try again.');
+    }
+  };
+
+  const confirmVerified = async () => {
+    if (!auth.currentUser) return;
+    await auth.currentUser.reload();
+    if (auth.currentUser.emailVerified) {
+      onLogin(await userFromFirebase(auth.currentUser));
+      onNavigateToFeed();
+    } else {
+      setErrorMessage('Your email is not verified yet. Open the verification link, then try again.');
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setErrorMessage('Enter your email address first.');
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      setSuccessMessage('If an account exists for that email, a reset link has been sent.');
+    } catch {
+      setSuccessMessage('If an account exists for that email, a reset link has been sent.');
     }
   };
 
@@ -188,7 +300,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   {currentUser.role}
                 </span>
               </div>
-              <p className="text-xs text-[#7A7266] dark:text-[#857D71] mt-0.5">{currentUser.email}</p>
             </div>
           </div>
 
@@ -249,6 +360,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           )}
 
+          {showInbox ? (
+            <div className="space-y-4 text-center">
+              <h3 className="font-serif font-bold text-base">Check your inbox</h3>
+              <p className="text-xs text-[#544E45] dark:text-[#B8B0A2]">Verify your email address before posting, claiming, or reading campus items.</p>
+              <button type="button" onClick={resendVerification} disabled={cooldown > 0} className="w-full min-h-[44px] bg-white dark:bg-[#28241F] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] text-xs font-medium">
+                {cooldown > 0 ? `Resend email (${cooldown}s)` : 'Resend email'}
+              </button>
+              <button type="button" onClick={confirmVerified} className="w-full min-h-[44px] bg-[#0F6E6E] text-white rounded-[10px] text-xs font-medium">
+                I've verified
+              </button>
+            </div>
+          ) : (
+          <>
           {/* Standard Single-Tap Google Sign-In */}
           <div className="space-y-3 pt-1">
             <button
@@ -265,6 +389,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               Fast, secure sign-in with your Google account. No password or email link required.
             </p>
           </div>
+
+          <div className="flex items-center gap-3 text-[11px] text-[#7A7266]"><span className="h-px bg-[#E6DFD2] flex-1" /><span>or</span><span className="h-px bg-[#E6DFD2] flex-1" /></div>
+
+          <form onSubmit={handleEmailAuth} className="space-y-3">
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="University email" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />
+            <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />
+            <button type="submit" disabled={isSigningIn} className="w-full min-h-[44px] bg-[#2F7D4F] text-white rounded-[10px] text-xs font-medium">
+              {mode === 'sign-up' ? 'Create account' : 'Sign in with email'}
+            </button>
+            <div className="flex items-center justify-between text-[11px]">
+              <button type="button" onClick={() => setMode(mode === 'sign-up' ? 'sign-in' : 'sign-up')} className="text-[#0F6E6E] underline">
+                {mode === 'sign-up' ? 'Already have an account? Sign in' : 'Create an account'}
+              </button>
+              {mode === 'sign-in' && <button type="button" onClick={handleForgotPassword} className="text-[#0F6E6E] underline">Forgot password</button>}
+            </div>
+          </form>
+          </>
+          )}
 
           {/* Root Admin Persona Switcher (For Ayomide) */}
           {canViewDemoAccounts && (

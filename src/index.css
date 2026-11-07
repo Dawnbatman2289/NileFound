@@ -8,6 +8,10 @@
 }
 
 @layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
   :root {
     --font-heading: 'Fraunces', Georgia, serif;
     --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
@@ -68,9 +72,20 @@
     background-color: var(--color-paper);
     color: var(--color-ink);
     font-family: var(--font-body);
+    max-width: 100%;
+    overflow-x: clip;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     transition: background-color 150ms ease, color 150ms ease;
+  }
+
+  html {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  img {
+    max-width: 100%;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -159,5 +174,4 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-border-dark);
 }
-
 

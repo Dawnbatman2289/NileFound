@@ -27,8 +27,8 @@ export const SOLUTION_OPTIONS: SolutionOption[] = [
   {
     id: 'option-a',
     name: 'Option A: Decoupled Jamstack PWA (Recommended)',
-    stack: 'React (Vite PWA) + Supabase (PostgreSQL, Auth, Storage) + Cloudflare Pages',
-    description: 'Static PWA deployed to global edge (Cloudflare) with Supabase providing database, row-level security, auth, and photo storage via serverless APIs.',
+    stack: 'React (Vite PWA) + Firebase (Firestore, Auth, Storage) + AI Studio hosting',
+    description: 'React PWA using Firebase Firestore, Authentication, Storage, and security rules without server-side functions.',
     scores: {
       freeTierLimits: 9,
       offlineBandwidth: 10,
@@ -38,18 +38,18 @@ export const SOLUTION_OPTIONS: SolutionOption[] = [
     },
     monthlyHostingCostNgn: 0,
     freeTierCaveats: [
-      'Supabase Free Tier pauses inactive projects after 7 days (can be kept alive via a weekly cron or student activity).',
-      'Free storage is capped at 1GB (stores ~10,000 compressed 100KB photos).',
-      'Cloudflare Pages offers unlimited bandwidth and 500 builds/month for free.'
+      'Firebase Spark limits reads, writes, and storage usage, so queries must remain bounded.',
+      'Storage uploads are compressed and restricted to verified users and approved image types.',
+      'AI Studio hosting serves the static application; no server-side functions are required.'
     ],
     pros: [
-      'Native PostgreSQL with Row-Level Security (RLS) protects student data at the database level.',
-      'Edge CDN serves the static frontend in under 80ms over Nigerian mobile networks.',
-      'PostgreSQL and Supabase are in massive demand among Nigerian tech unicorns (Paystack, Piggyvest, Moniepoint).'
+      'Firestore Security Rules protect student data at the database boundary.',
+      'Firebase Auth, Firestore, and Storage share one security model.',
+      'The client remains compatible with the Spark plan and a static hosting environment.'
     ],
     cons: [
-      'Requires managing SQL migrations and RLS security policies.',
-      'Project pauses if inactive for 7 consecutive days on the free tier.'
+      'Requires careful query limits and rule validation.',
+      'Complex relational reporting is less direct than in a SQL database.'
     ]
   },
   {

@@ -105,7 +105,7 @@ export const SystemDesignView: React.FC = () => {
         <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-xs space-y-4 p-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
             <div>
-              <h3 className="font-bold text-stone-900 text-sm">PostgreSQL 15 Relational DDL & Supabase RLS Policies</h3>
+              <h3 className="font-bold text-stone-900 text-sm">Firebase Firestore Collections & Security Rules</h3>
               <p className="text-xs text-stone-500 mt-0.5">
                 5 core relational tables with Row-Level Security enforcing NDPA 2023 compliance at the database engine level.
               </p>

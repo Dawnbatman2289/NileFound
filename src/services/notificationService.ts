@@ -7,7 +7,7 @@
  * HTML5 browser push alerts, Web Audio chimes, and email dispatch formatting.
  */
 
-import type { CampusItem, ClaimRecord, User, CampusNotification } from '../types/index.ts';
+import type { CampusNotification } from '../types/index.ts';
 
 export const MASTER_ADMIN_EMAIL = 'ayomide2289@gmail.com';
 const LOCAL_NOTIFICATIONS_KEY = 'nilefound_notifications_v1';
@@ -111,13 +111,11 @@ A new event occurred on NileFound - Nile University Campus Lost & Found:
 --------------------------------------------------
 EVENT: ${notification.title}
 TIME: ${new Date(notification.createdAt).toLocaleString('en-GB', { timeZone: 'Africa/Lagos' })} (WAT)
-PRIORITY: ${(notification.priority || 'NORMAL').toUpperCase()}
+PRIORITY: NORMAL
 DETAILS:
 ${notification.message}
 
-LOCATION: ${notification.location || 'Nile University Campus'}
-CATEGORY: ${notification.category || 'General'}
-REPORTER: ${notification.reporterName || 'Campus Member'} (${notification.reporterEmail || 'Unverified'})
+ITEM: ${notification.itemTitle || notification.itemId || 'Campus item'}
 --------------------------------------------------
 
 ACTIONS REQUIRED:
@@ -127,7 +125,7 @@ ACTIONS REQUIRED:
 3. Verify anti-theft claimant responses before releasing property.
 
 --
-NileFound Automated Security & Operations Desk
+NileFound Campus Lost & Found
 Nile University of Nigeria, Abuja
 Contact: Student Affairs / Campus Security`;
 
@@ -180,61 +178,5 @@ export function getEmailDispatchHistory(): EmailDispatchRecord[] {
  * Generate default seed notifications for realistic Nile campus activity
  */
 export function getInitialCampusNotifications(): CampusNotification[] {
-  const now = Date.now();
-  return [
-    {
-      id: 'notif-admin-welcome',
-      recipientUid: 'admin',
-      fromUid: 'system',
-      type: 'admin_review',
-      title: 'Admin Operations Desk Active',
-      message: 'System owner alerts configured for ayomide2289@gmail.com. You will receive notifications for all reported items, sensitive ID deposits, and ownership claims.',
-      forAdminOnly: true,
-      priority: 'high',
-      createdAt: new Date(now - 1000 * 60 * 15).toISOString(),
-      read: false,
-      recipientEmail: MASTER_ADMIN_EMAIL,
-    },
-    {
-      id: 'notif-sample-1',
-      recipientUid: 'admin',
-      fromUid: 'system',
-      type: 'item_reported_lost',
-      title: 'Lost Item: Regular Show Wallet with ID Card',
-      message: 'A student reported losing a blue & black Regular Show wallet containing a student ID card near Volta Academic Building.',
-      itemTitle: 'A Regular Show wallet with a student ID card and ATM card',
-      location: 'Volta Academic Building',
-      category: 'student_id',
-      itemType: 'lost',
-      createdAt: new Date(now - 1000 * 60 * 45).toISOString(),
-      read: false,
-    },
-    {
-      id: 'notif-sample-2',
-      recipientUid: 'admin',
-      fromUid: 'system',
-      type: 'item_reported_found',
-      title: 'Found Item: Student ID Card Deposited',
-      message: 'A student ID card was found near Ubangi House and deposited at the Main Gate Security Post for safekeeping.',
-      itemTitle: 'Student ID Card',
-      location: 'Ubangi House',
-      category: 'student_id',
-      itemType: 'found',
-      createdAt: new Date(now - 1000 * 60 * 120).toISOString(),
-      read: false,
-    },
-    {
-      id: 'notif-sample-3',
-      recipientUid: 'admin',
-      fromUid: 'system',
-      type: 'claim_submitted',
-      title: 'Ownership Claim Submitted',
-      message: 'Tunde Bakare submitted a verification answer to claim the brass key with green lanyard.',
-      itemTitle: 'Room 214 Brass Key with Green Lanyard',
-      forAdminOnly: true,
-      priority: 'normal',
-      createdAt: new Date(now - 1000 * 60 * 240).toISOString(),
-      read: true,
-    },
-  ];
+  return [];
 }

@@ -87,35 +87,29 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
   // Filter notifications according to tab
   const filteredNotifications = notifications.filter((n) => {
-    if (activeTab === 'admin') {
-      return n.forAdminOnly || n.priority === 'urgent' || n.priority === 'high';
-    }
+    if (activeTab === 'admin') return n.type === 'admin_review';
     if (activeTab === 'my') {
       if (!currentUser) return false;
       return (
-        n.recipientUid === currentUser.id ||
-        n.recipientEmail === currentUser.email ||
-        n.reporterEmail === currentUser.email
+        n.recipientUid === currentUser.id
       );
     }
     // Tab 'all': show non-admin notifications + admin if currentUser is admin
-    if (!isAdmin && n.forAdminOnly) return false;
+    if (!isAdmin && n.type === 'admin_review') return false;
 
     if (filterType !== 'all') {
-      if (filterType === 'lost' && n.itemType !== 'lost') return false;
-      if (filterType === 'found' && n.itemType !== 'found') return false;
       if (filterType === 'claim' && !n.type.includes('claim')) return false;
     }
     return true;
   });
 
   const unreadCount = notifications.filter((n) => !n.read).length;
-  const adminAlertsCount = notifications.filter((n) => (n.forAdminOnly || n.priority === 'high') && !n.read).length;
+  const adminAlertsCount = notifications.filter((n) => n.type === 'admin_review' && !n.read).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end p-2 sm:p-4 bg-[#0B1020]/80 backdrop-blur-md">
       <div 
-        className="w-full max-w-lg bg-[#141B33] text-[#F4F6FF] rounded-[20px] shadow-2xl border border-[#1E294B] flex flex-col max-h-[92vh] overflow-hidden my-auto sm:my-2"
+        className="w-[min(100% - 24px,512px)] max-h-[100dvh] bg-[#141B33] text-[#F4F6FF] rounded-[20px] shadow-2xl border border-[#1E294B] flex flex-col overflow-hidden my-auto sm:my-2 min-w-0"
         role="dialog"
         aria-label="Campus Notification Center"
       >
@@ -197,7 +191,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                   : 'border-transparent text-slate-400 hover:text-[#F4F6FF]'
               }`}
             >
-              All Updates ({notifications.filter(n => !n.forAdminOnly || isAdmin).length})
+              All Updates ({notifications.filter(n => n.type !== 'admin_review' || isAdmin).length})
             </button>
 
             {currentUser && (
@@ -288,7 +282,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                   <Mail className="w-4 h-4" /> Admin Email Dispatch Registry
                 </p>
                 <p className="text-[11px] text-slate-300">
-                  Formatted university email dispatches sent to <strong>{MASTER_ADMIN_EMAIL}</strong> for custody verification and lost/found reports.
+                Formatted university email dispatches prepared for the campus administrator.
                 </p>
               </div>
 
@@ -343,10 +337,6 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
           ) : (
             /* Notification Cards */
             filteredNotifications.map((notif) => {
-              const isUrgent = notif.priority === 'urgent';
-              const isHigh = notif.priority === 'high';
-              const isLost = notif.itemType === 'lost' || notif.type === 'item_reported_lost';
-              const isFound = notif.itemType === 'found' || notif.type === 'item_reported_found';
               const isClaim = notif.type.includes('claim');
 
               return (
@@ -362,15 +352,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                   {/* Left accent bar */}
                   <div
                     className={`absolute left-0 top-0 bottom-0 w-1 ${
-                      isUrgent
-                        ? 'bg-rose-500'
-                        : isHigh
-                        ? 'bg-amber-400'
-                        : isLost
-                        ? 'bg-amber-400'
-                        : isFound
-                        ? 'bg-[#C6FF3D]'
-                        : 'bg-blue-400'
+                      notif.type === 'admin_review' ? 'bg-amber-400' : isClaim ? 'bg-[#C6FF3D]' : 'bg-blue-400'
                     }`}
                   />
 
@@ -381,29 +363,13 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                         {/* Type pill */}
                         <span
                           className={`font-mono font-bold px-2 py-0.5 rounded uppercase ${
-                            isLost
-                              ? 'bg-amber-400/15 text-amber-300 border border-amber-400/30'
-                              : isFound
-                              ? 'bg-[#C6FF3D]/15 text-[#C6FF3D] border border-[#C6FF3D]/30'
-                              : isClaim
+                            isClaim
                               ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
                               : 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
                           }`}
                         >
-                          {isLost ? 'Lost Item' : isFound ? 'Found Item' : isClaim ? 'Claim Alert' : 'Admin Alert'}
+                          {isClaim ? 'Claim Alert' : notif.type === 'admin_review' ? 'Admin Alert' : 'Campus Update'}
                         </span>
-
-                        {isUrgent && (
-                          <span className="bg-rose-500 text-white font-bold font-mono px-1.5 py-0.5 rounded uppercase">
-                            Urgent
-                          </span>
-                        )}
-
-                        {notif.forAdminOnly && (
-                          <span className="bg-[#0B1020] text-[#C6FF3D] border border-[#C6FF3D]/30 font-bold px-1.5 py-0.5 rounded font-mono">
-                            Admin Only
-                          </span>
-                        )}
 
                         {!notif.read && (
                           <span className="w-2 h-2 rounded-full bg-[#C6FF3D] inline-block animate-pulse" />
@@ -426,13 +392,6 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
                     </div>
 
                     {/* Location & Metadata */}
-                    {notif.location && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400 pt-1">
-                        <MapPin className="w-3.5 h-3.5 text-[#C6FF3D] shrink-0" />
-                        <span className="truncate">{notif.location}</span>
-                      </div>
-                    )}
-
                     {/* Action Bar */}
                     <div className="pt-2 border-t border-[#1E294B]/80 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">

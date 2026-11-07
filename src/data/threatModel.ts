@@ -29,7 +29,7 @@ export const NILEFOUND_STRIDE_THREATS: ThreatModelEntry[] = [
     threatDescription: 'Malicious user tampers with the reported item status or injects script tags into item descriptions (XSS).',
     impactLevel: 'HIGH',
     campusContext: 'Attacker alters contact URL to redirect student to a phishing or payment page.',
-    technicalCountermeasure: 'DOMPurify sanitization on text fields + Supabase Row-Level Security (RLS) policies allowing updates only by author or admin.',
+    technicalCountermeasure: 'React text rendering plus Firestore Security Rules allowing updates only by the owner or admin.',
     owaspReference: 'OWASP A03:2021 Injection / Cross-Site Scripting'
   },
   {
@@ -50,7 +50,7 @@ export const NILEFOUND_STRIDE_THREATS: ThreatModelEntry[] = [
   },
   {
     category: 'Denial of Service',
-    threatDescription: 'Spammer floods the database with massive image uploads to exhaust Supabase/Cloudflare free-tier quotas.',
+    threatDescription: 'Spammer floods Firebase Storage with massive image uploads to exhaust free-tier quotas.',
     impactLevel: 'MEDIUM',
     campusContext: 'A prankster submits 20MB uncompressed video clips, exhausting bandwidth and crashing low-end Android browsers.',
     technicalCountermeasure: 'Strict client-side canvas downsampling (<100KB) + cloud upload hard gate at 200KB + client rate limiting (max 3 reports per hour per device).',

@@ -9,23 +9,18 @@
  */
 
 export const NILE_CAMPUS_LOCATIONS = [
-  'Ubangi House (STEM Laboratories & Environmental Sciences)',
-  'Limpopo Bay (Faculty of Law & Postgraduate Studies)',
-  'Niger House (Faculty of Arts & Social Sciences)',
-  'Nile House (Administration & Security Office)',
-  'Volta Academic Building',
-  'Congo House',
-  'Central Nile Library',
-  'Nile Student Centre',
-  'Male Hostel Block A',
-  'Male Hostel Block B',
-  'Female Hostel Block A',
-  'Female Hostel Block B',
-  'Picnic Arena & Food Court',
+  'Red Volta Hostel',
+  'White Volta Hostel',
+  'Blue Nile Hostel',
+  'Faculty of Engineering',
+  'Faculty of Law',
+  'Faculty of Natural & Applied Sciences',
+  'University Library',
+  'Central Cafeteria',
+  'Student Center',
   'Sports Complex',
-  'Main Campus Gate Security Post',
-  'Campus Car Park & Bus Stop',
-  'Other Campus Location'
+  'Administrative Block',
+  'Other Campus Location',
 ] as const;
 
 export const NILE_LOCATIONS = NILE_CAMPUS_LOCATIONS;

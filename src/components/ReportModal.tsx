@@ -25,9 +25,6 @@ import { CATEGORIES } from '../data/mockItems.ts';
 import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
 import { detectPii } from '../utils/piiDetector.ts';
 import { compressImageFile, CompressionResult } from '../utils/imageCompressor.ts';
-import { auth, googleProvider } from '../lib/firebase.ts';
-import { signInWithPopup } from 'firebase/auth';
-import { fetchUserRole, syncUserProfile } from '../services/firestoreService.ts';
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -36,6 +33,7 @@ interface ReportModalProps {
   onDraftSaved: () => void;
   currentUser?: User | null;
   onLogin?: (user: User) => void;
+  onOpenLogin?: () => void;
 }
 
 const DRAFT_STORAGE_KEY = 'nilefound_report_draft_v1';
@@ -46,7 +44,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   onSubmitItem,
   onDraftSaved,
   currentUser,
-  onLogin,
+  onOpenLogin,
 }) => {
   const [reportType, setReportType] = useState<ItemType>('lost');
   const [title, setTitle] = useState('');
@@ -192,40 +190,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     };
 
     if (!currentUser) {
-      setIsSigningIn(true);
-      try {
-        const result = await signInWithPopup(auth, googleProvider);
-        const fbUser = result.user;
-        const email = (fbUser.email || '').trim().toLowerCase();
-        const uid = fbUser.uid;
-        const assignedRole = await fetchUserRole(uid);
-        const isOwner = email === 'ayomide2289@gmail.com';
-        const isStaffOrAdmin = isOwner || assignedRole === 'admin' || assignedRole === 'security';
-        const role: UserRole = isOwner ? 'admin' : (isStaffOrAdmin ? assignedRole : 'student');
-        const loggedUser: User = {
-          id: uid,
-          name: isOwner ? 'Ayomide' : (fbUser.displayName || email.split('@')[0] || 'Campus User'),
-          email,
-          role,
-          isAdmin: role === 'admin',
-          department: 'Nile University',
-        };
-        await syncUserProfile(loggedUser);
-        if (onLogin) onLogin(loggedUser);
-
-        setIsSubmitting(true);
-        await onSubmitItem(newItem);
-        localStorage.removeItem(DRAFT_STORAGE_KEY);
-        onClose();
-      } catch (err: any) {
-        if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {
-          console.error('Sign-in error:', err);
-          setPiiError('Google sign in required to publish your report. Your draft is saved.');
-        }
-      } finally {
-        setIsSigningIn(false);
-        setIsSubmitting(false);
-      }
+      onOpenLogin?.();
       return;
     }
 
@@ -246,7 +211,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] shadow-xl max-w-lg w-full overflow-hidden border border-[#E6DFD2] dark:border-[#2E2A24] my-6">
+      <div className="bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] shadow-xl w-[min(100% - 24px,480px)] max-h-[100dvh] overflow-hidden border border-[#E6DFD2] dark:border-[#2E2A24] my-3 sm:my-6 flex flex-col min-w-0">
         {/* Header */}
         <div className="bg-[#FAF6EF] dark:bg-[#141311] px-5 sm:px-6 py-4 border-b border-[#E6DFD2] dark:border-[#2E2A24] flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -264,14 +229,14 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         </div>
 
         {/* Content */}
-        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 min-h-0 flex-1 overflow-y-auto">
           {/* Sign In Awareness Banner */}
           {currentUser ? (
             <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] px-3.5 py-2.5 rounded-[10px] text-xs flex items-center justify-between">
               <span className="text-[#544E45] dark:text-[#B8B0A2]">Reporting as:</span>
               <span className="font-medium text-[#0F6E6E] dark:text-[#199595] flex items-center gap-1.5 truncate">
                 <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">{currentUser.name} ({currentUser.email})</span>
+                <span className="truncate">{currentUser.name}</span>
               </span>
             </div>
           ) : (
@@ -287,24 +252,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 onClick={async () => {
                   setIsSigningIn(true);
                   try {
-                    const result = await signInWithPopup(auth, googleProvider);
-                    const fbUser = result.user;
-                    const email = (fbUser.email || '').trim().toLowerCase();
-                    const uid = fbUser.uid;
-                    const assignedRole = await fetchUserRole(uid);
-                    const isOwner = email === 'ayomide2289@gmail.com';
-                    const isStaffOrAdmin = isOwner || assignedRole === 'admin' || assignedRole === 'security';
-                    const role: UserRole = isOwner ? 'admin' : (isStaffOrAdmin ? assignedRole : 'student');
-                    const loggedUser: User = {
-                      name: isOwner ? 'Ayomide' : (fbUser.displayName || email.split('@')[0] || 'Campus User'),
-                      email,
-                      role,
-                      isAdmin: role === 'admin',
-                      department: 'Nile University',
-                      id: uid
-                    };
-                    await syncUserProfile(loggedUser);
-                    if (onLogin) onLogin(loggedUser);
+                    onOpenLogin?.();
                   } catch (err: any) {
                     console.warn('Sign-in cancelled or failed:', err);
                   } finally {
@@ -314,7 +262,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 disabled={isSigningIn}
                 className="bg-[#0F6E6E] hover:bg-[#0C5656] disabled:opacity-50 text-white px-3.5 py-1.5 rounded-[10px] font-medium text-xs shrink-0 cursor-pointer shadow-xs active:scale-98 transition-colors text-center btn-campus"
               >
-                {isSigningIn ? 'Signing in...' : 'Sign in with Google'}
+                Open sign-in
               </button>
             </div>
           )}

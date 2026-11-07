@@ -2,12 +2,12 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * 
- * NileFound Production Database Schema & Supabase RLS Policies
+ * NileFound Production Firebase Data Model & Security Notes
  * Mapped to the official engineering design specification.
  */
 
 export const NILEFOUND_SQL_SCHEMA = `-- ==============================================================================
--- NileFound: Campus Lost & Found System Database Schema (PostgreSQL 15 / Supabase)
+-- NileFound: Legacy schema notes retained for design reference; production uses Firebase Firestore.
 -- ==============================================================================
 
 -- 1. Enable UUID Extension

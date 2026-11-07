@@ -51,14 +51,14 @@ export const FeedView: React.FC<FeedViewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
   const [selectedLostItemForMatch, setSelectedLostItemForMatch] = useState<CampusItem | null>(null);
-  const [includeDemoSeed, setIncludeDemoSeed] = useState(true);
+  const [includeDemoSeed, setIncludeDemoSeed] = useState(false);
 
   const isOwnerEmail = currentUser?.email?.trim().toLowerCase() === 'ayomide2289@gmail.com';
   const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwnerEmail;
 
   // Combine real items from Firestore with verified sample items so feed is never bare
   const displayableItems = useMemo(() => {
-    if (!includeDemoSeed) return items;
+    if (!includeDemoSeed || !isAdmin) return items;
     const existingIds = new Set(items.map((it) => it.id));
     const supplemental = DEMO_ITEMS.filter((demo) => !existingIds.has(demo.id));
     return [...items, ...supplemental];

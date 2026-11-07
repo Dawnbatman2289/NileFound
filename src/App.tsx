@@ -39,7 +39,6 @@ import {
 import {
   playNotificationChime,
   sendBrowserPushNotification,
-  getInitialCampusNotifications,
 } from './services/notificationService.ts';
 
 export const MASTER_ADMIN_EMAIL = 'ayomide2289@gmail.com';
@@ -52,7 +51,7 @@ export default function App() {
 
   // Demo Mode is ONLY enabled when ayomide2289@gmail.com is running persona simulations
   const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
-    return localStorage.getItem('nilefound_admin_simulating') === 'true';
+    return false;
   });
 
   const [items, setItems] = useState<CampusItem[]>(() => {
@@ -68,17 +67,6 @@ export default function App() {
       return DEMO_ITEMS;
     }
 
-    const saved = localStorage.getItem('nilefound_real_items_v1');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch {
-        return INITIAL_ITEMS;
-      }
-    }
     return INITIAL_ITEMS;
   });
 
@@ -95,32 +83,11 @@ export default function App() {
       return DEMO_CLAIMS;
     }
 
-    const saved = localStorage.getItem('nilefound_real_claims_v1');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch {
-        return INITIAL_CLAIMS;
-      }
-    }
     return INITIAL_CLAIMS;
   });
 
   // Active user session
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('nilefound_user_v1');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // Students and staff land on Campus Feed by default
   const [activeTab, setActiveTab] = useState<AppTab>('feed');
@@ -149,29 +116,9 @@ export default function App() {
 
   // Campus Notifications and Admin Alerts
   const [notifications, setNotifications] = useState<CampusNotification[]>(() => {
-    const saved = localStorage.getItem('nilefound_notifications_v1');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch {
-        // fallback to initial notifications
-      }
-    }
-    return getInitialCampusNotifications();
+    return [];
   });
   const [activeToast, setActiveToast] = useState<CampusNotification | null>(null);
-
-  // Cache notifications locally
-  useEffect(() => {
-    try {
-      localStorage.setItem('nilefound_notifications_v1', JSON.stringify(notifications));
-    } catch (e) {
-      console.warn('Could not cache notifications locally:', e);
-    }
-  }, [notifications]);
 
   // Sync state to localStorage according to demo mode
   useEffect(() => {
@@ -255,14 +202,8 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser && fbUser.email) {
-        // If a password provider user is detected, purge session to prevent Token Service API errors
-        const isPasswordProvider = fbUser.providerData?.some((p) => p.providerId === 'password');
-        if (isPasswordProvider) {
-          console.warn('Stale password session detected. Signing out.');
-          await signOut(auth);
-          if (!isDemoMode) {
-            setCurrentUser(null);
-          }
+        if (!fbUser.emailVerified) {
+          if (!isDemoMode) setCurrentUser(null);
           return;
         }
 
@@ -287,7 +228,7 @@ export default function App() {
 
         const user: User = {
           id: fbUser.uid,
-          name: isOwner ? 'Ayomide' : (fbUser.displayName || email.split('@')[0]),
+          name: isOwner ? 'Ayomide' : (fbUser.displayName || email.split('@')[0]).split(' ')[0],
           email,
           role,
           isAdmin: role === 'admin',
@@ -321,7 +262,7 @@ export default function App() {
 
   // Real-time Firestore sync when in real mode
   useEffect(() => {
-    if (isDemoMode) return;
+    if (isDemoMode || !currentUser || !auth.currentUser?.emailVerified) return;
 
     // Real-time items subscription (publicly readable so everyone sees campus items)
     const unsubscribeItems = subscribeToRealtimeItems(
@@ -330,12 +271,12 @@ export default function App() {
           setItems(realtimeItems);
         } else {
           // If Firestore collection has not been populated yet, keep initial items
-          setItems((prev) => (prev.length > 0 ? prev : INITIAL_ITEMS));
+          setItems(realtimeItems);
         }
       },
       (err) => {
         console.warn('Real-time items sync error:', err);
-        setItems((prev) => (prev.length > 0 ? prev : INITIAL_ITEMS));
+        setItems([]);
       }
     );
 
@@ -363,12 +304,14 @@ export default function App() {
 
   // Real-time campus & admin notifications subscription
   useEffect(() => {
-    if (isDemoMode) return;
+    if (isDemoMode || !currentUser || !auth.currentUser?.emailVerified) {
+      setNotifications([]);
+      return;
+    }
     const unsubscribeNotifs = subscribeToRealtimeNotifications(
       currentUser,
       (realtimeNotifs) => {
-        if (realtimeNotifs && realtimeNotifs.length > 0) {
-          setNotifications((prev) => {
+        setNotifications((prev) => {
             const prevIds = new Set(prev.map((n) => n.id));
             const newest = realtimeNotifs[0];
             if (newest && !prevIds.has(newest.id) && !newest.read) {
@@ -378,7 +321,6 @@ export default function App() {
             }
             return realtimeNotifs;
           });
-        }
       },
       (err) => {
         console.warn('Real-time notifications sync error:', err);
@@ -421,7 +363,6 @@ export default function App() {
       }
     }
 
-    const reporterDisplayName = currentUser?.name || 'Campus Student';
     const currentUid = auth.currentUser?.uid || currentUser?.id || 'student';
 
     // Event 3: Check for matches (same category AND same campus location)
@@ -440,13 +381,15 @@ export default function App() {
             fromUid: currentUid,
             type: 'match_alert' as const,
             title: `Possible match: ${lostItem.title}`,
-            message: `A found item with category "${newItem.category.replace(/_/g, ' ')}" was just reported at ${newItem.location}. Check the feed!`,
+            message: `A found item in the same category was just reported at ${newItem.location}. Check the feed!`,
             read: false,
             createdAt: new Date().toISOString(),
             itemId: finalItemId,
           };
           if (!isDemoMode) saveNotificationToFirestore(matchNotif).catch(console.warn);
-          setNotifications((prev) => [{ ...matchNotif, id: `notif-match-${Date.now()}-${lostItem.id}` }, ...prev]);
+          if (matchNotif.recipientUid === currentUser?.id) {
+            setNotifications((prev) => [{ ...matchNotif, id: `notif-match-${Date.now()}-${lostItem.id}` }, ...prev]);
+          }
         }
       }
     } else if (newItem.type === 'lost') {
@@ -469,7 +412,9 @@ export default function App() {
           itemId: matchingFound.id,
         };
         if (!isDemoMode) saveNotificationToFirestore(matchNotif).catch(console.warn);
-        setNotifications((prev) => [{ ...matchNotif, id: `notif-match-${Date.now()}` }, ...prev]);
+        if (matchNotif.recipientUid === currentUser?.id) {
+          setNotifications((prev) => [{ ...matchNotif, id: `notif-match-${Date.now()}` }, ...prev]);
+        }
       }
     }
 
@@ -479,7 +424,7 @@ export default function App() {
       fromUid: currentUid,
       type: 'admin_review' as const,
       title: `New ${newItem.type.toUpperCase()}: ${newItem.title}`,
-      message: `A new ${newItem.type} item was reported at ${newItem.location} by ${reporterDisplayName}. Verification review required.`,
+      message: `A new ${newItem.type} item was reported at ${newItem.location}. Verification review required.`,
       read: false,
       createdAt: new Date().toISOString(),
       itemId: finalItemId,
@@ -493,11 +438,15 @@ export default function App() {
       ...adminNotif,
       id: `notif-${Date.now()}`,
     };
-    setNotifications((prev) => [localCreated, ...prev]);
+    if (localCreated.recipientUid === currentUser?.id || (localCreated.recipientUid === 'admin' && currentUser?.isAdmin)) {
+      setNotifications((prev) => [localCreated, ...prev]);
+    }
 
-    playNotificationChime();
-    setActiveToast(localCreated);
-    sendBrowserPushNotification(localCreated.title, { body: localCreated.message });
+    if (localCreated.recipientUid === currentUser?.id || (localCreated.recipientUid === 'admin' && currentUser?.isAdmin)) {
+      playNotificationChime();
+      setActiveToast(localCreated);
+      sendBrowserPushNotification(localCreated.title, { body: localCreated.message });
+    }
     return true;
   };
 
@@ -526,13 +475,15 @@ export default function App() {
         fromUid: currentUid,
         type: 'claim_received' as const,
         title: `New claim on ${matchingItem.title}`,
-        message: `${newClaim.claimantName} filed an ownership claim for your found item. Review it in the Admin Desk.`,
+        message: `A new ownership claim was filed for your found item. Review it in the Admin Desk.`,
         read: false,
         createdAt: new Date().toISOString(),
         itemId: matchingItem.id,
       };
       if (!isDemoMode) saveNotificationToFirestore(finderNotif).catch(console.warn);
-      setNotifications((prev) => [{ ...finderNotif, id: `notif-claim-rec-${Date.now()}` }, ...prev]);
+      if (finderNotif.recipientUid === currentUser?.id) {
+        setNotifications((prev) => [{ ...finderNotif, id: `notif-claim-rec-${Date.now()}` }, ...prev]);
+      }
     }
 
     // Event 5: (admin) a new claim needs review
@@ -541,7 +492,7 @@ export default function App() {
       fromUid: currentUid,
       type: 'admin_review' as const,
       title: `Claim needs review: ${matchingItem?.title || 'Campus Item'}`,
-      message: `${newClaim.claimantName} filed an ownership claim for "${matchingItem?.title || 'item'}". Physical verification pending.`,
+      message: `A new ownership claim was filed for "${matchingItem?.title || 'item'}". Physical verification pending.`,
       read: false,
       createdAt: new Date().toISOString(),
       itemId: newClaim.itemId,
@@ -555,10 +506,14 @@ export default function App() {
       ...claimAdminNotif,
       id: `notif-claim-${Date.now()}`,
     };
-    setNotifications((prev) => [localClaimNotif, ...prev]);
+    if (localClaimNotif.recipientUid === currentUser?.id || (localClaimNotif.recipientUid === 'admin' && currentUser?.isAdmin)) {
+      setNotifications((prev) => [localClaimNotif, ...prev]);
+    }
 
-    playNotificationChime();
-    setActiveToast(localClaimNotif);
+    if (localClaimNotif.recipientUid === currentUser?.id || (localClaimNotif.recipientUid === 'admin' && currentUser?.isAdmin)) {
+      playNotificationChime();
+      setActiveToast(localClaimNotif);
+    }
   };
 
   const handleApproveClaim = async (claimId: string, itemId: string) => {
@@ -599,7 +554,9 @@ export default function App() {
         itemId: claim.itemId,
       };
       if (!isDemoMode) saveNotificationToFirestore(approvedNotif).catch(console.warn);
-      setNotifications((prev) => [{ ...approvedNotif, id: `notif-appr-${Date.now()}` }, ...prev]);
+      if (approvedNotif.recipientUid === currentUser?.id) {
+        setNotifications((prev) => [{ ...approvedNotif, id: `notif-appr-${Date.now()}` }, ...prev]);
+      }
     }
 
     // Event 4: item is marked Returned (notify item author)
@@ -616,7 +573,9 @@ export default function App() {
         itemId: item.id,
       };
       if (!isDemoMode) saveNotificationToFirestore(returnedNotif).catch(console.warn);
-      setNotifications((prev) => [{ ...returnedNotif, id: `notif-ret-${Date.now()}` }, ...prev]);
+      if (returnedNotif.recipientUid === currentUser?.id) {
+        setNotifications((prev) => [{ ...returnedNotif, id: `notif-ret-${Date.now()}` }, ...prev]);
+      }
     }
   };
 
@@ -653,7 +612,9 @@ export default function App() {
         itemId: claim.itemId,
       };
       if (!isDemoMode) saveNotificationToFirestore(rejectedNotif).catch(console.warn);
-      setNotifications((prev) => [{ ...rejectedNotif, id: `notif-rej-${Date.now()}` }, ...prev]);
+      if (rejectedNotif.recipientUid === currentUser?.id) {
+        setNotifications((prev) => [{ ...rejectedNotif, id: `notif-rej-${Date.now()}` }, ...prev]);
+      }
     }
   };
 
@@ -690,7 +651,9 @@ export default function App() {
           itemId: targetItem.id,
         };
         if (!isDemoMode) saveNotificationToFirestore(returnedNotif).catch(console.warn);
-        setNotifications((prev) => [{ ...returnedNotif, id: `notif-ret-${Date.now()}` }, ...prev]);
+        if (returnedNotif.recipientUid === currentUser?.id) {
+          setNotifications((prev) => [{ ...returnedNotif, id: `notif-ret-${Date.now()}` }, ...prev]);
+        }
       }
     }
   };
@@ -805,12 +768,18 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 transition-opacity duration-200">
+      <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto p-4 sm:p-6 pb-24 sm:pb-6 transition-opacity duration-200">
         {activeTab === 'feed' && (
           <FeedView
             items={items}
             lowDataMode={lowDataMode}
-            onClaimItem={(item) => setSelectedItemForClaim(item)}
+            onClaimItem={(item) => {
+              if (!currentUser) {
+                setActiveTab('login');
+                return;
+              }
+              setSelectedItemForClaim(item);
+            }}
             onOpenReportModal={() => setIsReportModalOpen(true)}
             currentUser={currentUser}
             isDemoMode={isDemoMode}
@@ -865,7 +834,10 @@ export default function App() {
         onSubmitItem={handleAddItem}
         onDraftSaved={() => setSavedDraftCount(1)}
         currentUser={currentUser}
-        onLogin={(u) => setCurrentUser(u)}
+        onOpenLogin={() => {
+          setIsReportModalOpen(false);
+          setActiveTab('login');
+        }}
       />
 
       <ClaimModal
@@ -890,6 +862,14 @@ export default function App() {
         isOpen={isPrivacyModalOpen}
         onClose={() => setIsPrivacyModalOpen(false)}
       />
+
+      <button
+        onClick={() => setIsReportModalOpen(true)}
+        className="sm:hidden fixed right-4 bottom-4 z-40 min-h-12 px-5 bg-[#0F6E6E] hover:bg-[#0C5656] text-white rounded-[10px] shadow-lg font-semibold text-sm cursor-pointer btn-campus"
+        aria-label="Report an item"
+      >
+        + Report
+      </button>
 
       {/* Footer */}
       <footer className="bg-transparent border-t border-[#E6DFD2] dark:border-[#2E2A24] mt-16 py-8 px-4 text-xs text-[#7A7266] dark:text-[#857D71]">

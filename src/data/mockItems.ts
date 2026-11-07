@@ -137,5 +137,5 @@ export const DEMO_CLAIMS: ClaimRecord[] = [
 ];
 
 // Seed campus records for realistic Nile University lost and found feed
-export const INITIAL_ITEMS: CampusItem[] = DEMO_ITEMS;
-export const INITIAL_CLAIMS: ClaimRecord[] = DEMO_CLAIMS;
+export const INITIAL_ITEMS: CampusItem[] = [];
+export const INITIAL_CLAIMS: ClaimRecord[] = [];

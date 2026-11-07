@@ -75,14 +75,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-30 bg-[#FAF6EF]/95 dark:bg-[#141311]/95 backdrop-blur-sm border-b border-[#E6DFD2] dark:border-[#2E2A24] text-[#1F1B16] dark:text-[#F5F1EA] transition-colors">
       {/* Simple, left-aligned notice board header */}
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3 min-w-0">
         {/* Brand & Small Beta Tag */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             <h1 className="font-serif font-bold text-xl leading-none tracking-tight text-[#1F1B16] dark:text-[#F5F1EA]">
               NileFound
             </h1>
-            <span className="bg-[#E6DFD2]/60 dark:bg-[#2E2A24] text-[#544E45] dark:text-[#B8B0A2] border border-[#D1C7B7] dark:border-[#3F3A32] text-[10px] font-sans font-medium px-2 py-0.5 rounded-[4px] tracking-wide">
+            <span className="hidden sm:inline bg-[#E6DFD2]/60 dark:bg-[#2E2A24] text-[#544E45] dark:text-[#B8B0A2] border border-[#D1C7B7] dark:border-[#3F3A32] text-[10px] font-sans font-medium px-2 py-0.5 rounded-[4px] tracking-wide">
               Beta
             </span>
           </div>
@@ -92,7 +92,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Action Controls & Report Item Button */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 shrink-0">
           {/* Dark Mode Toggle */}
           {onToggleDarkMode && (
             <button
@@ -106,6 +106,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
 
           {/* Notification Center Trigger & Dropdown */}
+          {currentUser && (
           <div className="relative">
             <button
               onClick={() => setIsNotifOpen((prev) => !prev)}
@@ -135,6 +136,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }}
             />
           </div>
+          )}
 
           {/* Low-Data Toggle */}
           <button
@@ -195,7 +197,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Report Item Button: Solid Deep Teal (#0F6E6E), 10px Radius, Normal Size */}
           <button
             onClick={onOpenReportModal}
-            className="inline-flex items-center gap-2 bg-[#0F6E6E] hover:bg-[#0C5656] text-white font-medium text-xs sm:text-sm px-4 sm:px-5 py-2 rounded-[10px] shadow-xs transition-colors min-h-[44px] cursor-pointer btn-campus active:scale-98"
+            className="hidden sm:inline-flex items-center gap-2 bg-[#0F6E6E] hover:bg-[#0C5656] text-white font-medium text-xs sm:text-sm px-4 sm:px-5 py-2 rounded-[10px] shadow-xs transition-colors min-h-[44px] cursor-pointer btn-campus active:scale-98"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Report Item</span>
@@ -245,4 +247,3 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
-

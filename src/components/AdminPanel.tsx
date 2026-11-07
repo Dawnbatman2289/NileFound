@@ -102,7 +102,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const isOwnerEmail = currentUser?.email?.trim().toLowerCase() === 'ayomide2289@gmail.com';
   const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwnerEmail;
   const isSecurity = currentUser?.role === 'security';
-  const hasAccess = isAdmin || isSecurity;
+  const hasAccess = isAdmin;
 
   const stats = generateCampusAuditReport(items, claims);
 
@@ -510,58 +510,60 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span className="text-xs text-slate-400 font-mono">Total: {items.length}</span>
             </div>
 
-            <div className="divide-y divide-[#1E294B] text-xs">
-              {items.length === 0 ? (
-                <div className="p-8 text-center text-slate-400">No items currently logged.</div>
-              ) : (
-                items.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => setSelectedItemForDetail(item)}
-                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#0B1020]/60 transition-colors cursor-pointer"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase ${
-                          item.type === 'found' ? 'bg-[#C6FF3D]/10 text-[#C6FF3D]' : 'bg-amber-400/10 text-amber-300'
-                        }`}>
-                          {item.type}
-                        </span>
-                        <span className="font-bold text-[#F4F6FF] text-sm">{item.title}</span>
+            <div className="overflow-x-auto">
+              <div className="min-w-0 divide-y divide-[#1E294B] text-xs">
+                {items.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400">No items currently logged.</div>
+                ) : (
+                  items.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => isAdmin && setSelectedItemForDetail(item)}
+                      className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#0B1020]/60 transition-colors cursor-pointer"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase ${
+                            item.type === 'found' ? 'bg-[#C6FF3D]/10 text-[#C6FF3D]' : 'bg-amber-400/10 text-amber-300'
+                          }`}>
+                            {item.type}
+                          </span>
+                          <span className="font-bold text-[#F4F6FF] text-sm">{item.title}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          {item.location} • Status: <strong className="text-slate-300">{item.status}</strong> • <span className="text-[#C6FF3D] underline">Click to inspect full details</span>
+                        </p>
                       </div>
-                      <p className="text-[11px] text-slate-400 mt-1">
-                        {item.location} • Status: <strong className="text-slate-300">{item.status}</strong> • <span className="text-[#C6FF3D] underline">Click to inspect full details</span>
-                      </p>
-                    </div>
 
-                    <div className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
-                      <select
-                        value={item.status}
-                        onChange={(e) => onUpdateItemStatus(item.id, e.target.value as CampusItem['status'])}
-                        className="bg-[#0B1020] text-[#F4F6FF] border border-[#1E294B] rounded-xl px-3 py-2 text-xs focus:border-[#C6FF3D] focus:outline-hidden min-h-[44px] cursor-pointer"
-                      >
-                        <option value="open">Open</option>
-                        <option value="claim_requested">Claim Pending</option>
-                        <option value="returned">Returned / Reunited</option>
-                        <option value="expired">Expired</option>
-                      </select>
+                      <div className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={item.status}
+                          onChange={(e) => onUpdateItemStatus(item.id, e.target.value as CampusItem['status'])}
+                          className="bg-[#0B1020] text-[#F4F6FF] border border-[#1E294B] rounded-xl px-3 py-2 text-xs focus:border-[#C6FF3D] focus:outline-hidden min-h-[44px] cursor-pointer"
+                        >
+                          <option value="open">Open</option>
+                          <option value="claim_requested">Claim Pending</option>
+                          <option value="returned">Returned / Reunited</option>
+                          <option value="expired">Expired</option>
+                        </select>
 
-                      <button
-                        onClick={() => {
-                          if (confirm(`Permanently delete "${item.title}"?`)) {
-                            onDeleteItem(item.id);
-                            showNotification(`Removed item ${item.title}.`);
-                          }
-                        }}
-                        className="text-slate-400 hover:text-rose-400 p-2 min-h-[44px] flex items-center justify-center transition-colors cursor-pointer"
-                        title="Delete item"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Permanently delete "${item.title}"?`)) {
+                              onDeleteItem(item.id);
+                              showNotification(`Removed item ${item.title}.`);
+                            }
+                          }}
+                          className="text-slate-400 hover:text-rose-400 p-2 min-h-[44px] flex items-center justify-center transition-colors cursor-pointer"
+                          title="Delete item"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))
-              )}
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -843,13 +845,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       )}
 
       {/* Admin Item Detail Panel Modal */}
-      {selectedItemForDetail && (
+      {selectedItemForDetail && isAdmin && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/50 backdrop-blur-xs overflow-y-auto"
           onClick={() => setSelectedItemForDetail(null)}
         >
           <div
-            className="bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] shadow-xl max-w-2xl w-full overflow-hidden my-6"
+            className="bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] shadow-xl w-[min(100% - 24px,672px)] max-h-[100dvh] overflow-hidden my-3 sm:my-6 flex flex-col min-w-0"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -872,7 +874,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
 
             {/* Body */}
-            <div className="p-5 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
+            <div className="p-5 sm:p-6 space-y-4 min-h-0 flex-1 overflow-y-auto text-xs">
               {/* Full-size Photo */}
               {selectedItemForDetail.imageUrl && (
                 <div className="rounded-[10px] overflow-hidden bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24]">

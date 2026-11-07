@@ -28,12 +28,15 @@ service cloud.firestore {
     function isVerifiedUser() {
       return isSignedIn()
         && request.auth.token.keys().hasAll(['email_verified'])
-        && request.auth.token.email_verified == true;
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string
+        && request.auth.token.email.matches('^[^@]+@nileuniversity\\.edu\\.ng$');
     }
 
     // Master Admin check (Sole user permitted to provision admin and security roles)
     function isMasterAdmin() {
       return isVerifiedUser()
+        && request.auth.uid == 'PASTE_YOUR_UID'
         && request.auth.token.email == 'ayomide2289@gmail.com';
     }
 
@@ -83,17 +86,26 @@ service cloud.firestore {
     }
 
     function isValidClaim(data) {
-      return data.keys().hasAll(['itemId', 'itemTitle', 'claimantId', 'claimantName', 'claimantEmail', 'submittedAnswer', 'status', 'createdAt', 'updatedAt'])
+      return data.keys().hasAll(['itemId', 'itemTitle', 'claimantId', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['itemId', 'itemTitle', 'claimantId', 'status', 'createdAt', 'updatedAt', 'finderId'])
         && data.itemId is string && data.itemId.size() <= 128
         && data.itemTitle is string && data.itemTitle.size() <= 100
         && data.claimantId is string && data.claimantId.size() <= 128
-        && data.claimantName is string && data.claimantName.size() <= 100
-        && data.claimantEmail is string && data.claimantEmail.size() <= 100
-        && data.submittedAnswer is string && data.submittedAnswer.size() >= 1 && data.submittedAnswer.size() <= 500
         && data.status in ['pending', 'approved', 'rejected']
         && data.createdAt is string && data.createdAt.size() <= 50
         && data.updatedAt is string && data.updatedAt.size() <= 50
         && (!('finderId' in data) || (data.finderId is string && data.finderId.size() <= 128));
+    }
+
+    function isValidPrivateClaim(data, itemId, claimId) {
+      return data.keys().hasOnly(['itemId', 'claimId', 'claimantId', 'claimantName', 'claimantEmail', 'submittedAnswer', 'createdAt'])
+        && data.itemId == itemId
+        && data.claimId == claimId
+        && data.claimantId == request.auth.uid
+        && data.claimantName is string && data.claimantName.size() >= 2 && data.claimantName.size() <= 100
+        && data.claimantEmail is string && data.claimantEmail.size() >= 3 && data.claimantEmail.size() <= 100
+        && data.submittedAnswer is string && data.submittedAnswer.size() <= 500
+        && data.createdAt is string && data.createdAt.size() <= 50;
     }
 
     function isValidUser(data) {
@@ -106,10 +118,9 @@ service cloud.firestore {
         && (!('matricNumber' in data) || (data.matricNumber is string && data.matricNumber.size() <= 20));
     }
 
-    // Items collection (Campus lost and found feed - publicly readable)
+    // Items collection (verified campus members only)
     match /items/{itemId} {
-      allow get: if isValidId(itemId);
-      allow list: if true;
+      allow get, list: if isVerifiedUser() && isValidId(itemId);
       allow create: if isValidId(itemId) && isVerifiedUser()
         && isValidItem(incoming())
         && incoming().authorId == request.auth.uid
@@ -162,20 +173,32 @@ service cloud.firestore {
           isAdmin() ||
           (isVerifiedUser() && resource.data.authorId == request.auth.uid)
         );
+
+      }
+
+      match /privateClaims/{claimId} {
+        allow get: if isValidId(claimId) && isVerifiedUser() && (
+          isAdmin() ||
+          resource.data.claimantId == request.auth.uid ||
+          get(/databases/$(database)/documents/items/$(itemId)).data.authorId == request.auth.uid
+        );
+        allow list: if isVerifiedUser() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/items/$(itemId)).data.authorId == request.auth.uid
+        );
+        allow create: if isValidId(claimId) && isVerifiedUser()
+          && isValidPrivateClaim(incoming(), itemId, claimId);
+        allow update, delete: if isValidId(claimId) && isAdmin();
       }
     }
 
     // Claims collection
     match /claims/{claimId} {
       allow get: if isValidId(claimId) && isVerifiedUser() && (
-        isAdmin() ||
-        resource.data.claimantId == request.auth.uid ||
-        resource.data.finderId == request.auth.uid
+        isAdmin() || resource.data.claimantId == request.auth.uid
       );
       allow list: if isVerifiedUser() && (
-        isAdmin() ||
-        resource.data.claimantId == request.auth.uid ||
-        resource.data.finderId == request.auth.uid
+        isAdmin() || resource.data.claimantId == request.auth.uid
       );
       allow create: if isValidId(claimId) && isVerifiedUser()
         && isValidClaim(incoming())
@@ -223,9 +246,11 @@ service cloud.firestore {
         && data.keys().hasOnly(['recipientUid', 'fromUid', 'type', 'title', 'message', 'read', 'createdAt', 'itemId'])
         && data.fromUid is string && data.fromUid == request.auth.uid
         && data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid.size() <= 128
-        && data.type in ['claim_received', 'claim_approved', 'claim_rejected', 'match_alert', 'item_returned', 'admin_review', 'claim_submitted', 'item_reported_lost', 'item_reported_found', 'admin_alert']
+        && data.type in ['claim_received', 'claim_approved', 'claim_rejected', 'match_alert', 'item_returned', 'admin_review']
         && data.title is string && data.title.size() >= 2 && data.title.size() <= 120
+        && !data.title.matches('.*@.*')
         && data.message is string && data.message.size() >= 2 && data.message.size() <= 500
+        && !data.message.matches('.*@.*')
         && data.read is bool && data.read == false
         && data.createdAt is string && data.createdAt.size() <= 50
         && (!('itemId' in data) || (data.itemId is string && data.itemId.size() <= 128));
