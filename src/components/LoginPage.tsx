@@ -30,7 +30,7 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { fetchUserRole, syncUserProfile } from '../services/firestoreService.ts';
-import { validateNileEmail, validatePassword } from '../utils/authValidation.ts';
+import { validateAuthEmail, validatePassword } from '../utils/authValidation.ts';
 
 interface LoginPageProps {
   currentUser: User | null;
@@ -159,9 +159,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         throw popupError;
       }
       const fbUser = result.user;
-      if (!validateNileEmail(fbUser.email || '')) {
+      if (!validateAuthEmail(fbUser.email || '')) {
         await signOut(auth);
-        setErrorMessage('Use your Nile University email address (@nileuniversity.edu.ng).');
+        setErrorMessage('Use your Nile University email address or the authorized administrator account.');
         return;
       }
       const loggedUser = await userFromFirebase(fbUser);
@@ -190,8 +190,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setIsSigningIn(true);
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      if (!validateNileEmail(normalizedEmail)) {
-        setErrorMessage('Use your Nile University email address (@nileuniversity.edu.ng).');
+      if (!validateAuthEmail(normalizedEmail)) {
+        setErrorMessage('Use your Nile University email address or the authorized administrator account.');
         return;
       }
       if (mode === 'sign-up' && !validatePassword(password)) {
