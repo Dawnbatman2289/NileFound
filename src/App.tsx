@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { Navbar, AppTab } from './components/Navbar.tsx';
 import { FeedView } from './components/FeedView.tsx';
 import { AdminPanel } from './components/AdminPanel.tsx';
@@ -771,62 +772,69 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto p-4 sm:p-6 pb-24 sm:pb-6 transition-opacity duration-200">
-        {activeTab === 'feed' && (
-          <FeedView
-            items={items}
-            lowDataMode={lowDataMode}
-            onClaimItem={(item) => {
-              if (!currentUser) {
-                setActiveTab('login');
-                return;
-              }
-              setSelectedItemForClaim(item);
-            }}
-            onOpenReportModal={() => setIsReportModalOpen(true)}
-            currentUser={currentUser}
-            isDemoMode={isDemoMode}
-            onNavigateToLogin={() => setActiveTab('login')}
-          />
-        )}
-
-        {activeTab === 'admin' && (
-          <AdminPanel
-            currentUser={currentUser}
-            items={items}
-            claims={claims}
-            onUpdateItemStatus={handleUpdateItemStatus}
-            onDeleteItem={handleDeleteItem}
-            onApproveClaim={handleApproveClaim}
-            onRejectClaim={handleRejectClaim}
-            onExpireOldItems={handleExpireOldItems}
-            onNavigateToLogin={() => setActiveTab('login')}
-            onSwitchPersona={handleSwitchPersona}
-          />
-        )}
-
-        {activeTab === 'login' && (
-          <LoginPage
-            currentUser={currentUser}
-            onLogin={(user) => {
-              if (user.id.startsWith('demo-') || user.email !== MASTER_ADMIN_EMAIL && isSimulating) {
-                handleSwitchPersona(user);
-              } else {
-                setCurrentUser(user);
-                if (user.role === 'admin' || user.role === 'security') {
-                  setActiveTab('admin');
-                } else {
-                  setActiveTab('feed');
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.18, ease: 'easeOut' }}
+        >
+          {activeTab === 'feed' && (
+            <FeedView
+              items={items}
+              lowDataMode={lowDataMode}
+              onClaimItem={(item) => {
+                if (!currentUser) {
+                  setActiveTab('login');
+                  return;
                 }
-              }
-            }}
-            onLogout={() => {
-              handleExitSimulation();
-              setCurrentUser(null);
-            }}
-            onNavigateToFeed={() => setActiveTab('feed')}
-            isDemoMode={isDemoMode}
-          />
-        )}
+                setSelectedItemForClaim(item);
+              }}
+              onOpenReportModal={() => setIsReportModalOpen(true)}
+              currentUser={currentUser}
+              isDemoMode={isDemoMode}
+              onNavigateToLogin={() => setActiveTab('login')}
+            />
+          )}
+
+          {activeTab === 'admin' && (
+            <AdminPanel
+              currentUser={currentUser}
+              items={items}
+              claims={claims}
+              onUpdateItemStatus={handleUpdateItemStatus}
+              onDeleteItem={handleDeleteItem}
+              onApproveClaim={handleApproveClaim}
+              onRejectClaim={handleRejectClaim}
+              onExpireOldItems={handleExpireOldItems}
+              onNavigateToLogin={() => setActiveTab('login')}
+              onSwitchPersona={handleSwitchPersona}
+            />
+          )}
+
+          {activeTab === 'login' && (
+            <LoginPage
+              currentUser={currentUser}
+              onLogin={(user) => {
+                if (user.id.startsWith('demo-') || user.email !== MASTER_ADMIN_EMAIL && isSimulating) {
+                  handleSwitchPersona(user);
+                } else {
+                  setCurrentUser(user);
+                  if (user.role === 'admin' || user.role === 'security') {
+                    setActiveTab('admin');
+                  } else {
+                    setActiveTab('feed');
+                  }
+                }
+              }}
+              onLogout={() => {
+                handleExitSimulation();
+                setCurrentUser(null);
+              }}
+              onNavigateToFeed={() => setActiveTab('feed')}
+              isDemoMode={isDemoMode}
+            />
+          )}
+        </motion.div>
       </main>
 
       {/* Modals & Notification Drawers */}

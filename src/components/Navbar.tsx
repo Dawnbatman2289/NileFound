@@ -7,6 +7,7 @@
  */
 
 import React from 'react';
+import { motion } from 'motion/react';
 import { 
   Wifi, 
   WifiOff, 
@@ -214,7 +215,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       <nav className="max-w-7xl mx-auto px-4 flex gap-4 overflow-x-auto text-xs border-t border-[#E6DFD2] dark:border-[#2E2A24]">
         <button
           onClick={() => setActiveTab('feed')}
-          className={`flex items-center gap-1.5 py-2.5 border-b-2 font-medium whitespace-nowrap transition-colors min-h-[44px] cursor-pointer ${
+          className={`relative flex items-center gap-1.5 py-2.5 border-b-2 font-medium whitespace-nowrap transition-colors min-h-[44px] cursor-pointer ${
             activeTab === 'feed'
               ? 'border-[#0F6E6E] text-[#0F6E6E] dark:text-[#199595] font-bold'
               : 'border-transparent text-[#7A7266] dark:text-[#857D71] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
@@ -222,13 +223,20 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <Search className="w-3.5 h-3.5" />
           <span>Campus Feed</span>
+          {activeTab === 'feed' && (
+            <motion.span
+              layoutId="active-nav-tab"
+              className="absolute inset-x-0 -bottom-px h-0.5 bg-[#0F6E6E] dark:bg-[#199595]"
+              transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+            />
+          )}
         </button>
 
         {/* Admin Control Center Tab */}
         {canAccessAdmin && (
           <button
             onClick={() => setActiveTab('admin')}
-            className={`flex items-center gap-1.5 py-2.5 border-b-2 font-medium whitespace-nowrap transition-colors min-h-[44px] cursor-pointer ${
+            className={`relative flex items-center gap-1.5 py-2.5 border-b-2 font-medium whitespace-nowrap transition-colors min-h-[44px] cursor-pointer ${
               activeTab === 'admin'
                 ? 'border-[#0F6E6E] text-[#0F6E6E] dark:text-[#199595] font-bold'
                 : 'border-transparent text-[#7A7266] dark:text-[#857D71] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
@@ -236,6 +244,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <KeyRound className="w-3.5 h-3.5 text-[#0F6E6E] dark:text-[#199595]" />
             <span>Admin Control Center</span>
+            {activeTab === 'admin' && (
+              <motion.span
+                layoutId="active-nav-tab"
+                className="absolute inset-x-0 -bottom-px h-0.5 bg-[#0F6E6E] dark:bg-[#199595]"
+                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+              />
+            )}
             {pendingClaimsCount > 0 && (
               <span className="bg-[#E8A317] text-[#1F1B16] font-sans text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
                 {pendingClaimsCount}

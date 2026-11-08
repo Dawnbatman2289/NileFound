@@ -348,6 +348,8 @@ export const FeedView: React.FC<FeedViewProps> = ({
                   id={`item-${item.id}`}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
+                  whileHover={{ y: -3 }}
+                  whileTap={{ scale: 0.995 }}
                   transition={{ duration: 0.2, delay: Math.min(filteredItems.indexOf(item) * 0.03, 0.24) }}
                   className={`notice-card flex flex-col justify-between overflow-hidden ${
                     isReturned ? 'opacity-65' : ''
