@@ -262,8 +262,19 @@ service cloud.firestore {
       return data.recipientUid == request.auth.uid
         || (
           data.recipientUid == 'admin'
-          && isAdmin()
           && data.type == 'admin_review'
+          && (
+            (
+              'itemId' in data
+              && exists(/databases/$(database)/documents/items/$(data.itemId))
+              && get(/databases/$(database)/documents/items/$(data.itemId)).data.authorId == request.auth.uid
+            )
+            || (
+              'claimId' in data
+              && exists(/databases/$(database)/documents/claims/$(data.claimId))
+              && get(/databases/$(database)/documents/claims/$(data.claimId)).data.claimantId == request.auth.uid
+            )
+          )
         )
         || (
           'itemId' in data

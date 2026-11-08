@@ -33,6 +33,7 @@ import {
 import { CampusItem, ClaimRecord, User } from '../types/index.ts';
 import { generateCampusAuditReport } from '../utils/admin.ts';
 import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
+import { sanitizeCsvCell } from '../utils/csv.ts';
 import { 
   fetchAllRoles, 
   assignUserRole, 
@@ -167,19 +168,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const exportAuditLogCsv = () => {
     const headers = ['ID', 'Type', 'Title', 'Category', 'Location', 'Holding Desk', 'Status', 'Date Reported'];
-    const csvCell = (value: string) => {
-      const safeValue = /^[=+\-@]/.test(value) ? `'${value}` : value;
-      return `"${safeValue.replace(/"/g, '""')}"`;
-    };
     const rows = items.map((i) => [
-      csvCell(i.id),
-      csvCell(i.type),
-      csvCell(i.title),
-      csvCell(i.category),
-      csvCell(`${i.location}${i.locationDetails ? ` - ${i.locationDetails}` : ''}`),
-      csvCell(i.holdingLocation),
-      csvCell(i.status),
-      csvCell(formatDateDDMMYYYY(i.dateLostOrFound))
+      sanitizeCsvCell(i.id),
+      sanitizeCsvCell(i.type),
+      sanitizeCsvCell(i.title),
+      sanitizeCsvCell(i.category),
+      sanitizeCsvCell(`${i.location}${i.locationDetails ? ` - ${i.locationDetails}` : ''}`),
+      sanitizeCsvCell(i.holdingLocation),
+      sanitizeCsvCell(i.status),
+      sanitizeCsvCell(formatDateDDMMYYYY(i.dateLostOrFound))
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');

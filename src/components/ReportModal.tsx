@@ -24,7 +24,7 @@ import { CampusItem, ItemType, ItemCategory, HoldingLocation, User, UserRole } f
 import { CATEGORIES } from '../data/mockItems.ts';
 import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
 import { detectPii } from '../utils/piiDetector.ts';
-import { compressImageFile, CompressionResult } from '../utils/imageCompressor.ts';
+import { compressImageFile, CompressionResult, isSupportedImageFile } from '../utils/imageCompressor.ts';
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -128,6 +128,11 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     if (!file) return;
 
     if (isFoundStudentId) {
+      return;
+    }
+
+    if (!isSupportedImageFile(file)) {
+      setPiiError('Choose a JPEG, PNG, or WebP image no larger than 5MB.');
       return;
     }
 

@@ -18,6 +18,10 @@ export interface CompressionResult {
   reductionPercentage: number;
 }
 
+export function isSupportedImageFile(file: Pick<File, 'type' | 'size'>, maxBytes = 5 * 1024 * 1024): boolean {
+  return /^(image\/jpeg|image\/png|image\/webp)$/.test(file.type) && file.size > 0 && file.size <= maxBytes;
+}
+
 export function compressImageFile(
   file: File,
   maxDimension = 800,

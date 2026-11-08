@@ -170,5 +170,6 @@ The current implementation includes:
 - Location selection uses official academic, hostel, administration, and student-life points, with an optional room/spot detail saved separately from the campus location.
 - Feed search now supports type, category, campus location, status, and date-range filters, with restrained motion transitions for item cards.
 - TypeScript validation, production build, and utility tests available through `npm run lint`, `npm run build`, and `npm test`.
+- The QA suite covers auth/domain/OTP boundaries, static Firestore and Storage rule invariants, campus filter combinations, upload MIME/size guards, and CSV formula-injection protection.
 
 This repository is a React/Vite application. It does not contain a Next.js API route or Cloud Function for server-side OTP email dispatch; Firebase email verification is used instead, which is compatible with the Firebase Spark/no-Cloud-Functions architecture.

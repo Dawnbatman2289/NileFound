@@ -27,6 +27,7 @@ import { CATEGORIES, DEMO_ITEMS } from '../data/mockItems.ts';
 import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
 import { calculateMatchScore } from '../utils/matching.ts';
 import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
+import { filterCampusItems } from '../utils/feedFilters.ts';
 
 interface FeedViewProps {
   items: CampusItem[];
@@ -68,32 +69,14 @@ export const FeedView: React.FC<FeedViewProps> = ({
   }, [items, includeDemoSeed]);
 
   // Filter items
-  const filteredItems = useMemo(() => {
-    return displayableItems.filter((item) => {
-      if (selectedType !== 'all' && item.type !== selectedType) return false;
-      if (selectedCategory !== 'all' && item.category !== selectedCategory) return false;
-      if (selectedLocation !== 'all' && item.location !== selectedLocation) return false;
-      if (selectedStatus === 'active' && item.status !== 'open') return false;
-      if (selectedStatus === 'claimed' && item.status !== 'claim_requested') return false;
-      if (selectedStatus === 'resolved' && item.status !== 'returned') return false;
-      if (selectedDateRange !== 'all') {
-        const ageMs = Date.now() - new Date(item.createdAt).getTime();
-        const rangeMs = selectedDateRange === '24h' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
-        if (ageMs < 0 || ageMs > rangeMs) return false;
-      }
-      
-      if (searchTerm.trim()) {
-        const query = searchTerm.toLowerCase();
-        const isFoundIdCard = item.type === 'found' && item.category === 'student_id';
-        const displayTitle = isFoundIdCard ? 'A student ID card was found' : item.title;
-        const matchTitle = displayTitle.toLowerCase().includes(query);
-        const matchDesc = item.description.toLowerCase().includes(query);
-        const matchLoc = `${item.location} ${item.locationDetails || ''}`.toLowerCase().includes(query);
-        if (!matchTitle && !matchDesc && !matchLoc) return false;
-      }
-      return true;
-    });
-  }, [displayableItems, selectedType, selectedCategory, selectedLocation, selectedStatus, selectedDateRange, searchTerm]);
+  const filteredItems = useMemo(() => filterCampusItems(displayableItems, {
+    searchTerm,
+    type: selectedType,
+    category: selectedCategory,
+    location: selectedLocation,
+    status: selectedStatus,
+    dateRange: selectedDateRange,
+  }), [displayableItems, selectedType, selectedCategory, selectedLocation, selectedStatus, selectedDateRange, searchTerm]);
 
   // Separate lost vs found
   const lostItems = useMemo(() => displayableItems.filter(i => i.type === 'lost'), [displayableItems]);
