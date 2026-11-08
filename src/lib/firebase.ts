@@ -78,13 +78,6 @@ export async function testConnection(): Promise<boolean> {
     }
 
     if (auth.currentUser) {
-      const isPassword = auth.currentUser.providerData?.some((p) => p.providerId === 'password');
-      if (isPassword) {
-        console.warn('Stale password provider session detected. Clearing from local session.');
-        await signOut(auth);
-        return false;
-      }
-
       try {
         await auth.currentUser.getIdToken(false);
       } catch (tokenError: any) {
