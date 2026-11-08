@@ -6,11 +6,6 @@ export function validateNileEmail(email: string): boolean {
   return /^[^\s@]+@nileuniversity\.edu\.ng$/i.test(normalizeNileEmail(email));
 }
 
-export function validateAuthEmail(email: string): boolean {
-  const normalizedEmail = normalizeNileEmail(email);
-  return normalizedEmail === 'ayomide2289@gmail.com' || validateNileEmail(normalizedEmail);
-}
-
 export function validatePassword(password: string): boolean {
   return password.length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
 }

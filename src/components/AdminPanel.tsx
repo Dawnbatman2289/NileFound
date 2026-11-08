@@ -103,6 +103,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const isOwnerEmail = currentUser?.email?.trim().toLowerCase() === 'ayomide2289@gmail.com';
   const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwnerEmail;
   const isSecurity = currentUser?.role === 'security';
+  const canUsePersonaSimulation = import.meta.env.DEV && currentUser?.role === 'admin';
   const hasAccess = isAdmin;
 
   const stats = generateCampusAuditReport(items, claims);
@@ -360,7 +361,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <span>Staff Roles & Security</span>
         </button>
 
-        {isOwnerEmail && (
+        {canUsePersonaSimulation && (
           <button
             onClick={() => setActiveTab('personas')}
             className={`py-3 px-4 font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap min-h-[44px] cursor-pointer ${

@@ -6,7 +6,7 @@
  */
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { getAuth, signOut } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -19,7 +19,6 @@ export const db =
     : getFirestore(app);
 
 export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
 
 export enum OperationType {
   CREATE = 'create',

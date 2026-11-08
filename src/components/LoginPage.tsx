@@ -4,33 +4,27 @@
  * 
  * NileFound Authentication Screen
  * Layout: Clean, standard sign-in interface in Deep Navy (#0B1020), Muted Card (#141B33), and Electric Lime (#C6FF3D).
- * Main Action: Normal Google Sign-In with standard campus wording.
+ * Main Action: Verified Nile University email and password authentication.
  */
 
 import React, { useState } from 'react';
 import { 
   Shield, 
   Check, 
-  UserCheck, 
   AlertCircle, 
-  LogIn, 
-  LogOut, 
-  ArrowRight 
 } from 'lucide-react';
 import { User, UserRole } from '../types/index.ts';
-import { auth, googleProvider } from '../lib/firebase.ts';
+import { auth } from '../lib/firebase.ts';
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
-  signInWithPopup,
-  signInWithRedirect,
   signOut,
   updateProfile,
 } from 'firebase/auth';
-import { fetchUserRole, syncUserProfile } from '../services/firestoreService.ts';
-import { validateAuthEmail, validatePassword } from '../utils/authValidation.ts';
+import { fetchUserRole } from '../services/firestoreService.ts';
+import { validateNileEmail, validatePassword } from '../utils/authValidation.ts';
 
 interface LoginPageProps {
   currentUser: User | null;
@@ -56,57 +50,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [showInbox, setShowInbox] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
-  const isMasterAdmin = currentUser?.email?.trim().toLowerCase() === 'ayomide2289@gmail.com';
-  const isAdminSimulation = isDemoMode && !!currentUser;
-  const canViewDemoAccounts = isMasterAdmin || isAdminSimulation;
-
-  // Master Admin & Test Personas strictly restricted to ayomide2289@gmail.com
-  const DEMO_ACCOUNTS: User[] = [
-    {
-      id: 'master-ayomide',
-      name: 'Ayomide (Master Admin)',
-      email: 'ayomide2289@gmail.com',
-      role: 'admin',
-      isAdmin: true,
-      department: 'System Owner & University Administration',
-    },
-    {
-      id: 'demo-admin',
-      name: 'Campus Administrator',
-      email: 'admin@nileuniversity.edu.ng',
-      role: 'admin',
-      matricNumber: 'ADMIN-01',
-      department: 'Student Affairs',
-      isAdmin: true,
-    },
-    {
-      id: 'demo-student-chidera',
-      name: 'Chidera Eze (Student)',
-      email: 'chidera@nileuniversity.edu.ng',
-      role: 'student',
-      matricNumber: '23/ENG/0481',
-      department: 'Computer Engineering',
-      isAdmin: false,
-    },
-    {
-      id: 'demo-security-musa',
-      name: 'Officer Musa (Main Gate)',
-      email: 'security.gate@nileuniversity.edu.ng',
-      role: 'security',
-      department: 'Campus Security & Safety',
-      isAdmin: false,
-    },
-  ];
-
   const clearFeedback = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
   };
 
   const friendlyAuthError = (error: any) => {
-    if (error?.code === 'auth/account-exists-with-different-credential') {
-      return 'An account already exists with another sign-in method. Try Google or use the email address already linked to your account.';
-    }
     if (error?.code === 'auth/invalid-credential' || error?.code === 'auth/invalid-login-credentials') {
       return 'The email or password is not correct.';
     }
@@ -131,67 +80,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     };
   };
 
-  const handleSelectDemoAccount = (preset: User) => {
-    if (!canViewDemoAccounts) {
-      setErrorMessage('Unauthorized: Demo accounts are strictly reserved for ayomide2289@gmail.com.');
-      return;
-    }
-    onLogin(preset);
-    setSuccessMessage(`Switched active persona to ${preset.name} (${preset.role})`);
-  };
-
-  /**
-   * Handle standard Google Sign-In with popup
-   */
-  const handleGoogleSignIn = async () => {
-    clearFeedback();
-    setIsSigningIn(true);
-
-    try {
-      let result;
-      try {
-        result = await signInWithPopup(auth, googleProvider);
-      } catch (popupError: any) {
-        if (popupError?.code === 'auth/popup-blocked' || popupError?.code === 'auth/operation-not-supported-in-this-environment') {
-          await signInWithRedirect(auth, googleProvider);
-          return;
-        }
-        throw popupError;
-      }
-      const fbUser = result.user;
-      if (!validateAuthEmail(fbUser.email || '')) {
-        await signOut(auth);
-        setErrorMessage('Use your Nile University email address or the authorized administrator account.');
-        return;
-      }
-      const loggedUser = await userFromFirebase(fbUser);
-
-      try {
-        await syncUserProfile(loggedUser);
-      } catch (err) {
-        console.warn('Could not sync user profile to Firestore:', err);
-      }
-
-      onLogin(loggedUser);
-      setSuccessMessage(`Signed in as ${loggedUser.name}`);
-      onNavigateToFeed();
-    } catch (err: any) {
-      if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {
-        setErrorMessage(friendlyAuthError(err));
-      }
-    } finally {
-      setIsSigningIn(false);
-    }
-  };
-
   const handleEmailAuth = async (event: React.FormEvent) => {
     event.preventDefault();
     clearFeedback();
     setIsSigningIn(true);
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      if (!validateAuthEmail(normalizedEmail)) {
-        setErrorMessage('Use your Nile University email address or the authorized administrator account.');
+      if (!validateNileEmail(normalizedEmail)) {
+        setErrorMessage('Use your Nile University email address (@nileuniversity.edu.ng).');
         return;
       }
       if (mode === 'sign-up' && !validatePassword(password)) {
@@ -320,7 +216,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         </div>
       )}
 
-      {/* Main Authentication Card */}
+      {!currentUser && (
       <div className="bg-white dark:bg-[#1E1C18] rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] shadow-xs overflow-hidden">
         {/* Header Notice */}
         <div className="bg-[#FAF6EF] dark:bg-[#141311] px-5 py-3.5 border-b border-[#E6DFD2] dark:border-[#2E2A24] flex items-center justify-between">
@@ -341,7 +237,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               Sign in to your campus account
             </h2>
             <p className="text-xs sm:text-sm text-[#544E45] dark:text-[#B8B0A2] leading-relaxed">
-              Sign in with your Google account to browse lost and found items, report misplaced belongings, and submit ownership verification claims across Nile University.
+              Use your verified Nile University email and password to browse lost and found items, report misplaced belongings, and submit ownership verification claims.
             </p>
           </div>
 
@@ -373,28 +269,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           ) : (
           <>
-          {/* Standard Single-Tap Google Sign-In */}
-          <div className="space-y-3 pt-1">
-            <button
-              type="button"
-              onClick={handleGoogleSignIn}
-              disabled={isSigningIn}
-              className="w-full min-h-[48px] py-3 px-6 bg-[#0F6E6E] hover:bg-[#0C5656] disabled:opacity-50 text-white rounded-[10px] text-sm font-medium shadow-xs transition-colors flex items-center justify-center gap-2.5 cursor-pointer active:scale-98 btn-campus"
-            >
-              <LogIn className="w-4 h-4 text-white" />
-              <span>{isSigningIn ? 'Connecting to Google...' : 'Sign in with Google'}</span>
-            </button>
-
-            <p className="text-[11px] text-[#7A7266] dark:text-[#857D71] text-center">
-              Fast, secure sign-in with your Google account. No password or email link required.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 text-[11px] text-[#7A7266]"><span className="h-px bg-[#E6DFD2] flex-1" /><span>or</span><span className="h-px bg-[#E6DFD2] flex-1" /></div>
-
           <form onSubmit={handleEmailAuth} className="space-y-3">
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="University email" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />
-            <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@nileuniversity.edu.ng" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />
+            <input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />
             <button type="submit" disabled={isSigningIn} className="w-full min-h-[44px] bg-[#2F7D4F] text-white rounded-[10px] text-xs font-medium">
               {mode === 'sign-up' ? 'Create account' : 'Sign in with email'}
             </button>
@@ -407,74 +284,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </form>
           </>
           )}
-
-          {/* Root Admin Persona Switcher (For Ayomide) */}
-          {canViewDemoAccounts && (
-            <div className="pt-5 border-t border-[#E6DFD2] dark:border-[#2E2A24] space-y-3">
-              <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] p-3.5 rounded-[10px] text-xs space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-[#0F6E6E] dark:text-[#199595] flex items-center gap-1.5">
-                    <Shield className="w-4 h-4" /> Admin Persona Simulation
-                  </span>
-                  <span className="text-[10px] bg-white dark:bg-[#1E1C18] text-[#544E45] dark:text-[#B8B0A2] px-2 py-0.5 rounded-[4px] border border-[#E6DFD2] dark:border-[#2E2A24]">
-                    ayomide2289@gmail.com
-                  </span>
-                </div>
-                <p className="text-[11px] text-[#544E45] dark:text-[#B8B0A2]">
-                  Switch between demo personas to test how students, security officers, and administrators experience NileFound.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-2">
-                {DEMO_ACCOUNTS.map((account) => {
-                  const isActive = currentUser?.email === account.email;
-                  return (
-                    <button
-                      key={account.id}
-                      type="button"
-                      onClick={() => handleSelectDemoAccount(account)}
-                      className={`w-full min-h-[44px] p-3 rounded-[10px] border text-left transition-colors flex items-center justify-between cursor-pointer btn-campus ${
-                        isActive
-                          ? 'border-[#0F6E6E] bg-[#E7F3F3] dark:bg-[#0D2D2D]'
-                          : 'border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] hover:bg-[#FAF6EF] dark:hover:bg-[#1E1C18]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-7 h-7 rounded-[6px] flex items-center justify-center font-bold text-xs bg-[#FAF6EF] dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] border border-[#E6DFD2] dark:border-[#2E2A24]"
-                        >
-                          {account.name.charAt(0)}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-xs text-[#1F1B16] dark:text-[#F5F1EA]">{account.name}</span>
-                            <span className="text-[9px] font-sans font-medium px-1.5 py-0.2 rounded-[4px] uppercase bg-[#FAF6EF] dark:bg-[#1E1C18] text-[#544E45] dark:text-[#B8B0A2] border border-[#E6DFD2] dark:border-[#2E2A24]">
-                              {account.role}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-[#7A7266] dark:text-[#857D71]">{account.email}</span>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        {isActive ? (
-                          <span className="text-xs font-medium text-[#0F6E6E] dark:text-[#199595] flex items-center gap-1">
-                            <UserCheck className="w-3.5 h-3.5" /> Active
-                          </span>
-                        ) : (
-                          <span className="text-xs text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]">
-                            Switch →
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </div>
+      )}
     </div>
   );
 };

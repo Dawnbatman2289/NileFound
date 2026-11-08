@@ -120,6 +120,22 @@ export default function App() {
     return [];
   });
   const [activeToast, setActiveToast] = useState<CampusNotification | null>(null);
+  const canUsePersonaSimulation = import.meta.env.DEV && currentUser?.role === 'admin';
+
+  useEffect(() => {
+    if (!canUsePersonaSimulation) {
+      setIsSimulating(false);
+      setIsDemoMode(false);
+      localStorage.removeItem('nilefound_admin_simulating');
+    }
+  }, [canUsePersonaSimulation]);
+
+  useEffect(() => {
+    if (currentUser && activeTab === 'login') {
+      const isPrivilegedUser = currentUser.role === 'admin' || currentUser.role === 'security' || currentUser.isAdmin;
+      setActiveTab(isPrivilegedUser ? 'admin' : 'feed');
+    }
+  }, [currentUser, activeTab]);
 
   // Sync state to localStorage according to demo mode
   useEffect(() => {
@@ -740,7 +756,7 @@ export default function App() {
       />
 
       {/* Simulation Banner: Visible ONLY when ayomide2289@gmail.com is simulating another persona */}
-      {isSimulating && (
+      {canUsePersonaSimulation && isSimulating && (
         <div className="bg-[#FAF6EF] dark:bg-[#1E1C18] border-b border-[#E6DFD2] dark:border-[#2E2A24] px-4 py-2.5 text-xs flex flex-wrap items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-2.5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#E8A317]" />
@@ -807,7 +823,7 @@ export default function App() {
               onRejectClaim={handleRejectClaim}
               onExpireOldItems={handleExpireOldItems}
               onNavigateToLogin={() => setActiveTab('login')}
-              onSwitchPersona={handleSwitchPersona}
+              onSwitchPersona={canUsePersonaSimulation ? handleSwitchPersona : undefined}
             />
           )}
 
@@ -873,13 +889,15 @@ export default function App() {
         onClose={() => setIsPrivacyModalOpen(false)}
       />
 
-      <button
-        onClick={() => setIsReportModalOpen(true)}
-        className="sm:hidden fixed right-4 bottom-4 z-40 min-h-12 px-5 bg-[#0F6E6E] hover:bg-[#0C5656] text-white rounded-[10px] shadow-lg font-semibold text-sm cursor-pointer btn-campus"
-        aria-label="Report an item"
-      >
-        + Report
-      </button>
+      {activeTab === 'feed' && (
+        <button
+          onClick={() => setIsReportModalOpen(true)}
+          className="sm:hidden fixed right-4 bottom-4 z-40 min-h-12 px-5 bg-[#0F6E6E] hover:bg-[#0C5656] text-white rounded-[10px] shadow-lg font-semibold text-sm cursor-pointer btn-campus"
+          aria-label="Report an item"
+        >
+          + Report
+        </button>
+      )}
 
       {/* Footer */}
       <footer className="bg-transparent border-t border-[#E6DFD2] dark:border-[#2E2A24] mt-16 py-8 px-4 text-xs text-[#7A7266] dark:text-[#857D71]">

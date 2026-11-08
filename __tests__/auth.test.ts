@@ -4,7 +4,6 @@ import {
   generateOtpCode,
   isOtpCurrent,
   normalizeNileEmail,
-  validateAuthEmail,
   validateNileEmail,
   validateOtpCode,
   validatePassword,
@@ -13,7 +12,6 @@ import {
 test('accepts and normalizes verified Nile addresses', () => {
   assert.equal(normalizeNileEmail(' USER@NILEUNIVERSITY.EDU.NG '), 'user@nileuniversity.edu.ng');
   assert.equal(validateNileEmail('user@nileuniversity.edu.ng'), true);
-  assert.equal(validateAuthEmail(' ayomide2289@gmail.com '), true);
 });
 
 test('rejects lookalike or external domains', () => {
