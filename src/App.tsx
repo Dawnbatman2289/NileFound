@@ -771,7 +771,7 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto p-4 sm:p-6 pb-24 sm:pb-6 transition-opacity duration-200">
+      <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto p-4 sm:p-6 lg:p-8 pb-24 sm:pb-6 transition-opacity duration-200">
         <motion.div
           key={activeTab}
           initial={{ opacity: 0, y: 6 }}

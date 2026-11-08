@@ -74,7 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <header className="sticky top-0 z-30 bg-[#FAF6EF]/95 dark:bg-[#141311]/95 backdrop-blur-sm border-b border-[#E6DFD2] dark:border-[#2E2A24] text-[#1F1B16] dark:text-[#F5F1EA] transition-colors">
+    <header className="sticky top-0 z-30 bg-[#FAF6EF]/95 dark:bg-[#141311]/95 backdrop-blur-sm border-b border-[#E6DFD2] dark:border-[#2E2A24] text-[#1F1B16] dark:text-[#F5F1EA] shadow-[0_1px_0_rgba(31,27,22,0.03),0_8px_24px_rgba(31,27,22,0.04)] transition-colors">
       {/* Simple, left-aligned notice board header */}
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3 min-w-0">
         {/* Brand & Small Beta Tag */}

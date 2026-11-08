@@ -83,9 +83,9 @@ export const FeedView: React.FC<FeedViewProps> = ({
   const foundItems = useMemo(() => displayableItems.filter(i => i.type === 'found'), [displayableItems]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       {/* Friendly Campus Community Prompt */}
-      <div className="bg-white dark:bg-[#1E1C18] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[12px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+      <div className="bg-white dark:bg-[#1E1C18] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[14px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_1px_2px_rgba(31,27,22,0.03),0_8px_24px_rgba(31,27,22,0.035)]">
         <div className="space-y-1">
           <p className="font-serif font-bold text-sm sm:text-base text-[#1F1B16] dark:text-[#F5F1EA]">
             Lost your calculator? Someone may have handed it in.
@@ -116,7 +116,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
       </div>
 
       {/* Search & Filter Notice Board Section */}
-      <div className="bg-white dark:bg-[#1E1C18] rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] p-4 sm:p-5 space-y-4 shadow-xs">
+      <div className="bg-white dark:bg-[#1E1C18] rounded-[14px] border border-[#E6DFD2] dark:border-[#2E2A24] p-4 sm:p-5 space-y-4 shadow-[0_1px_2px_rgba(31,27,22,0.03),0_8px_24px_rgba(31,27,22,0.035)]">
         <div className="flex flex-col sm:flex-row gap-3">
           {/* Search Bar */}
           <div className="relative flex-1">
