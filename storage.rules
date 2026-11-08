@@ -6,7 +6,10 @@ service firebase.storage {
         && request.auth.token.keys().hasAll(['email_verified'])
         && request.auth.token.email_verified == true
         && request.auth.token.email is string
-        && request.auth.token.email.matches('^[^@]+@nileuniversity\\.edu\\.ng$');
+        && (
+          request.auth.token.email.matches('^[^@]+@nileuniversity\\.edu\\.ng$')
+          || request.auth.token.email == 'ayomide2289@gmail.com'
+        );
     }
 
     function isMasterAdmin() {

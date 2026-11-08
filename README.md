@@ -151,7 +151,7 @@ Complete these steps in your [Firebase Console](https://console.firebase.google.
 - [ ] **Authentication Providers**: Ensure **Google** is enabled under Auth > Sign-in method.
 - [ ] **Authorized Domains**: Add your AI Studio hosting domains (`ais-dev-*.run.app`, `ais-pre-*.run.app`) under Auth > Settings > Authorized domains.
 - [ ] **API Key Restrictions**: In Google Cloud Console, restrict your Firebase Web API key (`AIzaSyCz...`) to HTTP referrers matching your application domains.
-- [ ] **Master Admin UID**: Replace `PASTE_YOUR_UID` in `firestore.rules` and `storage.rules` with the Firebase Auth UID for the master administrator before publishing.
+- [ ] **Master Admin UID**: Replace `PASTE_YOUR_UID` in `firestore.rules` and `storage.rules` with the Firebase Auth UID for `ayomide2289@gmail.com` before publishing. Rules allow this exact verified account as the only non-Nile-domain exception.
 - [ ] **Email Verification**: Keep email verification enforcement enabled; unverified users cannot read, post, claim, or access private data.
 - [ ] **Domain Restriction**: Verify that the published rules require `@nileuniversity.edu.ng` for authenticated Firestore and Storage access.
 
