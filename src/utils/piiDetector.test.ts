@@ -19,7 +19,7 @@ test('detectPii catches Nigerian phone numbers', () => {
 
 test('detectPii catches email addresses', () => {
   assert.equal(detectPii('Email me at student@nileuniversity.edu.ng').hasPii, true);
-  assert.equal(detectPii('Contact john@gmail.com').hasPii, true);
+  assert.equal(detectPii('Contact john@gmail.example.com').hasPii, true);
   assert.equal(detectPii('Blue backpack found in Ubangi').hasPii, false);
 });
 

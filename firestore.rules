@@ -32,15 +32,14 @@ service cloud.firestore {
         && request.auth.token.email is string
         && (
           request.auth.token.email.matches('^[^@]+@nileuniversity\\.edu\\.ng$')
-          || request.auth.token.email == 'ayomide2289@gmail.com'
+          || request.auth.uid == 'nFdIhTjOOqMqMG4y1KIT550Qf5m1'
         );
     }
 
     // Master Admin check (Sole user permitted to provision admin and security roles)
     function isMasterAdmin() {
       return isVerifiedUser()
-        && request.auth.uid == 'PASTE_YOUR_UID'
-        && request.auth.token.email == 'ayomide2289@gmail.com';
+        && request.auth.uid == 'nFdIhTjOOqMqMG4y1KIT550Qf5m1';
     }
 
     // Check roles document in /roles/{uid}
@@ -76,7 +75,7 @@ service cloud.firestore {
         && data.authorId is string && data.authorId.size() <= 128
         && data.createdAt is string && data.createdAt.size() <= 50
         && data.updatedAt is string && data.updatedAt.size() <= 50
-        && (!('imageUrl' in data) || (data.imageUrl is string && (data.imageUrl.matches('^https://.*') || data.imageUrl.matches('^data:image/(jpeg|png|webp);base64,.*')) && data.imageUrl.size() <= 100000))
+        && (!('imageUrl' in data) || (data.imageUrl is string && (data.imageUrl.matches('^https://kempt-coyote-nc70r\\.firebasestorage\\.app/.*') || data.imageUrl.matches('^data:image/(jpeg|png|webp);base64,.*')) && data.imageUrl.size() <= 100000))
         && (!('verificationQuestion' in data) || (data.verificationQuestion is string && data.verificationQuestion.size() <= 300))
         && (!('isSensitiveId' in data) || (data.isSensitiveId is bool));
     }
@@ -90,7 +89,7 @@ service cloud.firestore {
     }
 
     function isValidClaim(data) {
-      return data.keys().hasAll(['itemId', 'itemTitle', 'claimantId', 'status', 'createdAt', 'updatedAt'])
+      return data.keys().hasAll(['itemId', 'itemTitle', 'claimantId', 'finderId', 'status', 'createdAt', 'updatedAt'])
         && data.keys().hasOnly(['itemId', 'itemTitle', 'claimantId', 'status', 'createdAt', 'updatedAt', 'finderId'])
         && data.itemId is string && data.itemId.size() <= 128
         && data.itemTitle is string && data.itemTitle.size() <= 100
@@ -98,7 +97,7 @@ service cloud.firestore {
         && data.status in ['pending', 'approved', 'rejected']
         && data.createdAt is string && data.createdAt.size() <= 50
         && data.updatedAt is string && data.updatedAt.size() <= 50
-        && (!('finderId' in data) || (data.finderId is string && data.finderId.size() <= 128));
+        && data.finderId is string && data.finderId.size() <= 128;
     }
 
     function isValidPrivateClaim(data, itemId, claimId) {
@@ -109,6 +108,15 @@ service cloud.firestore {
         && data.claimantName is string && data.claimantName.size() >= 2 && data.claimantName.size() <= 100
         && data.claimantEmail is string && data.claimantEmail.size() >= 3 && data.claimantEmail.size() <= 100
         && data.submittedAnswer is string && data.submittedAnswer.size() <= 500
+        && data.createdAt is string && data.createdAt.size() <= 50;
+    }
+
+    function isValidPrivateDetails(data, itemId) {
+      return data.keys().hasOnly(['itemId', 'authorId', 'authorName', 'authorEmail', 'createdAt'])
+        && data.itemId is string && data.itemId == itemId
+        && data.authorId is string && data.authorId == request.auth.uid
+        && data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 100
+        && data.authorEmail is string && data.authorEmail.size() >= 3 && data.authorEmail.size() <= 100
         && data.createdAt is string && data.createdAt.size() <= 50;
     }
 
@@ -141,6 +149,11 @@ service cloud.firestore {
             && existing().status != 'returned'
             && incoming().status in ['open', 'claim_requested', 'returned', 'expired']
           )
+          || (
+            existing().status == 'open'
+            && incoming().status == 'claim_requested'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
         );
       allow delete: if isValidId(itemId) && (
         isAdmin() ||
@@ -171,7 +184,7 @@ service cloud.firestore {
         );
         allow list: if isMasterAdmin() || isAdmin();
         allow create: if isValidId(docId) && isVerifiedUser()
-          && incoming().authorId == request.auth.uid;
+          && isValidPrivateDetails(incoming(), itemId);
         allow update, delete: if isValidId(docId) && (
           isMasterAdmin() ||
           isAdmin() ||
@@ -208,7 +221,8 @@ service cloud.firestore {
         && isValidClaim(incoming())
         && incoming().claimantId == request.auth.uid
         && incoming().status == 'pending'
-        && exists(/databases/$(database)/documents/items/$(incoming().itemId));
+        && exists(/databases/$(database)/documents/items/$(incoming().itemId))
+        && incoming().finderId == get(/databases/$(database)/documents/items/$(incoming().itemId)).data.authorId;
       allow update: if isValidId(claimId) && isVerifiedUser()
         && isValidClaim(incoming())
         && incoming().claimantId == existing().claimantId
@@ -226,7 +240,7 @@ service cloud.firestore {
     }
 
     // Role assignment collection (/roles/{userId})
-    // Strictly restricted: ONLY ayomide2289@gmail.com can create or modify admin and security roles
+    // Strictly restricted to the project owner's UID.
     match /roles/{userId} {
       allow get: if isValidId(userId) && isVerifiedUser() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
@@ -258,7 +272,16 @@ service cloud.firestore {
         && data.read is bool && data.read == false
         && data.createdAt is string && data.createdAt.size() <= 50
         && (!('itemId' in data) || (data.itemId is string && data.itemId.size() <= 128))
-        && (!('claimId' in data) || (data.claimId is string && data.claimId.size() <= 128));
+        && (!('itemTitle' in data) || (data.itemTitle is string && data.itemTitle.size() <= 100 && !data.itemTitle.matches('.*@.*')))
+        && (!('claimId' in data) || (data.claimId is string && data.claimId.size() <= 128))
+        && (
+          (data.type == 'claim_received' && data.title == 'New claim on your item' && data.message == 'A new ownership claim was filed for your item.')
+          || (data.type == 'claim_approved' && data.title == 'Claim approved' && data.message == 'Your ownership claim was approved.')
+          || (data.type == 'claim_rejected' && data.title == 'Claim rejected' && data.message == 'Your ownership claim was rejected.')
+          || (data.type == 'match_alert' && data.title == 'Possible item match' && data.message == 'A possible match was found for your report.')
+          || (data.type == 'item_returned' && data.title == 'Item returned' && data.message == 'Your reported item was marked returned.')
+          || (data.type == 'admin_review' && data.title == 'Review needed' && data.message == 'A campus record needs administrator review.')
+        );
     }
 
     function canCreateNotification(data) {

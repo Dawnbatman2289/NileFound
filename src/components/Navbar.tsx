@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  * 
  * NileFound Slim Navbar & Header
- * Styled in Deep Navy (#0B1020), Soft White (#F4F6FF), and Electric Lime (#C6FF3D).
+ * Styled in Deep Navy (#FAF6EF), Soft White (#F4F6FF), and Electric Lime (#0F6E6E).
  */
 
 import React from 'react';
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { User, CampusNotification } from '../types/index.ts';
 import { NotificationDropdown } from './NotificationDropdown.tsx';
+import { PROJECT_OWNER_UID } from '../config/admin.ts';
 
 export type AppTab = 'feed' | 'admin' | 'login';
 
@@ -65,8 +66,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleDarkMode,
 }) => {
   const [isNotifOpen, setIsNotifOpen] = React.useState(false);
-  const isOwnerEmail = currentUser?.email?.trim().toLowerCase() === 'ayomide2289@gmail.com';
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwnerEmail;
+  const isOwner = currentUser?.id === PROJECT_OWNER_UID;
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwner;
   const isSecurity = currentUser?.role === 'security';
   const canAccessAdmin = isAdmin || isSecurity;
 
@@ -83,7 +84,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <h1 className="font-serif font-bold text-xl leading-none tracking-tight text-[#1F1B16] dark:text-[#F5F1EA]">
               NileFound
             </h1>
-            <span className="hidden sm:inline bg-[#E6DFD2]/60 dark:bg-[#2E2A24] text-[#544E45] dark:text-[#B8B0A2] border border-[#D1C7B7] dark:border-[#3F3A32] text-[10px] font-sans font-medium px-2 py-0.5 rounded-[4px] tracking-wide">
+            <span className="hidden sm:inline bg-[#E6DFD2]/60 dark:bg-[#2E2A24] text-[#544E45] dark:text-[#B8B0A2] border border-[#D1C7B7] dark:border-[#3F3A32] text-xs font-sans font-medium px-2 py-0.5 rounded-[10px] tracking-wide">
               Beta
             </span>
           </div>
@@ -118,7 +119,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-[#E8A317] text-[#1F1B16] text-[10px] font-bold font-sans w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
+                <span className="absolute -top-1 -right-1 bg-[#E8A317] text-[#1F1B16] text-xs font-bold font-sans w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
@@ -180,7 +181,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
               <span className="max-w-[100px] truncate hidden sm:inline">{currentUser.name}</span>
               {isAdmin && (
-                <span className="bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] text-[9px] font-bold px-1.5 py-0.5 rounded-[4px] border border-[#0F6E6E]/30">
+                <span className="bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] text-xs font-bold px-1.5 py-0.5 rounded-[10px] border border-[#0F6E6E]/30">
                   <span className="hidden sm:inline">Admin</span>
                 </span>
               )}
@@ -203,7 +204,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Report Item</span>
             {savedDraftCount > 0 && (
-              <span className="bg-[#0C5656] text-white text-[10px] px-1.5 py-0.2 rounded font-sans font-medium">
+              <span className="bg-[#0C5656] text-white text-xs px-1.5 py-0.2 rounded font-sans font-medium">
                 1 draft
               </span>
             )}
@@ -252,7 +253,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               />
             )}
             {pendingClaimsCount > 0 && (
-              <span className="bg-[#E8A317] text-[#1F1B16] font-sans text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
+              <span className="bg-[#E8A317] text-[#1F1B16] font-sans text-xs px-1.5 py-0.2 rounded-full font-bold ml-0.5">
                 {pendingClaimsCount}
               </span>
             )}

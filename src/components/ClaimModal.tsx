@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  * 
  * NileFound Claim Modal
- * Layout: Verification question prompt, claimant contact fields, and confirmation screen in Deep Navy (#0B1020) and Electric Lime (#C6FF3D).
+ * Layout: Verification question prompt, claimant contact fields, and confirmation screen in Deep Navy (#FAF6EF) and Electric Lime (#0F6E6E).
  * Main Action: Submit verification response to claim a found item.
  */
 
@@ -67,7 +67,6 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
       await onSuccessClaim(newClaim);
       setIsVerifiedDemo(true);
     } catch (err: any) {
-      console.error('Failed to submit claim:', err);
       setErrorMsg(err?.message || 'Could not save your claim to the database. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -85,7 +84,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
           </div>
           <button
             onClick={onClose}
-            className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] transition-colors p-1 rounded-[6px] cursor-pointer"
+            className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] transition-colors p-1 rounded-[10px] cursor-pointer"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />
@@ -113,7 +112,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
                     "{item.verificationQuestion}"
                   </p>
                   <div>
-                    <label className="block text-[11px] font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
+                    <label className="block text-xs font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
                       Your Precise Answer (Only visible to the finder and campus security):
                     </label>
                     <input
@@ -125,7 +124,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
                       required
                     />
                   </div>
-                  <p className="text-[10px] text-[#7A7266] dark:text-[#857D71]">
+                  <p className="text-xs text-[#7A7266] dark:text-[#857D71]">
                     Anti-theft protection: Only the genuine owner knows this specific detail.
                   </p>
                 </div>
@@ -159,7 +158,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
                     className="w-full text-xs px-3.5 py-2.5 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] focus:border-[#0F6E6E] focus:outline-hidden min-h-[44px]"
                     required
                   />
-                  <p className="text-[10px] text-[#7A7266] dark:text-[#857D71] mt-1">
+                  <p className="text-xs text-[#7A7266] dark:text-[#857D71] mt-1">
                     Protected under university privacy guidelines: Contact details are never displayed on the public feed.
                   </p>
                 </div>
@@ -206,7 +205,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
                   <MessageCircle className="w-4 h-4 shrink-0" />
                   <span>Next Step: Security & Custodian Handover</span>
                 </div>
-                <p className="text-[11px] text-[#7A7266] dark:text-[#857D71] leading-relaxed">
+                <p className="text-xs text-[#7A7266] dark:text-[#857D71] leading-relaxed">
                   Once your answer is reviewed by the finder or campus security, an approval notification will confirm handover at a designated campus post.
                 </p>
               </div>

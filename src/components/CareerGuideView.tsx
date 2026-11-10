@@ -32,7 +32,7 @@ export const CareerGuideView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="bg-emerald-900 text-white rounded-xl p-5 border border-emerald-800 shadow-sm space-y-2">
+      <div className="bg-emerald-900 text-white rounded-[20px] p-5 border border-emerald-800 shadow-sm space-y-2">
         <div className="flex items-center gap-2 text-amber-300 font-bold text-xs uppercase tracking-wider">
           <Layers className="w-4 h-4" />
           <span>Stage 3: Ideate & Decide (Engineering Architecture)</span>
@@ -73,8 +73,8 @@ export const CareerGuideView: React.FC = () => {
       {/* TAB 1: STAGE 3 ARCHITECTURAL DECISION MATRIX */}
       {activeSubTab === 'decision_matrix' && (
         <div className="space-y-6">
-          <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs px-3.5 py-2.5 rounded-lg font-medium flex items-center gap-2">
-            <span className="font-bold uppercase tracking-wider text-[10px] bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded">
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs px-3.5 py-2.5 rounded-[12px] font-medium flex items-center gap-2">
+            <span className="font-bold uppercase tracking-wider text-xs bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded">
               Draft Note
             </span>
             <span>AI-generated draft, not independent analysis</span>
@@ -91,7 +91,7 @@ export const CareerGuideView: React.FC = () => {
                 <button
                   key={opt.id}
                   onClick={() => setSelectedOptionId(opt.id)}
-                  className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between space-y-3 ${
+                  className={`p-4 rounded-[20px] border text-left transition-all flex flex-col justify-between space-y-3 ${
                     isSelected
                       ? 'border-emerald-700 bg-white shadow-md ring-2 ring-emerald-600/30'
                       : 'border-stone-200 bg-white/70 hover:bg-white hover:border-stone-300'
@@ -100,11 +100,11 @@ export const CareerGuideView: React.FC = () => {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-1">
                       {isRecommended ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
                           Recommended
                         </span>
                       ) : (
-                        <span className="text-[10px] font-bold text-stone-500 uppercase">
+                        <span className="text-xs font-bold text-stone-500 uppercase">
                           Alternative
                         </span>
                       )}
@@ -114,12 +114,12 @@ export const CareerGuideView: React.FC = () => {
                     </div>
 
                     <h4 className="font-bold text-xs text-stone-900 leading-snug">{opt.name}</h4>
-                    <p className="text-[11px] text-stone-500 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-stone-500 line-clamp-2 leading-relaxed">
                       {opt.stack}
                     </p>
                   </div>
 
-                  <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-[11px]">
+                  <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-xs">
                     <span className="text-stone-500">Cost:</span>
                     <strong className="text-emerald-700 font-mono">₦0 / mo</strong>
                   </div>
@@ -129,10 +129,10 @@ export const CareerGuideView: React.FC = () => {
           </div>
 
           {/* Deep Dive on Selected Option */}
-          <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-5">
+          <div className="bg-white rounded-[20px] border border-stone-200 p-5 space-y-5">
             <div className="border-b border-stone-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
+                <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
                   Deep Architectural Inspection
                 </span>
                 <h3 className="font-bold text-stone-900 text-base mt-0.5">{selectedOption.name}</h3>
@@ -140,7 +140,7 @@ export const CareerGuideView: React.FC = () => {
               </div>
 
               <div className="text-right self-start sm:self-auto">
-                <span className="text-[10px] font-bold text-stone-400 block uppercase">Weighted Score</span>
+                <span className="text-xs font-bold text-stone-400 block uppercase">Weighted Score</span>
                 <span className="text-2xl font-extrabold text-emerald-800 font-mono">
                   {calculateWeightedScore(selectedOption.scores)} <span className="text-xs text-stone-500">/ 10</span>
                 </span>
@@ -148,7 +148,7 @@ export const CareerGuideView: React.FC = () => {
             </div>
 
             {/* Score Breakdown Bars */}
-            <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-3">
+            <div className="bg-stone-50 p-4 rounded-[20px] border border-stone-200 space-y-3">
               <span className="text-xs font-bold text-stone-700 uppercase tracking-wider block">
                 Criteria Evaluation (Weighted Scoring):
               </span>
@@ -239,31 +239,31 @@ export const CareerGuideView: React.FC = () => {
       {activeSubTab === 'career_strategy' && (
         <div className="space-y-5">
           {/* Competitions Open to Nigerian Tech Students */}
-          <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-4">
+          <div className="bg-white rounded-[20px] border border-stone-200 p-5 space-y-4">
             <div className="border-b border-stone-100 pb-2">
               <h3 className="font-bold text-stone-900 text-sm">Competitions & Grants to Target</h3>
               <p className="text-xs text-stone-500 mt-0.5">Where NileFound will stand out against standard submissions.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-              <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 space-y-2">
-                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Annual Flagship</span>
+              <div className="bg-stone-50 border border-stone-200 rounded-[20px] p-4 space-y-2">
+                <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Annual Flagship</span>
                 <h4 className="font-bold text-stone-900 text-xs">Google Solution Challenge</h4>
                 <p className="text-xs text-stone-600 leading-relaxed">
                   Aligns with <strong>UN SDG 11 (Sustainable Cities & Communities)</strong>. Highlight client-side image compression (&lt;100KB) and offline IndexedDB resilience.
                 </p>
               </div>
 
-              <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 space-y-2">
-                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">National Student Body</span>
+              <div className="bg-stone-50 border border-stone-200 rounded-[20px] p-4 space-y-2">
+                <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">National Student Body</span>
                 <h4 className="font-bold text-stone-900 text-xs">NACOS National Software Exhibition</h4>
                 <p className="text-xs text-stone-600 leading-relaxed">
                   Nigeria Association of Computing Students annual convention software competition. University-wide utility projects regularly win top honors.
                 </p>
               </div>
 
-              <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 space-y-2">
-                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Innovation & Funding</span>
+              <div className="bg-stone-50 border border-stone-200 rounded-[20px] p-4 space-y-2">
+                <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Innovation & Funding</span>
                 <h4 className="font-bold text-stone-900 text-xs">NITDA / CcHUB University Challenge</h4>
                 <p className="text-xs text-stone-600 leading-relaxed">
                   NITDA and Co-Creation Hub look for hyper-local African infrastructure solutions that don't depend on expensive cloud servers.
@@ -273,7 +273,7 @@ export const CareerGuideView: React.FC = () => {
           </div>
 
           {/* Resume Bullet Points for 100L CV */}
-          <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-4">
+          <div className="bg-white rounded-[20px] border border-stone-200 p-5 space-y-4">
             <div className="border-b border-stone-100 pb-2 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-stone-900 text-sm">How to Write This on Your Resume / LinkedIn</h3>
@@ -282,7 +282,7 @@ export const CareerGuideView: React.FC = () => {
               <Briefcase className="w-4 h-4 text-emerald-700" />
             </div>
 
-            <div className="bg-stone-900 text-emerald-300 font-mono text-xs p-4 rounded-xl space-y-3 leading-relaxed border border-stone-800">
+            <div className="bg-stone-900 text-emerald-300 font-mono text-xs p-4 rounded-[20px] space-y-3 leading-relaxed border border-stone-800">
               <p className="text-stone-300">
                 <strong className="text-amber-400">Project: NileFound (Campus Lost & Found Verification PWA)</strong> | React, TypeScript, PWA, Tailwind CSS
               </p>
@@ -304,7 +304,7 @@ export const CareerGuideView: React.FC = () => {
           </div>
 
           {/* Elevator Pitch to Student Affairs */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-3">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-[20px] p-5 space-y-3">
             <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs uppercase tracking-wide">
               <Lightbulb className="w-4 h-4 text-emerald-700" />
               <span>The 60-Second Student Affairs Pitch Script</span>

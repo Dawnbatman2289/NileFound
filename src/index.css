@@ -5,6 +5,13 @@
 @theme {
   --font-serif: 'Fraunces', Georgia, serif;
   --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --color-paper: #FAF6EF;
+  --color-surface: #FFFFFF;
+  --color-ink: #1F1B16;
+  --color-border: #E6DFD2;
+  --color-accent: #0F6E6E;
+  --color-lost-bg: #FEF7E9;
+  --color-found-bg: #EDF7F1;
 }
 
 @layer base {
@@ -102,14 +109,14 @@
   gap: 4px;
   font-family: var(--font-body);
   font-weight: 700;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-lost-ink);
   background-color: var(--color-lost-bg);
   border: 1.5px dashed var(--color-lost-border);
   padding: 3px 8px;
-  border-radius: 4px;
+  border-radius: 10px;
 }
 
 /* Stamp label for Found notice (+2deg tilt) */
@@ -120,21 +127,21 @@
   gap: 4px;
   font-family: var(--font-body);
   font-weight: 700;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-found-ink);
   background-color: var(--color-found-bg);
   border: 1.5px dashed var(--color-found-border);
   padding: 3px 8px;
-  border-radius: 4px;
+  border-radius: 10px;
 }
 
 /* Notice Board Card with 12px radius and 8px grid alignment */
 .notice-card {
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: 0 1px 2px rgba(31, 27, 22, 0.03), 0 8px 24px rgba(31, 27, 22, 0.035);
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }

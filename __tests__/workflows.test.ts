@@ -62,5 +62,7 @@ test('image guard rejects unsafe or oversized uploads', () => {
 
 test('CSV export neutralizes formula injection and quotes fields', () => {
   assert.equal(sanitizeCsvCell('=HYPERLINK("https://attacker")'), '"\'=HYPERLINK(""https://attacker"")"');
+  assert.equal(sanitizeCsvCell('\t=SUM(A1:A2)'), '"\'\t=SUM(A1:A2)"');
+  assert.equal(sanitizeCsvCell('\r=SUM(A1:A2)'), '"\'\r=SUM(A1:A2)"');
   assert.equal(sanitizeCsvCell('Nile Main Library'), '"Nile Main Library"');
 });

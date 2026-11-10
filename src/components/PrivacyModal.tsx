@@ -4,7 +4,7 @@
  * 
  * Privacy Policy Modal for NileFound
  * Plain-English explanation of data collection, 60-day auto-purge retention,
- * and user deletion requests styled in Deep Navy (#0B1020) and Electric Lime (#C6FF3D).
+ * and user deletion requests styled in Deep Navy (#FAF6EF) and Electric Lime (#0F6E6E).
  */
 
 import React from 'react';
@@ -29,7 +29,7 @@ export const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onClose }) =
           </div>
           <button
             onClick={onClose}
-            className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] transition-colors p-1 rounded-[6px] cursor-pointer"
+            className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] transition-colors p-1 rounded-[10px] cursor-pointer"
             aria-label="Close"
           >
             <X className="w-5 h-5" />

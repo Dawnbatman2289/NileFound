@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  * 
  * NileFound Campus Notification Service
- * Manages in-app notifications, Admin notifications for ayomide2289@gmail.com,
+ * Manages in-app notifications and project-owner dispatch formatting,
  * HTML5 browser push alerts, Web Audio chimes, and email dispatch formatting.
  */
 
 import type { CampusNotification } from '../types/index.ts';
 
-export const MASTER_ADMIN_EMAIL = 'ayomide2289@gmail.com';
+export const PROJECT_OWNER_CONTACT = 'owner@example.com';
 const LOCAL_NOTIFICATIONS_KEY = 'nilefound_notifications_v1';
 const EMAIL_DISPATCH_LOG_KEY = 'nilefound_email_dispatches_v1';
 
@@ -94,13 +94,12 @@ export function sendBrowserPushNotification(title: string, options?: Notificatio
       badge: '/favicon.ico',
       ...options,
     });
-  } catch (err) {
-    console.debug('Browser push notification could not be shown:', err);
+  } catch {
   }
 }
 
 /**
- * Compose and launch email dispatch to ayomide2289@gmail.com
+ * Compose and launch a locally prepared owner email dispatch.
  */
 export function createAdminEmailDispatch(notification: CampusNotification): EmailDispatchRecord {
   const subject = encodeURIComponent(`[NileFound Alert] ${notification.title}`);
@@ -129,11 +128,11 @@ NileFound Campus Lost & Found
 Nile University of Nigeria, Abuja
 Contact: Student Affairs / Campus Security`;
 
-  const mailtoUrl = `mailto:${MASTER_ADMIN_EMAIL}?subject=${subject}&body=${encodeURIComponent(formattedBody)}`;
+  const mailtoUrl = `mailto:${PROJECT_OWNER_CONTACT}?subject=${subject}&body=${encodeURIComponent(formattedBody)}`;
   
   const record: EmailDispatchRecord = {
     id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-    recipient: MASTER_ADMIN_EMAIL,
+    recipient: PROJECT_OWNER_CONTACT,
     subject: `[NileFound Alert] ${notification.title}`,
     bodyText: formattedBody,
     sentAt: new Date().toISOString(),
@@ -148,8 +147,7 @@ Contact: Student Affairs / Campus Security`;
       const existing: EmailDispatchRecord[] = raw ? JSON.parse(raw) : [];
       localStorage.setItem(EMAIL_DISPATCH_LOG_KEY, JSON.stringify([record, ...existing.slice(0, 49)]));
     }
-  } catch (e) {
-    console.warn('Could not store email dispatch log:', e);
+  } catch {
   }
 
   // Open mail client

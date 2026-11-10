@@ -38,7 +38,7 @@ export const SystemDesignView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="bg-emerald-900 text-white rounded-xl p-5 border border-emerald-800 shadow-sm space-y-2">
+      <div className="bg-emerald-900 text-white rounded-[20px] p-5 border border-emerald-800 shadow-sm space-y-2">
         <div className="flex items-center gap-2 text-amber-300 font-bold text-xs uppercase tracking-wider">
           <Terminal className="w-4 h-4" />
           <span>Stage 4 & 5: System Design, Database Schema & Prototype</span>
@@ -102,7 +102,7 @@ export const SystemDesignView: React.FC = () => {
 
       {/* TAB 1: PostgreSQL DDL & RLS Policies */}
       {activeTab === 'sql_schema' && (
-        <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-xs space-y-4 p-5">
+        <div className="bg-white rounded-[20px] border border-stone-200 overflow-hidden shadow-xs space-y-4 p-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
             <div>
               <h3 className="font-bold text-stone-900 text-sm">Firebase Firestore Collections & Security Rules</h3>
@@ -112,7 +112,7 @@ export const SystemDesignView: React.FC = () => {
             </div>
             <button
               onClick={handleCopySql}
-              className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors shrink-0"
+              className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-[12px] text-xs font-semibold shadow-xs transition-colors shrink-0"
             >
               {copiedSql ? (
                 <>
@@ -128,7 +128,7 @@ export const SystemDesignView: React.FC = () => {
             </button>
           </div>
 
-          <div className="bg-stone-900 text-stone-100 font-mono text-xs p-4 rounded-xl overflow-x-auto max-h-[500px] border border-stone-800 scrollbar-thin">
+          <div className="bg-stone-900 text-stone-100 font-mono text-xs p-4 rounded-[20px] overflow-x-auto max-h-[500px] border border-stone-800 scrollbar-thin">
             <pre className="text-emerald-300/90 leading-relaxed">{NILEFOUND_SQL_SCHEMA}</pre>
           </div>
         </div>
@@ -136,7 +136,7 @@ export const SystemDesignView: React.FC = () => {
 
       {/* TAB 2: Single-File HTML Prototype */}
       {activeTab === 'prototype_demo' && (
-        <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-5">
+        <div className="bg-white rounded-[20px] border border-stone-200 p-5 space-y-5">
           <div className="border-b border-stone-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="font-bold text-stone-900 text-sm">Standalone Single-File HTML Prototype</h3>
@@ -150,7 +150,7 @@ export const SystemDesignView: React.FC = () => {
                 href="/prototype.html"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors"
+                className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-[12px] text-xs font-semibold shadow-xs transition-colors"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>Launch Prototype in New Tab</span>
@@ -158,14 +158,14 @@ export const SystemDesignView: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-xs text-emerald-900 space-y-2">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-[20px] p-4 text-xs text-emerald-900 space-y-2">
             <p className="font-semibold text-emerald-950">Why this prototype is crucial for your pitch:</p>
             <p className="text-emerald-800 leading-relaxed">
               Before Student Affairs or Campus Security grants permission to link to official university emails, you can open this single file from a flash drive on any computer in the Student Services Centre with zero installation. It demonstrates the complete reporting, search, hidden verification, and admin purging workflow offline!
             </p>
           </div>
 
-          <div className="border border-stone-200 rounded-xl overflow-hidden shadow-xs h-[550px] bg-stone-100">
+          <div className="border border-stone-200 rounded-[20px] overflow-hidden shadow-xs h-[550px] bg-stone-100">
             <iframe
               src="/prototype.html"
               title="Standalone Prototype Demo"
@@ -179,45 +179,45 @@ export const SystemDesignView: React.FC = () => {
       {activeTab === 'qa_protocol' && (
         <div className="space-y-5">
           {/* Usability Testing 3 Tasks */}
-          <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-4">
+          <div className="bg-white rounded-[20px] border border-stone-200 p-5 space-y-4">
             <div className="border-b border-stone-100 pb-2">
               <h3 className="font-bold text-stone-900 text-sm">Usability Testing Protocol (5 Nile Students)</h3>
               <p className="text-xs text-stone-500 mt-0.5">Scenario-based testing across distinct university faculties.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs">
-              <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 space-y-2">
-                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded text-[10px] uppercase">
+              <div className="bg-stone-50 border border-stone-200 rounded-[20px] p-3.5 space-y-2">
+                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded text-xs uppercase">
                   Task 1: Log Misplaced Calculator
                 </span>
                 <p className="text-stone-700 font-medium">
                   Log a misplaced scientific calculator at Ubangi STEM Lab while throttling network to simulated 3G.
                 </p>
-                <div className="border-t border-stone-200 pt-1 text-[11px] text-stone-500">
+                <div className="border-t border-stone-200 pt-1 text-xs text-stone-500">
                   Target: <strong>&lt; 90 seconds</strong> completion time • Checks IndexedDB offline cache.
                 </div>
               </div>
 
-              <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 space-y-2">
-                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded text-[10px] uppercase">
+              <div className="bg-stone-50 border border-stone-200 rounded-[20px] p-3.5 space-y-2">
+                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded text-xs uppercase">
                   Task 2: Locate ID Card & Claim
                 </span>
                 <p className="text-stone-700 font-medium">
                   Locate a found Student ID card on the public feed and submit an ownership claim with hidden attribute.
                 </p>
-                <div className="border-t border-stone-200 pt-1 text-[11px] text-stone-500">
+                <div className="border-t border-stone-200 pt-1 text-xs text-stone-500">
                   Target: <strong>&lt; 45 seconds</strong> • Verifies blur filter & frictionless navigation.
                 </div>
               </div>
 
-              <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 space-y-2">
-                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded text-[10px] uppercase">
+              <div className="bg-stone-50 border border-stone-200 rounded-[20px] p-3.5 space-y-2">
+                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded text-xs uppercase">
                   Task 3: Review Claim & Relay
                 </span>
                 <p className="text-stone-700 font-medium">
                   Review a pending claim as finder/admin, validate the answer, and initiate secure WhatsApp contact.
                 </p>
-                <div className="border-t border-stone-200 pt-1 text-[11px] text-stone-500">
+                <div className="border-t border-stone-200 pt-1 text-xs text-stone-500">
                   Target: <strong>&lt; 30 seconds</strong> • Confirms double opt-in WhatsApp revelation.
                 </div>
               </div>
@@ -225,7 +225,7 @@ export const SystemDesignView: React.FC = () => {
           </div>
 
           {/* Edge Case Failure Matrix */}
-          <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-4">
+          <div className="bg-white rounded-[20px] border border-stone-200 p-5 space-y-4">
             <div className="border-b border-stone-100 pb-2">
               <h3 className="font-bold text-stone-900 text-sm">Edge Case Failure Handling Matrix</h3>
               <p className="text-xs text-stone-500 mt-0.5">Automated technical handling strategies for real campus anomalies.</p>
@@ -270,7 +270,7 @@ export const SystemDesignView: React.FC = () => {
 
       {/* TAB 4: Phased Campus Rollout Plan */}
       {activeTab === 'rollout_plan' && (
-        <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-5">
+        <div className="bg-white rounded-[20px] border border-stone-200 p-5 space-y-5">
           <div className="border-b border-stone-100 pb-2">
             <h3 className="font-bold text-stone-900 text-sm">Phased Campus Rollout Plan (Nile University of Nigeria)</h3>
             <p className="text-xs text-stone-500 mt-0.5">Structured 3-phase deployment strategy ensuring high adoption and operational stability.</p>
@@ -280,7 +280,7 @@ export const SystemDesignView: React.FC = () => {
             <div className="bg-stone-50 border-l-4 border-emerald-600 p-4 rounded-r-xl space-y-1">
               <div className="flex items-center justify-between">
                 <h4 className="font-bold text-stone-900 text-xs">Phase 1: Controlled Pilot (Weeks 1 to 4)</h4>
-                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">Faculty Pilot</span>
+                <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">Faculty Pilot</span>
               </div>
               <p className="text-xs text-stone-700 leading-relaxed">
                 Deploy exclusively within the <strong>Ubangi STEM Laboratory Building</strong> and the <strong>Faculty of Computing / Software Engineering</strong> departments. Post physical QR code flyers linking to the PWA in computer laboratories and study lounges.
@@ -290,7 +290,7 @@ export const SystemDesignView: React.FC = () => {
             <div className="bg-stone-50 border-l-4 border-amber-500 p-4 rounded-r-xl space-y-1">
               <div className="flex items-center justify-between">
                 <h4 className="font-bold text-stone-900 text-xs">Phase 2: Residential Expansion (Weeks 5 to 8)</h4>
-                <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded">Hostel Expansion</span>
+                <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded">Hostel Expansion</span>
               </div>
               <p className="text-xs text-stone-700 leading-relaxed">
                 Expand coverage to <strong>Male and Female On-Campus Hostels</strong> and the <strong>Limpopo Bay Law Faculty building</strong>. Onboard hostel security officers and reception desk personnel to record physical items deposited at residential desks.
@@ -300,7 +300,7 @@ export const SystemDesignView: React.FC = () => {
             <div className="bg-stone-50 border-l-4 border-stone-900 p-4 rounded-r-xl space-y-1">
               <div className="flex items-center justify-between">
                 <h4 className="font-bold text-stone-900 text-xs">Phase 3: Campus-Wide Institutional Adoption (Weeks 9+)</h4>
-                <span className="text-[10px] font-bold bg-stone-200 text-stone-800 px-2 py-0.5 rounded">University Wide</span>
+                <span className="text-xs font-bold bg-stone-200 text-stone-800 px-2 py-0.5 rounded">University Wide</span>
               </div>
               <p className="text-xs text-stone-700 leading-relaxed">
                 Transfer master administrative access to the <strong>Student Services Centre</strong> and <strong>Nile House Security Administration</strong>. Embed NileFound onboarding links into orientation packages for incoming undergraduate students.

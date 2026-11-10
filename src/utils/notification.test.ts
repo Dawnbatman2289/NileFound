@@ -8,14 +8,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { 
-  MASTER_ADMIN_EMAIL, 
+  PROJECT_OWNER_CONTACT,
   getInitialCampusNotifications, 
   createAdminEmailDispatch 
 } from '../services/notificationService.ts';
 import type { CampusNotification } from '../types/index.ts';
 
-test('MASTER_ADMIN_EMAIL is set to ayomide2289@gmail.com', () => {
-  assert.equal(MASTER_ADMIN_EMAIL, 'ayomide2289@gmail.com');
+test('project-owner dispatch uses a safe placeholder contact', () => {
+  assert.equal(PROJECT_OWNER_CONTACT, 'owner@example.com');
 });
 
 test('getInitialCampusNotifications is empty and contains no seeded data', () => {
@@ -24,7 +24,7 @@ test('getInitialCampusNotifications is empty and contains no seeded data', () =>
   assert.equal(notifs.length, 0);
 });
 
-test('createAdminEmailDispatch creates an email record targeted to ayomide2289@gmail.com', () => {
+test('createAdminEmailDispatch creates an email record targeted to the placeholder owner contact', () => {
   // Mock window.open if running in node environment
   if (typeof window === 'undefined') {
     (globalThis as any).window = {
@@ -52,7 +52,7 @@ test('createAdminEmailDispatch creates an email record targeted to ayomide2289@g
   };
 
   const dispatch = createAdminEmailDispatch(sampleNotif);
-  assert.equal(dispatch.recipient, 'ayomide2289@gmail.com');
+  assert.equal(dispatch.recipient, 'owner@example.com');
   assert.ok(dispatch.subject.includes('NileFound Alert'));
   assert.ok(dispatch.bodyText.includes('Ayomide'));
   assert.ok(dispatch.bodyText.includes('Casio fx-991EX'));

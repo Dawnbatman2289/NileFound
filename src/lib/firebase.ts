@@ -64,8 +64,6 @@ export function handleFirestoreError(
     userFacingMessage = 'The requested campus item or record could not be found.';
   }
 
-  // Internal debug log only containing sanitized operation code, never auth tokens or user email
-  console.warn(`[Data Service] Operation ${operationType} on ${path?.split('/')[0] || 'resource'} failed:`, errMsg);
   throw new Error(userFacingMessage);
 }
 
@@ -84,9 +82,6 @@ export async function testConnection(): Promise<boolean> {
           tokenError?.message?.includes('token-service-api-has-not-been-used') ||
           tokenError?.code === 'auth/token-service-api-has-not-been-used'
         ) {
-          console.warn(
-            'Token Service API disabled on Google Cloud project 399482156784. Signing out stale session.'
-          );
           await signOut(auth);
           return false;
         }
@@ -96,16 +91,12 @@ export async function testConnection(): Promise<boolean> {
     return true;
   } catch (error: any) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase connection: client appears offline.');
       return false;
     }
     if (
       error?.message?.includes('token-service-api-has-not-been-used') ||
       error?.message?.includes('securetoken.googleapis.com')
     ) {
-      console.warn(
-        'Token Service API disabled on Google Cloud project 399482156784. Signing out stale session.'
-      );
       if (auth.currentUser) {
         await signOut(auth);
       }

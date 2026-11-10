@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  * 
  * NileFound Item Reporting Modal
- * Layout: Multi-step-in-one form modal with offline draft auto-save and image compression in Deep Navy (#0B1020) and Electric Lime (#C6FF3D).
+ * Layout: Multi-step-in-one form modal with offline draft auto-save and image compression in Deep Navy (#FAF6EF) and Electric Lime (#0F6E6E).
  * Main Action: Report a lost or found item on the Nile University campus.
  */
 
@@ -141,8 +141,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       // Client-side compression target < 100KB
       const result = await compressImageFile(file, 800, 0.7);
       setCompressionResult(result);
-    } catch (err) {
-      console.error('Error compressing image:', err);
+    } catch {
     } finally {
       setIsCompressing(false);
     }
@@ -209,7 +208,6 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       localStorage.removeItem(DRAFT_STORAGE_KEY);
       onClose();
     } catch (err: any) {
-      console.error('Error submitting item:', err);
       setPiiError(err?.message || 'Could not save report to campus database. Your draft is saved.');
     } finally {
       setIsSubmitting(false);
@@ -230,7 +228,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] transition-colors p-1 rounded-[6px] cursor-pointer"
+            className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] transition-colors p-1 rounded-[10px] cursor-pointer"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" />
@@ -262,8 +260,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   setIsSigningIn(true);
                   try {
                     onOpenLogin?.();
-                  } catch (err: any) {
-                    console.warn('Sign-in cancelled or failed:', err);
+                  } catch {
                   } finally {
                     setIsSigningIn(false);
                   }
@@ -276,7 +273,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             </div>
           )}
           {hasRestoredDraft && (
-            <div className="flex items-center justify-between text-xs bg-amber-400/10 text-amber-300 border border-amber-400/30 p-3 rounded-xl">
+            <div className="flex items-center justify-between text-xs bg-amber-400/10 text-amber-300 border border-amber-400/30 p-3 rounded-[20px]">
               <span className="flex items-center gap-2">
                 <Save className="w-3.5 h-3.5 text-amber-400" />
                 Restored unfinished draft from local storage
@@ -299,14 +296,14 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           )}
 
           {saveNotice && (
-            <div className="text-xs bg-[#C6FF3D]/10 text-[#C6FF3D] border border-[#C6FF3D]/30 p-3 rounded-xl flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-[#C6FF3D]" />
+            <div className="text-xs bg-[#0F6E6E]/10 text-[#0F6E6E] border border-[#0F6E6E]/30 p-3 rounded-[20px] flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-[#0F6E6E]" />
               <span>{saveNotice}</span>
             </div>
           )}
 
           {piiError && (
-            <div className="bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs p-3.5 rounded-xl flex items-start gap-2.5">
+            <div className="bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs p-3.5 rounded-[20px] flex items-start gap-2.5">
               <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold text-rose-200">Personal details detected</p>
@@ -323,7 +320,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 setReportType('lost');
                 saveDraftLocally();
               }}
-              className={`py-2 text-xs font-semibold rounded-[8px] transition-colors min-h-[44px] cursor-pointer btn-campus ${
+              className={`py-2 text-xs font-semibold rounded-[10px] transition-colors min-h-[44px] cursor-pointer btn-campus ${
                 reportType === 'lost'
                   ? 'bg-[#E8A317] text-[#1F1B16] shadow-xs'
                   : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16]'
@@ -337,7 +334,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 setReportType('found');
                 saveDraftLocally();
               }}
-              className={`py-2 text-xs font-semibold rounded-[8px] transition-colors min-h-[44px] cursor-pointer btn-campus ${
+              className={`py-2 text-xs font-semibold rounded-[10px] transition-colors min-h-[44px] cursor-pointer btn-campus ${
                 reportType === 'found'
                   ? 'bg-[#2F7D4F] text-white shadow-xs'
                   : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16]'
@@ -430,7 +427,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
 
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1.5">
-                Specific Spot <span className="text-[10px] font-normal text-[#7A7266]">(optional)</span>
+                Specific Spot <span className="text-xs font-normal text-[#7A7266]">(optional)</span>
               </label>
               <input
                 type="text"
@@ -468,7 +465,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               <label className="block text-xs font-medium text-[#544E45] dark:text-[#B8B0A2]">
                 Detailed Description: <span className="text-[#0F6E6E]">*</span>
               </label>
-              <span className="text-[10px] text-[#7A7266] dark:text-[#857D71]">No phone numbers or matric numbers</span>
+              <span className="text-xs text-[#7A7266] dark:text-[#857D71]">No phone numbers or matric numbers</span>
             </div>
             <textarea
               rows={3}
@@ -498,13 +495,13 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   <ShieldAlert className="w-4 h-4 shrink-0" />
                   <span>Ask the owner one thing only they would know</span>
                 </div>
-                <p className="text-[11px] text-[#544E45] dark:text-[#B8B0A2] leading-relaxed">
+                <p className="text-xs text-[#544E45] dark:text-[#B8B0A2] leading-relaxed">
                   Pick a private detail not visible in any photo. Claimants must answer this correctly before contact details are released.
                 </p>
 
                 {/* Suggestions */}
                 <div className="space-y-1.5 pt-1">
-                  <span className="text-[10px] font-medium text-[#7A7266] dark:text-[#857D71] block">
+                  <span className="text-xs font-medium text-[#7A7266] dark:text-[#857D71] block">
                     Quick suggestions:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
@@ -521,7 +518,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                           setVerificationQuestion(sug.text);
                           saveDraftLocally();
                         }}
-                        className="text-[10px] bg-white dark:bg-[#1E1C18] text-[#544E45] dark:text-[#B8B0A2] border border-[#E6DFD2] dark:border-[#2E2A24] hover:border-[#0F6E6E] hover:text-[#0F6E6E] px-2.5 py-1 rounded-[6px] font-medium transition-colors cursor-pointer btn-campus"
+                        className="text-xs bg-white dark:bg-[#1E1C18] text-[#544E45] dark:text-[#B8B0A2] border border-[#E6DFD2] dark:border-[#2E2A24] hover:border-[#0F6E6E] hover:text-[#0F6E6E] px-2.5 py-1 rounded-[10px] font-medium transition-colors cursor-pointer btn-campus"
                       >
                         + {sug.label}
                       </button>
@@ -531,7 +528,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
 
                 <div className="pt-2 space-y-3">
                   <div>
-                    <label className="block text-[11px] font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
+                    <label className="block text-xs font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
                       Your Question (Shown to claimants):
                     </label>
                     <input
@@ -547,7 +544,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
+                    <label className="block text-xs font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
                       Correct Answer (Private - only you and security/admin can see this):
                     </label>
                     <input
@@ -560,7 +557,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                       placeholder="e.g. A photo of a black car with Abuja plate"
                       className="w-full text-xs px-3.5 py-2.5 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] focus:border-[#0F6E6E] focus:outline-hidden min-h-[44px]"
                     />
-                    <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] mt-1 block">
+                    <span className="text-xs text-[#7A7266] dark:text-[#857D71] mt-1 block">
                       Protected in a private subcollection. Never sent to other students browsing the feed.
                     </span>
                   </div>
@@ -603,7 +600,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               <p className="font-medium text-[#1F1B16] dark:text-[#F5F1EA]">
                 Photos of student ID cards are prohibited.
               </p>
-              <p className="text-[11px] text-[#7A7266] dark:text-[#857D71] mt-0.5">
+              <p className="text-xs text-[#7A7266] dark:text-[#857D71] mt-0.5">
                 Hand the physical ID card to the Main Gate Security Post.
               </p>
             </div>
@@ -621,7 +618,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   <span className="text-xs font-medium text-[#1F1B16] dark:text-[#F5F1EA]">
                     {compressionResult ? 'Change Photo' : 'Attach Photo (Optional)'}
                   </span>
-                  <span className="text-[10px] text-[#7A7266] dark:text-[#857D71]">
+                  <span className="text-xs text-[#7A7266] dark:text-[#857D71]">
                     Client-side compressed under 100KB to conserve mobile data
                   </span>
                 </div>
@@ -639,13 +636,17 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                     <img
                       src={compressionResult.dataUrl}
                       alt="Preview"
-                      className="w-12 h-12 object-cover rounded-[8px] border border-[#E6DFD2] dark:border-[#2E2A24]"
+                      className="w-12 h-12 object-cover rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24]"
+                      loading="lazy"
+                      decoding="async"
+                      width={48}
+                      height={48}
                     />
                     <div>
                       <span className="font-semibold block text-xs">
                         Compressed: {compressionResult.compressedSizeKb} KB
                       </span>
-                      <span className="text-[10px] text-[#7A7266] dark:text-[#857D71]">
+                      <span className="text-xs text-[#7A7266] dark:text-[#857D71]">
                         Reduced from {compressionResult.originalSizeKb} KB (-{compressionResult.reductionPercentage}%)
                       </span>
                     </div>

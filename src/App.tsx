@@ -8,15 +8,15 @@
  * Main Action: Browse campus listings, report lost/found items, and verify ownership claims.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Navbar, AppTab } from './components/Navbar.tsx';
 import { FeedView } from './components/FeedView.tsx';
-import { AdminPanel } from './components/AdminPanel.tsx';
+const AdminPanel = lazy(() => import('./components/AdminPanel.tsx').then((module) => ({ default: module.AdminPanel })));
 import { LoginPage } from './components/LoginPage.tsx';
 import { ReportModal } from './components/ReportModal.tsx';
 import { ClaimModal } from './components/ClaimModal.tsx';
-import { PrivacyModal } from './components/PrivacyModal.tsx';
+const PrivacyModal = lazy(() => import('./components/PrivacyModal.tsx').then((module) => ({ default: module.PrivacyModal })));
 import { NotificationToast } from './components/NotificationToast.tsx';
 import { CampusItem, ClaimRecord, User, CampusNotification } from './types/index.ts';
 import { DEMO_ITEMS, DEMO_CLAIMS, INITIAL_ITEMS, INITIAL_CLAIMS } from './data/mockItems.ts';
@@ -41,16 +41,15 @@ import {
   playNotificationChime,
   sendBrowserPushNotification,
 } from './services/notificationService.ts';
-
-export const MASTER_ADMIN_EMAIL = 'ayomide2289@gmail.com';
+import { PROJECT_OWNER_UID } from './config/admin.ts';
 
 export default function App() {
-  // Admin Simulation mode: strictly reserved for ayomide2289@gmail.com
+  // Admin Simulation mode: strictly reserved for the project owner.
   const [isSimulating, setIsSimulating] = useState<boolean>(() => {
     return localStorage.getItem('nilefound_admin_simulating') === 'true';
   });
 
-  // Demo Mode is ONLY enabled when ayomide2289@gmail.com is running persona simulations
+  // Demo Mode is only enabled during an owner-controlled persona simulation.
   const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
     return false;
   });
@@ -155,7 +154,7 @@ export default function App() {
     }
   }, [claims, isDemoMode]);
 
-  // Switch to simulated persona (ayomide2289@gmail.com only)
+  // Switch to simulated persona (project owner only)
   const handleSwitchPersona = (user: User) => {
     setIsSimulating(true);
     setIsDemoMode(true);
@@ -172,18 +171,18 @@ export default function App() {
     }
   };
 
-  // Exit simulation and return to root master admin ayomide2289@gmail.com
+  // Exit simulation and return to the project owner
   const handleExitSimulation = () => {
     setIsSimulating(false);
     setIsDemoMode(false);
     localStorage.removeItem('nilefound_admin_simulating');
     const masterUser: User = {
-      id: 'master-ayomide',
-      name: 'Ayomide',
-      email: MASTER_ADMIN_EMAIL,
+      id: PROJECT_OWNER_UID,
+      name: 'Project Owner',
+      email: 'owner@example.com',
       role: 'admin',
       isAdmin: true,
-      department: 'System Owner & University Administration',
+      department: 'Project Owner & University Administration',
     };
     setCurrentUser(masterUser);
     setActiveTab('admin');
@@ -228,7 +227,6 @@ export default function App() {
         try {
           await fbUser.getIdToken(false);
         } catch (tokenErr: any) {
-          console.warn('Token validation failed. Signing out stale session:', tokenErr);
           await signOut(auth);
           if (!isDemoMode) {
             setCurrentUser(null);
@@ -237,7 +235,7 @@ export default function App() {
         }
 
         const email = fbUser.email.trim().toLowerCase();
-        const isOwner = email === 'ayomide2289@gmail.com';
+        const isOwner = fbUser.uid === PROJECT_OWNER_UID;
         // Check role in /roles/{uid}
         const assignedRole = await fetchUserRole(fbUser.uid);
         const isStaffOrAdmin = isOwner || assignedRole === 'admin' || assignedRole === 'security';
@@ -245,7 +243,7 @@ export default function App() {
 
         const user: User = {
           id: fbUser.uid,
-          name: isOwner ? 'Ayomide' : (fbUser.displayName || email.split('@')[0]).split(' ')[0],
+          name: isOwner ? 'Project Owner' : (fbUser.displayName || email.split('@')[0]).split(' ')[0],
           email,
           role,
           isAdmin: role === 'admin',
@@ -256,22 +254,14 @@ export default function App() {
             : 'Nile University Member',
         };
         setCurrentUser(user);
-        syncUserProfile(user).catch((e) => console.debug('Profile sync:', e));
+        syncUserProfile(user).catch(() => {});
       } else {
-        if (!isDemoMode) {
-          const saved = localStorage.getItem('nilefound_user_v1');
-          if (saved) {
-            try {
-              const u = JSON.parse(saved);
-              if (u?.email?.toLowerCase() === MASTER_ADMIN_EMAIL) {
-                return;
-              }
-            } catch {
-              // ignore
-            }
-          }
-          setCurrentUser(null);
-        }
+        setCurrentUser(null);
+        setIsSimulating(false);
+        setIsDemoMode(false);
+        localStorage.removeItem('nilefound_user_v1');
+        localStorage.removeItem('nilefound_admin_simulating');
+        setActiveTab('login');
       }
     });
     return () => unsubscribe();
@@ -292,7 +282,6 @@ export default function App() {
         }
       },
       (err) => {
-        console.warn('Real-time items sync error:', err);
         setItems([]);
       }
     );
@@ -306,7 +295,6 @@ export default function App() {
           setClaims(realtimeClaims);
         },
         (err) => {
-          console.warn('Real-time claims sync error:', err);
         }
       );
     } else {
@@ -340,7 +328,6 @@ export default function App() {
           });
       },
       (err) => {
-        console.warn('Real-time notifications sync error:', err);
       }
     );
     return () => unsubscribeNotifs();
@@ -374,8 +361,7 @@ export default function App() {
       try {
         finalItemId = await saveItemToFirestore(newItem, currentUser);
         setItems((prev) => [{ ...newItem, id: finalItemId }, ...prev]);
-      } catch (err) {
-        console.error('Error saving item to Firestore:', err);
+      } catch {
         setItems((prev) => [newItem, ...prev]);
       }
     }
@@ -403,7 +389,7 @@ export default function App() {
             createdAt: new Date().toISOString(),
             itemId: lostItem.id,
           };
-          if (!isDemoMode) saveNotificationToFirestore(matchNotif).catch(console.warn);
+          if (!isDemoMode) saveNotificationToFirestore(matchNotif).catch(() => {});
           if (matchNotif.recipientUid === currentUser?.id) {
             setNotifications((prev) => [{ ...matchNotif, id: `notif-match-${Date.now()}-${lostItem.id}` }, ...prev]);
           }
@@ -428,7 +414,7 @@ export default function App() {
           createdAt: new Date().toISOString(),
           itemId: matchingFound.id,
         };
-        if (!isDemoMode) saveNotificationToFirestore(matchNotif).catch(console.warn);
+        if (!isDemoMode) saveNotificationToFirestore(matchNotif).catch(() => {});
         if (matchNotif.recipientUid === currentUser?.id) {
           setNotifications((prev) => [{ ...matchNotif, id: `notif-match-${Date.now()}` }, ...prev]);
         }
@@ -448,7 +434,7 @@ export default function App() {
     };
 
     if (!isDemoMode) {
-      saveNotificationToFirestore(adminNotif).catch(console.warn);
+      saveNotificationToFirestore(adminNotif).catch(() => {});
     }
 
     const localCreated: CampusNotification = {
@@ -478,9 +464,8 @@ export default function App() {
       );
     } else {
       try {
-        await saveClaimToFirestore(newClaim, currentUser, matchingItem?.id);
+        await saveClaimToFirestore(newClaim, currentUser, matchingItem?.authorId);
       } catch (err) {
-        console.error('Error saving claim to Firestore:', err);
         throw err;
       }
     }
@@ -497,7 +482,7 @@ export default function App() {
         createdAt: new Date().toISOString(),
         itemId: matchingItem.id,
       };
-      if (!isDemoMode) saveNotificationToFirestore(finderNotif).catch(console.warn);
+      if (!isDemoMode) saveNotificationToFirestore(finderNotif).catch(() => {});
       if (finderNotif.recipientUid === currentUser?.id) {
         setNotifications((prev) => [{ ...finderNotif, id: `notif-claim-rec-${Date.now()}` }, ...prev]);
       }
@@ -516,7 +501,7 @@ export default function App() {
     };
 
     if (!isDemoMode) {
-      saveNotificationToFirestore(claimAdminNotif).catch(console.warn);
+      saveNotificationToFirestore(claimAdminNotif).catch(() => {});
     }
 
     const localClaimNotif: CampusNotification = {
@@ -553,8 +538,7 @@ export default function App() {
         setItems((prev) =>
           prev.map((it) => (it.id === itemId ? { ...it, status: 'returned' } : it))
         );
-      } catch (err) {
-        console.error('Error approving claim in Firestore:', err);
+      } catch {
       }
     }
 
@@ -571,7 +555,7 @@ export default function App() {
         itemId: claim.itemId,
         claimId: claim.id,
       };
-      if (!isDemoMode) saveNotificationToFirestore(approvedNotif).catch(console.warn);
+      if (!isDemoMode) saveNotificationToFirestore(approvedNotif).catch(() => {});
       if (approvedNotif.recipientUid === currentUser?.id) {
         setNotifications((prev) => [{ ...approvedNotif, id: `notif-appr-${Date.now()}` }, ...prev]);
       }
@@ -590,7 +574,7 @@ export default function App() {
         createdAt: new Date().toISOString(),
         itemId: item.id,
       };
-      if (!isDemoMode) saveNotificationToFirestore(returnedNotif).catch(console.warn);
+      if (!isDemoMode) saveNotificationToFirestore(returnedNotif).catch(() => {});
       if (returnedNotif.recipientUid === currentUser?.id) {
         setNotifications((prev) => [{ ...returnedNotif, id: `notif-ret-${Date.now()}` }, ...prev]);
       }
@@ -612,8 +596,7 @@ export default function App() {
         setClaims((prev) =>
           prev.map((c) => (c.id === claimId ? { ...c, status: 'rejected' } : c))
         );
-      } catch (err) {
-        console.error('Error rejecting claim in Firestore:', err);
+      } catch {
       }
     }
 
@@ -630,7 +613,7 @@ export default function App() {
         itemId: claim.itemId,
         claimId: claim.id,
       };
-      if (!isDemoMode) saveNotificationToFirestore(rejectedNotif).catch(console.warn);
+      if (!isDemoMode) saveNotificationToFirestore(rejectedNotif).catch(() => {});
       if (rejectedNotif.recipientUid === currentUser?.id) {
         setNotifications((prev) => [{ ...rejectedNotif, id: `notif-rej-${Date.now()}` }, ...prev]);
       }
@@ -650,8 +633,7 @@ export default function App() {
         setItems((prev) =>
           prev.map((it) => (it.id === itemId ? { ...it, status } : it))
         );
-      } catch (err) {
-        console.error('Error updating item status in Firestore:', err);
+      } catch {
       }
     }
 
@@ -669,7 +651,7 @@ export default function App() {
           createdAt: new Date().toISOString(),
           itemId: targetItem.id,
         };
-        if (!isDemoMode) saveNotificationToFirestore(returnedNotif).catch(console.warn);
+        if (!isDemoMode) saveNotificationToFirestore(returnedNotif).catch(() => {});
         if (returnedNotif.recipientUid === currentUser?.id) {
           setNotifications((prev) => [{ ...returnedNotif, id: `notif-ret-${Date.now()}` }, ...prev]);
         }
@@ -688,8 +670,7 @@ export default function App() {
       await deleteItemFromFirestore(itemId);
       setItems((prev) => prev.filter((it) => it.id !== itemId));
       setClaims((prev) => prev.filter((c) => c.itemId !== itemId));
-    } catch (err) {
-      console.error('Error deleting item from Firestore:', err);
+    } catch {
     }
   };
 
@@ -722,14 +703,14 @@ export default function App() {
         const el = document.getElementById(`item-${itemId}`);
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          el.classList.add('ring-2', 'ring-[#C6FF3D]');
-          setTimeout(() => el.classList.remove('ring-2', 'ring-[#C6FF3D]'), 3000);
+          el.classList.add('ring-2', 'ring-[#0F6E6E]');
+          setTimeout(() => el.classList.remove('ring-2', 'ring-[#0F6E6E]'), 3000);
         }
       }, 150);
     }
   };
 
-  const isOwner = currentUser?.email?.trim().toLowerCase() === MASTER_ADMIN_EMAIL;
+  const isOwner = currentUser?.id === PROJECT_OWNER_UID;
   const isPrivileged = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwner;
 
   return (
@@ -755,7 +736,7 @@ export default function App() {
         onToggleDarkMode={() => setIsDarkMode((prev) => !prev)}
       />
 
-      {/* Simulation Banner: Visible ONLY when ayomide2289@gmail.com is simulating another persona */}
+      {/* Simulation Banner: visible only during an owner-controlled simulation. */}
       {canUsePersonaSimulation && isSimulating && (
         <div className="bg-[#FAF6EF] dark:bg-[#1E1C18] border-b border-[#E6DFD2] dark:border-[#2E2A24] px-4 py-2.5 text-xs flex flex-wrap items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-2.5">
@@ -764,8 +745,8 @@ export default function App() {
             <span className="text-[#544E45] dark:text-[#B8B0A2]">
               Viewing as <strong className="text-[#0F6E6E] dark:text-[#199595] font-bold">{currentUser?.name}</strong> ({currentUser?.role})
             </span>
-            <span className="text-[#7A7266] dark:text-[#857D71] text-[11px] font-mono hidden md:inline">
-              (Master: {MASTER_ADMIN_EMAIL})
+            <span className="text-[#7A7266] dark:text-[#857D71] text-xs font-mono hidden md:inline">
+              (Project owner)
             </span>
           </div>
 
@@ -813,25 +794,27 @@ export default function App() {
           )}
 
           {activeTab === 'admin' && (
-            <AdminPanel
-              currentUser={currentUser}
-              items={items}
-              claims={claims}
-              onUpdateItemStatus={handleUpdateItemStatus}
-              onDeleteItem={handleDeleteItem}
-              onApproveClaim={handleApproveClaim}
-              onRejectClaim={handleRejectClaim}
-              onExpireOldItems={handleExpireOldItems}
-              onNavigateToLogin={() => setActiveTab('login')}
-              onSwitchPersona={canUsePersonaSimulation ? handleSwitchPersona : undefined}
-            />
+            <Suspense fallback={<div className="p-6 text-xs text-ink">Loading admin tools…</div>}>
+              <AdminPanel
+                currentUser={currentUser}
+                items={items}
+                claims={claims}
+                onUpdateItemStatus={handleUpdateItemStatus}
+                onDeleteItem={handleDeleteItem}
+                onApproveClaim={handleApproveClaim}
+                onRejectClaim={handleRejectClaim}
+                onExpireOldItems={handleExpireOldItems}
+                onNavigateToLogin={() => setActiveTab('login')}
+                onSwitchPersona={canUsePersonaSimulation ? handleSwitchPersona : undefined}
+              />
+            </Suspense>
           )}
 
           {activeTab === 'login' && (
             <LoginPage
               currentUser={currentUser}
               onLogin={(user) => {
-                if (user.id.startsWith('demo-') || user.email !== MASTER_ADMIN_EMAIL && isSimulating) {
+                if (user.id.startsWith('demo-') || user.id !== PROJECT_OWNER_UID && isSimulating) {
                   handleSwitchPersona(user);
                 } else {
                   setCurrentUser(user);
@@ -843,8 +826,12 @@ export default function App() {
                 }
               }}
               onLogout={() => {
-                handleExitSimulation();
+                setIsSimulating(false);
+                setIsDemoMode(false);
+                localStorage.removeItem('nilefound_user_v1');
+                localStorage.removeItem('nilefound_admin_simulating');
                 setCurrentUser(null);
+                setActiveTab('login');
               }}
               onNavigateToFeed={() => setActiveTab('feed')}
               isDemoMode={isDemoMode}
@@ -884,10 +871,12 @@ export default function App() {
         }}
       />
 
-      <PrivacyModal
-        isOpen={isPrivacyModalOpen}
-        onClose={() => setIsPrivacyModalOpen(false)}
-      />
+      <Suspense fallback={null}>
+        <PrivacyModal
+          isOpen={isPrivacyModalOpen}
+          onClose={() => setIsPrivacyModalOpen(false)}
+        />
+      </Suspense>
 
       {activeTab === 'feed' && (
         <button
@@ -908,7 +897,7 @@ export default function App() {
             <span>Nile University of Nigeria, Abuja</span>
           </div>
 
-          <div className="flex items-center gap-3 text-[11px]">
+          <div className="flex items-center gap-3 text-xs">
             <button
               onClick={() => setIsPrivacyModalOpen(true)}
               className="text-[#0F6E6E] dark:text-[#199595] hover:underline font-medium cursor-pointer"

@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  * 
  * NileFound Authentication Screen
- * Layout: Clean, standard sign-in interface in Deep Navy (#0B1020), Muted Card (#141B33), and Electric Lime (#C6FF3D).
+ * Layout: Clean, standard sign-in interface in Deep Navy (#FAF6EF), Muted Card (#1E1C18), and Electric Lime (#0F6E6E).
  * Main Action: Verified Nile University email and password authentication.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Shield, 
   Check, 
@@ -20,11 +20,16 @@ import {
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  GoogleAuthProvider,
   signOut,
   updateProfile,
 } from 'firebase/auth';
 import { fetchUserRole } from '../services/firestoreService.ts';
-import { validateNileEmail, validatePassword } from '../utils/authValidation.ts';
+import { validateFullName, validateNileEmail, validatePassword } from '../utils/authValidation.ts';
+import { PROJECT_OWNER_UID } from '../config/admin.ts';
 
 interface LoginPageProps {
   currentUser: User | null;
@@ -47,8 +52,45 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const cooldownTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getRedirectResult(auth).then(async (result) => {
+      if (!active || !result?.user) return;
+      const email = result.user.email?.toLowerCase() || '';
+      if (result.user.uid !== PROJECT_OWNER_UID && !validateNileEmail(email)) {
+        await signOut(auth);
+        setErrorMessage('Please use your @nileuniversity.edu.ng email.');
+        return;
+      }
+      onLogin(await userFromFirebase(result.user));
+      onNavigateToFeed();
+    }).catch(() => {});
+    return () => {
+      active = false;
+      if (cooldownTimer.current) window.clearInterval(cooldownTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showInbox) return;
+    const timer = window.setInterval(async () => {
+      if (!auth.currentUser) return;
+      await auth.currentUser.reload();
+      if (auth.currentUser.emailVerified) {
+        setShowInbox(false);
+        onLogin(await userFromFirebase(auth.currentUser));
+        onNavigateToFeed();
+      }
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [showInbox]);
 
   const clearFeedback = () => {
     setErrorMessage(null);
@@ -60,7 +102,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return 'The email or password is not correct.';
     }
     if (error?.code === 'auth/email-already-in-use') return 'An account already exists for this email.';
-    if (error?.code === 'auth/weak-password') return 'Choose a stronger password with at least six characters.';
+    if (error?.code === 'auth/weak-password') return 'Choose a stronger password with at least 8 characters.';
+    if (error?.code === 'auth/account-exists-with-different-credential') return 'An account already exists with another sign-in method. Sign in with that method first.';
     if (error?.code === 'auth/too-many-requests') return 'Too many attempts. Please wait a moment and try again.';
     return 'Could not complete sign in. Please try again.';
   };
@@ -68,15 +111,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const userFromFirebase = async (fbUser: import('firebase/auth').User): Promise<User> => {
     const userEmail = (fbUser.email || '').trim().toLowerCase();
     const assignedRole = await fetchUserRole(fbUser.uid);
-    const isOwner = userEmail === 'ayomide2289@gmail.com';
+    const isOwner = fbUser.uid === PROJECT_OWNER_UID;
     const role: UserRole = isOwner ? 'admin' : assignedRole;
     return {
       id: fbUser.uid,
-      name: isOwner ? 'Ayomide' : (fbUser.displayName || userEmail.split('@')[0] || 'Campus User').split(' ')[0],
+      name: isOwner ? 'Project Owner' : (fbUser.displayName || userEmail.split('@')[0] || 'Campus User').split(' ')[0],
       email: userEmail,
       role,
       isAdmin: role === 'admin',
-      department: isOwner ? 'System Owner & University Administration' : 'Nile University Member',
+      department: isOwner ? 'Project Owner & University Administration' : 'Nile University Member',
     };
   };
 
@@ -87,7 +130,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     try {
       const normalizedEmail = email.trim().toLowerCase();
       if (!validateNileEmail(normalizedEmail)) {
-        setErrorMessage('Use your Nile University email address (@nileuniversity.edu.ng).');
+        setErrorMessage('Please use your @nileuniversity.edu.ng email.');
+        return;
+      }
+      if (mode === 'sign-up' && !validateFullName(fullName)) {
+        setErrorMessage('Enter your full name using 2-100 letters, spaces, hyphens, or apostrophes.');
+        return;
+      }
+      if (mode === 'sign-up' && password !== confirmPassword) {
+        setErrorMessage('Passwords do not match.');
         return;
       }
       if (mode === 'sign-up' && !validatePassword(password)) {
@@ -98,7 +149,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         ? await createUserWithEmailAndPassword(auth, normalizedEmail, password)
         : await signInWithEmailAndPassword(auth, normalizedEmail, password);
       if (mode === 'sign-up') {
-        await updateProfile(result.user, { displayName: email.trim().split('@')[0] });
+        await updateProfile(result.user, { displayName: fullName.trim() });
         await sendEmailVerification(result.user);
         setShowInbox(true);
         setSuccessMessage('Verification email sent. Check your inbox before continuing.');
@@ -129,9 +180,35 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           return value - 1;
         });
       }, 1000);
+      cooldownTimer.current = timer;
       setSuccessMessage('Verification email sent again.');
     } catch {
       setErrorMessage('Could not resend the verification email. Please try again.');
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    clearFeedback();
+    setIsSigningIn(true);
+    const provider = new GoogleAuthProvider();
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const email = result.user.email?.toLowerCase() || '';
+      if (result.user.uid !== PROJECT_OWNER_UID && !validateNileEmail(email)) {
+        await signOut(auth);
+        setErrorMessage('Please use your @nileuniversity.edu.ng email.');
+        return;
+      }
+      onLogin(await userFromFirebase(result.user));
+      onNavigateToFeed();
+    } catch (error: any) {
+      if (error?.code === 'auth/popup-blocked' || error?.code === 'auth/popup-closed-by-user') {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+      setErrorMessage(friendlyAuthError(error));
+    } finally {
+      setIsSigningIn(false);
     }
   };
 
@@ -151,6 +228,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       setErrorMessage('Enter your email address first.');
       return;
     }
+    if (!validateNileEmail(email.trim().toLowerCase())) {
+      setErrorMessage('Please use your @nileuniversity.edu.ng email.');
+      return;
+    }
     try {
       await sendPasswordResetEmail(auth, email.trim());
       setSuccessMessage('If an account exists for that email, a reset link has been sent.');
@@ -166,8 +247,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     clearFeedback();
     try {
       await signOut(auth);
-    } catch (err) {
-      console.warn('Sign out error:', err);
+    } catch {
     }
     onLogout();
   };
@@ -185,7 +265,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm">{currentUser.name}</span>
                 <span
-                  className={`text-[10px] font-sans font-medium px-2 py-0.5 rounded-[4px] border ${
+                  className={`text-xs font-sans font-medium px-2 py-0.5 rounded-[10px] border ${
                     currentUser.role === 'admin'
                       ? 'bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border-[#0F6E6E]/30'
                       : currentUser.role === 'security'
@@ -226,7 +306,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               NileFound Campus Sign-In
             </span>
           </div>
-          <span className="text-[10px] bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border border-[#0F6E6E]/20 font-sans font-medium px-2 py-0.5 rounded-[4px]">
+          <span className="text-xs bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border border-[#0F6E6E]/20 font-sans font-medium px-2 py-0.5 rounded-[10px]">
             Nile University Account
           </span>
         </div>
@@ -260,28 +340,38 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <div className="space-y-4 text-center">
               <h3 className="font-serif font-bold text-base">Check your inbox</h3>
               <p className="text-xs text-[#544E45] dark:text-[#B8B0A2]">Verify your email address before posting, claiming, or reading campus items.</p>
+              <p className="text-xs text-[#7A7266]">Check your spam or junk folder if it does not arrive.</p>
               <button type="button" onClick={resendVerification} disabled={cooldown > 0} className="w-full min-h-[44px] bg-white dark:bg-[#28241F] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] text-xs font-medium">
                 {cooldown > 0 ? `Resend email (${cooldown}s)` : 'Resend email'}
               </button>
               <button type="button" onClick={confirmVerified} className="w-full min-h-[44px] bg-[#0F6E6E] text-white rounded-[10px] text-xs font-medium">
                 I've verified
               </button>
+              <button type="button" onClick={handleSignOut} className="text-xs text-[#0F6E6E] underline">Wrong email? Use a different one</button>
             </div>
           ) : (
           <>
           <form onSubmit={handleEmailAuth} className="space-y-3">
+            {mode === 'sign-up' && <input type="text" required minLength={2} maxLength={100} value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />}
             <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@nileuniversity.edu.ng" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />
-            <input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />
+            <div className="relative">
+              <input type={showPassword ? 'text' : 'password'} required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full min-h-[44px] px-3 pr-20 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />
+              <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#0F6E6E]" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? 'Hide' : 'Show'}</button>
+            </div>
+            {mode === 'sign-up' && <input type={showPassword ? 'text' : 'password'} required minLength={8} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm password" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />}
+            {mode === 'sign-up' && <p className="text-xs text-[#544E45] dark:text-[#B8B0A2]">Password: 8+ characters, including one letter and one number.</p>}
             <button type="submit" disabled={isSigningIn} className="w-full min-h-[44px] bg-[#2F7D4F] text-white rounded-[10px] text-xs font-medium">
               {mode === 'sign-up' ? 'Create account' : 'Sign in with email'}
             </button>
-            <div className="flex items-center justify-between text-[11px]">
+            <div className="flex items-center justify-between text-xs">
               <button type="button" onClick={() => setMode(mode === 'sign-up' ? 'sign-in' : 'sign-up')} className="text-[#0F6E6E] underline">
                 {mode === 'sign-up' ? 'Already have an account? Sign in' : 'Create an account'}
               </button>
               {mode === 'sign-in' && <button type="button" onClick={handleForgotPassword} className="text-[#0F6E6E] underline">Forgot password</button>}
             </div>
           </form>
+          <div className="flex items-center gap-3 text-xs text-[#7A7266]"><span className="h-px flex-1 bg-[#E6DFD2]" /><span>or</span><span className="h-px flex-1 bg-[#E6DFD2]" /></div>
+          <button type="button" onClick={handleGoogleSignIn} disabled={isSigningIn} className="w-full min-h-[44px] border border-[#E6DFD2] rounded-[10px] text-xs font-medium">Continue with Google</button>
           </>
           )}
         </div>

@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  * 
  * NileFound Campus Feed
- * Layout: Search filters, category selectors, and responsive card grid in Deep Navy (#0B1020), Muted Cards (#141B33), and Electric Lime (#C6FF3D).
+ * Layout: Search filters, category selectors, and responsive card grid in Deep Navy (#FAF6EF), Muted Cards (#1E1C18), and Electric Lime (#0F6E6E).
  * Main Action: Browse campus listings, check match scores, and initiate claims.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Search, 
@@ -28,6 +28,7 @@ import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
 import { calculateMatchScore } from '../utils/matching.ts';
 import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
 import { filterCampusItems } from '../utils/feedFilters.ts';
+import { PROJECT_OWNER_UID } from '../config/admin.ts';
 
 interface FeedViewProps {
   items: CampusItem[];
@@ -56,9 +57,36 @@ export const FeedView: React.FC<FeedViewProps> = ({
   const [selectedDateRange, setSelectedDateRange] = useState<'all' | '24h' | '7d'>('all');
   const [selectedLostItemForMatch, setSelectedLostItemForMatch] = useState<CampusItem | null>(null);
   const [includeDemoSeed, setIncludeDemoSeed] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const isOwnerEmail = currentUser?.email?.trim().toLowerCase() === 'ayomide2289@gmail.com';
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwnerEmail;
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(searchTerm), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem('nilefound_feed_filters');
+    if (!saved) return;
+    try {
+      const state = JSON.parse(saved);
+      setSelectedCategory(state.category || 'all');
+      setSelectedLocation(state.location || 'all');
+      setSelectedType(state.type || 'all');
+    } catch {
+      sessionStorage.removeItem('nilefound_feed_filters');
+    }
+  }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem('nilefound_feed_filters', JSON.stringify({
+      category: selectedCategory,
+      location: selectedLocation,
+      type: selectedType,
+    }));
+  }, [selectedCategory, selectedLocation, selectedType]);
+
+  const isOwner = currentUser?.id === PROJECT_OWNER_UID;
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwner;
 
   // Combine real items from Firestore with verified sample items so feed is never bare
   const displayableItems = useMemo(() => {
@@ -70,13 +98,13 @@ export const FeedView: React.FC<FeedViewProps> = ({
 
   // Filter items
   const filteredItems = useMemo(() => filterCampusItems(displayableItems, {
-    searchTerm,
+    searchTerm: debouncedSearch,
     type: selectedType,
     category: selectedCategory,
     location: selectedLocation,
     status: selectedStatus,
     dateRange: selectedDateRange,
-  }), [displayableItems, selectedType, selectedCategory, selectedLocation, selectedStatus, selectedDateRange, searchTerm]);
+  }), [displayableItems, selectedType, selectedCategory, selectedLocation, selectedStatus, selectedDateRange, debouncedSearch]);
 
   // Separate lost vs found
   const lostItems = useMemo(() => displayableItems.filter(i => i.type === 'lost'), [displayableItems]);
@@ -85,7 +113,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
   return (
     <div className="space-y-7">
       {/* Friendly Campus Community Prompt */}
-      <div className="bg-white dark:bg-[#1E1C18] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[14px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_1px_2px_rgba(31,27,22,0.03),0_8px_24px_rgba(31,27,22,0.035)]">
+      <div className="bg-white dark:bg-[#1E1C18] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[12px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_1px_2px_rgba(31,27,22,0.03),0_8px_24px_rgba(31,27,22,0.035)]">
         <div className="space-y-1">
           <p className="font-serif font-bold text-sm sm:text-base text-[#1F1B16] dark:text-[#F5F1EA]">
             Lost your calculator? Someone may have handed it in.
@@ -116,7 +144,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
       </div>
 
       {/* Search & Filter Notice Board Section */}
-      <div className="bg-white dark:bg-[#1E1C18] rounded-[14px] border border-[#E6DFD2] dark:border-[#2E2A24] p-4 sm:p-5 space-y-4 shadow-[0_1px_2px_rgba(31,27,22,0.03),0_8px_24px_rgba(31,27,22,0.035)]">
+      <div className="bg-white dark:bg-[#1E1C18] rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] p-4 sm:p-5 space-y-4 shadow-[0_1px_2px_rgba(31,27,22,0.03),0_8px_24px_rgba(31,27,22,0.035)]">
         <div className="flex flex-col sm:flex-row gap-3">
           {/* Search Bar */}
           <div className="relative flex-1">
@@ -143,7 +171,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
           <div className="flex bg-[#FAF6EF] dark:bg-[#141311] p-1 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] shrink-0 gap-1">
             <button
               onClick={() => setSelectedType('all')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-[8px] transition-colors min-h-[38px] cursor-pointer ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-[10px] transition-colors min-h-[38px] cursor-pointer ${
                 selectedType === 'all'
                   ? 'bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] border border-[#E6DFD2] dark:border-[#2E2A24] shadow-xs'
                   : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16]'
@@ -153,7 +181,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
             </button>
             <button
               onClick={() => setSelectedType('found')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-[8px] transition-colors min-h-[38px] cursor-pointer ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-[10px] transition-colors min-h-[38px] cursor-pointer ${
                 selectedType === 'found'
                   ? 'bg-[#2F7D4F] text-white shadow-xs'
                   : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16]'
@@ -163,7 +191,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
             </button>
             <button
               onClick={() => setSelectedType('lost')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-[8px] transition-colors min-h-[38px] cursor-pointer ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-[10px] transition-colors min-h-[38px] cursor-pointer ${
                 selectedType === 'lost'
                   ? 'bg-[#E8A317] text-[#1F1B16] font-semibold shadow-xs'
                   : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16]'
@@ -177,7 +205,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
         {/* Category & Location Dropdowns */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#E6DFD2] dark:border-[#2E2A24]">
           <div>
-            <label className="block text-[11px] font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
+            <label className="block text-xs font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
               Category:
             </label>
             <select
@@ -197,7 +225,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
             </select>
           </div>
           <div>
-            <label className="block text-[11px] font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
+            <label className="block text-xs font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
               Status:
             </label>
             <select
@@ -212,7 +240,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
             </select>
           </div>
           <div>
-            <label className="block text-[11px] font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
+            <label className="block text-xs font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
               Date:
             </label>
             <select
@@ -227,7 +255,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
+            <label className="block text-xs font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1">
               Campus Location:
             </label>
             <select
@@ -257,7 +285,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
             {isAdmin && (
               <button
                 onClick={() => setIncludeDemoSeed(!includeDemoSeed)}
-                className={`text-[11px] px-2.5 py-1 rounded-[8px] border transition-colors cursor-pointer btn-campus ${
+                className={`text-xs px-2.5 py-1 rounded-[10px] border transition-colors cursor-pointer btn-campus ${
                   includeDemoSeed
                     ? 'bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] border-[#D1C7B7] dark:border-[#3F3A32]'
                     : 'bg-[#FAF6EF] dark:bg-[#141311] text-[#7A7266] border-[#E6DFD2] dark:border-[#2E2A24]'
@@ -282,14 +310,14 @@ export const FeedView: React.FC<FeedViewProps> = ({
                   setSelectedStatus('all');
                   setSelectedDateRange('all');
                 }}
-                className="text-[11px] font-medium text-[#0F6E6E] dark:text-[#199595] hover:underline cursor-pointer"
+                className="text-xs font-medium text-[#0F6E6E] dark:text-[#199595] hover:underline cursor-pointer"
               >
                 Reset All Filters
               </button>
             )}
 
             {lowDataMode && (
-              <span className="text-[#0F6E6E] dark:text-[#199595] bg-[#E7F3F3] dark:bg-[#0D2D2D] px-2.5 py-0.5 rounded-[6px] text-[11px] font-medium border border-[#0F6E6E]/20">
+              <span className="text-[#0F6E6E] dark:text-[#199595] bg-[#E7F3F3] dark:bg-[#0D2D2D] px-2.5 py-0.5 rounded-[10px] text-xs font-medium border border-[#0F6E6E]/20">
                 Low-Data: Photos hidden
               </span>
             )}
@@ -373,6 +401,9 @@ export const FeedView: React.FC<FeedViewProps> = ({
                           alt={item.title}
                           className="w-full h-full object-cover transition-transform duration-200 hover:scale-[1.01]"
                           loading="lazy"
+                          decoding="async"
+                          width={640}
+                          height={360}
                         />
                         <div className="absolute top-3 left-3">
                           <span className={isFound ? 'stamp-found' : 'stamp-lost'}>
@@ -386,7 +417,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
                         <span className={isFound ? 'stamp-found' : 'stamp-lost'}>
                           {isFound ? 'Found' : 'Lost'}
                         </span>
-                        <span className="text-[11px] text-[#7A7266] dark:text-[#857D71]">
+                        <span className="text-xs text-[#7A7266] dark:text-[#857D71]">
                           {isReturned ? 'Returned' : item.status === 'claim_requested' ? 'Claim pending' : 'Open'}
                         </span>
                       </div>
@@ -422,7 +453,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
 
                       {/* Physical Custody Location for Found Items */}
                       {isFound && (
-                        <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[8px] px-3 py-2 text-[11px] flex items-center justify-between text-[#544E45] dark:text-[#B8B0A2]">
+                        <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] px-3 py-2 text-xs flex items-center justify-between text-[#544E45] dark:text-[#B8B0A2]">
                           <span className="text-[#7A7266] dark:text-[#857D71]">Held at:</span>
                           <span className="font-medium text-[#1F1B16] dark:text-[#F5F1EA]">
                             {isFoundIdCard || item.holdingLocation === 'security_main_gate'
@@ -438,7 +469,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
 
                       {/* Anti-Theft Verification Flag */}
                       {isFound && item.verificationQuestion && (
-                        <div className="text-[10px] text-[#0F6E6E] dark:text-[#199595] bg-[#E7F3F3] dark:bg-[#0D2D2D] border border-[#0F6E6E]/20 px-2.5 py-1.5 rounded-[8px] flex items-center gap-1.5">
+                        <div className="text-xs text-[#0F6E6E] dark:text-[#199595] bg-[#E7F3F3] dark:bg-[#0D2D2D] border border-[#0F6E6E]/20 px-2.5 py-1.5 rounded-[10px] flex items-center gap-1.5">
                           <Lock className="w-3 h-3 shrink-0" />
                           <span>Ownership verification required to claim</span>
                         </div>
@@ -462,7 +493,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
                         <span>{isReturned ? 'Item Reunited' : 'This is Mine (Claim)'}</span>
                       </button>
                     ) : (
-                      <div className="w-full text-center py-2 px-3 text-xs text-[#7A5000] dark:text-[#F9CF7C] bg-[#FEF7E9] dark:bg-[#2B210A] rounded-[8px] border border-[#E8A317]/30 min-h-[44px] flex items-center justify-center font-medium">
+                      <div className="w-full text-center py-2 px-3 text-xs text-[#7A5000] dark:text-[#F9CF7C] bg-[#FEF7E9] dark:bg-[#2B210A] rounded-[10px] border border-[#E8A317]/30 min-h-[44px] flex items-center justify-center font-medium">
                         Looking for this item • Report if seen
                       </div>
                     )}

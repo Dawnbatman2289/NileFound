@@ -2,8 +2,8 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * 
- * NileFound Admin Panel - Built specially for ayomide2289@gmail.com
- * Layout: Primary administrator dashboard in Deep Navy (#0B1020), Muted Cards (#141B33), and Electric Lime (#C6FF3D).
+ * NileFound Admin Panel - Restricted to authorized project administrators.
+ * Layout: Primary administrator dashboard in Deep Navy (#FAF6EF), Muted Cards (#1E1C18), and Electric Lime (#0F6E6E).
  * Main Action: Review verification answers, approve/reject claims, audit physical custody at university gates, and manage campus roles.
  */
 
@@ -41,6 +41,7 @@ import {
   fetchItemPrivateDetails,
   ItemPrivateDetails
 } from '../services/firestoreService.ts';
+import { PROJECT_OWNER_UID } from '../config/admin.ts';
 
 interface AdminPanelProps {
   currentUser: User | null;
@@ -70,6 +71,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [activeTab, setActiveTab] = useState<'claims' | 'custody' | 'all_items' | 'roles' | 'personas'>('claims');
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [selectedItemForDetail, setSelectedItemForDetail] = useState<CampusItem | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<CampusItem | null>(null);
   const [privateDetails, setPrivateDetails] = useState<ItemPrivateDetails>({});
   const [isLoadingPrivate, setIsLoadingPrivate] = useState(false);
 
@@ -100,8 +102,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newTargetRole, setNewTargetRole] = useState<'admin' | 'security'>('security');
   const [isSavingRole, setIsSavingRole] = useState(false);
 
-  const isOwnerEmail = currentUser?.email?.trim().toLowerCase() === 'ayomide2289@gmail.com';
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwnerEmail;
+  const isOwner = currentUser?.id === PROJECT_OWNER_UID;
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwner;
   const isSecurity = currentUser?.role === 'security';
   const canUsePersonaSimulation = import.meta.env.DEV && currentUser?.role === 'admin';
   const hasAccess = isAdmin;
@@ -140,8 +142,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleCreateOrUpdateRole = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isOwnerEmail) {
-      showNotification('Unauthorized: Only ayomide2289@gmail.com can provision new roles.');
+    if (!isOwner) {
+      showNotification('Unauthorized: only the project owner can provision new roles.');
       return;
     }
     if (!newTargetUid.trim() || !newTargetEmail.trim()) {
@@ -154,7 +156,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         newTargetUid.trim(),
         newTargetEmail.trim().toLowerCase(),
         newTargetRole,
-        currentUser?.email || 'ayomide2289@gmail.com'
+        currentUser?.email || 'owner@example.com'
       );
       showNotification(`Assigned ${newTargetRole} role to ${newTargetEmail.trim()}.`);
       setNewTargetUid('');
@@ -200,7 +202,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         <div className="space-y-1">
           <h3 className="font-serif font-bold text-[#1F1B16] dark:text-[#F5F1EA] text-base tracking-tight">Restricted Administrator Area</h3>
           <p className="text-xs text-[#544E45] dark:text-[#B8B0A2] leading-relaxed">
-            This administration portal is specially configured for <strong className="text-[#0F6E6E] dark:text-[#199595]">ayomide2289@gmail.com</strong> and designated Nile University campus security personnel.
+            This administration portal is configured for the project owner and designated Nile University campus security personnel.
           </p>
         </div>
         <button
@@ -219,12 +221,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       <div className="bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] p-6 border border-[#E6DFD2] dark:border-[#2E2A24] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-5">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] font-semibold text-[11px] px-2.5 py-0.5 rounded-[4px] border border-[#0F6E6E]/20 flex items-center gap-1">
+            <span className="bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] font-semibold text-xs px-2.5 py-0.5 rounded-[10px] border border-[#0F6E6E]/20 flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5" />
-              {isOwnerEmail ? 'System Owner & Primary Admin' : 'Campus Administrator'}
+              {isOwner ? 'Project Owner & Primary Admin' : 'Campus Administrator'}
             </span>
             <span className="text-xs text-[#7A7266] dark:text-[#857D71] font-mono">
-              ayomide2289@gmail.com
+              Project owner
             </span>
           </div>
 
@@ -268,41 +270,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-[#1E1C18] p-4 sm:p-5 rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] text-left shadow-xs">
-          <span className="text-[11px] font-medium text-[#7A7266] dark:text-[#857D71]">Pending Claims</span>
+          <span className="text-xs font-medium text-[#7A7266] dark:text-[#857D71]">Pending Claims</span>
           <div className="text-2xl sm:text-3xl font-serif font-bold text-[#E8A317] mt-1">
             {pendingClaims.length}
           </div>
-          <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] mt-0.5 block">
+          <span className="text-xs text-[#7A7266] dark:text-[#857D71] mt-0.5 block">
             {pendingClaims.length === 0 ? 'Queue is clear' : 'Awaiting review'}
           </span>
         </div>
 
         <div className="bg-white dark:bg-[#1E1C18] p-4 sm:p-5 rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] text-left shadow-xs">
-          <span className="text-[11px] font-medium text-[#7A7266] dark:text-[#857D71]">Physical Custody</span>
+          <span className="text-xs font-medium text-[#7A7266] dark:text-[#857D71]">Physical Custody</span>
           <div className="text-2xl sm:text-3xl font-serif font-bold text-[#0F6E6E] dark:text-[#199595] mt-1">
             {physicalCustodyItems.length}
           </div>
-          <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] mt-0.5 block">
+          <span className="text-xs text-[#7A7266] dark:text-[#857D71] mt-0.5 block">
             At Security Gate & Desks
           </span>
         </div>
 
         <div className="bg-white dark:bg-[#1E1C18] p-4 sm:p-5 rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] text-left shadow-xs">
-          <span className="text-[11px] font-medium text-[#7A7266] dark:text-[#857D71]">Reunited Items</span>
+          <span className="text-xs font-medium text-[#7A7266] dark:text-[#857D71]">Reunited Items</span>
           <div className="text-2xl sm:text-3xl font-serif font-bold text-[#2F7D4F] dark:text-[#75CE9A] mt-1">
             {stats.totalReturned}
           </div>
-          <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] mt-0.5 block">
+          <span className="text-xs text-[#7A7266] dark:text-[#857D71] mt-0.5 block">
             Confirmed returned
           </span>
         </div>
 
         <div className="bg-white dark:bg-[#1E1C18] p-4 sm:p-5 rounded-[12px] border border-[#E6DFD2] dark:border-[#2E2A24] text-left shadow-xs">
-          <span className="text-[11px] font-medium text-[#7A7266] dark:text-[#857D71]">Total Tracked</span>
+          <span className="text-xs font-medium text-[#7A7266] dark:text-[#857D71]">Total Tracked</span>
           <div className="text-2xl sm:text-3xl font-serif font-bold text-[#1F1B16] dark:text-[#F5F1EA] mt-1">
             {items.length}
           </div>
-          <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] mt-0.5 block">
+          <span className="text-xs text-[#7A7266] dark:text-[#857D71] mt-0.5 block">
             Lost and found posts
           </span>
         </div>
@@ -319,7 +321,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <span>Claim Requests Queue</span>
-          <span className="bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C] text-[10px] px-2 py-0.5 rounded-full font-bold">
+          <span className="bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C] text-xs px-2 py-0.5 rounded-full font-bold">
             {pendingClaims.length}
           </span>
         </button>
@@ -333,7 +335,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <span>Gate Custody Ledger</span>
-          <span className="bg-[#FAF6EF] dark:bg-[#141311] text-[#544E45] dark:text-[#B8B0A2] text-[10px] px-2 py-0.5 rounded-full font-medium">
+          <span className="bg-[#FAF6EF] dark:bg-[#141311] text-[#544E45] dark:text-[#B8B0A2] text-xs px-2 py-0.5 rounded-full font-medium">
             {physicalCustodyItems.length}
           </span>
         </button>
@@ -371,8 +373,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             }`}
           >
             <ShieldCheck className="w-4 h-4 text-[#0F6E6E] dark:text-[#199595]" />
-            <span>Test Personas (ayomide2289@gmail.com only)</span>
+            <span>Test Personas (project owner only)</span>
           </button>
+        )}
+        {pendingDelete && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-3" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+            <div className="w-full max-w-[480px] rounded-[20px] bg-white dark:bg-[#1E1C18] p-5 shadow-xl">
+              <h2 id="delete-title" className="text-sm font-bold text-[#1F1B16] dark:text-[#F5F1EA]">Delete this item?</h2>
+              <p className="mt-2 text-xs text-[#544E45] dark:text-[#B8B0A2]">This permanently removes “{pendingDelete.title}”.</p>
+              <div className="mt-5 flex justify-end gap-2">
+                <button type="button" onClick={() => setPendingDelete(null)} className="min-h-[44px] rounded-[10px] border border-[#E6DFD2] px-4 text-xs">Cancel</button>
+                <button type="button" onClick={() => { onDeleteItem(pendingDelete.id); showNotification(`Removed item ${pendingDelete.title}.`); setPendingDelete(null); setSelectedItemForDetail(null); }} className="min-h-[44px] rounded-[10px] bg-[#9B1C1C] px-4 text-xs font-medium text-white">Delete</button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
@@ -380,8 +394,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {activeTab === 'claims' && (
         <div className="space-y-4">
           {pendingClaims.length === 0 ? (
-            <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-10 text-center space-y-2 shadow-lg">
-              <CheckCircle className="w-10 h-10 text-[#C6FF3D] mx-auto" />
+            <div className="bg-[#1E1C18] rounded-[20px] border border-[#1E294B] p-10 text-center space-y-2 shadow-lg">
+              <CheckCircle className="w-10 h-10 text-[#0F6E6E] mx-auto" />
               <h4 className="font-extrabold text-[#F4F6FF] text-base">No pending claims</h4>
               <p className="text-xs text-slate-400">All submitted claims have been processed.</p>
             </div>
@@ -391,13 +405,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               return (
                 <div
                   key={claim.id}
-                  className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-5 space-y-4 shadow-xl hover:border-[#C6FF3D]/30 transition-all"
+                  className="bg-[#1E1C18] rounded-[20px] border border-[#1E294B] p-5 space-y-4 shadow-xl hover:border-[#0F6E6E]/30 transition-all"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1E294B] pb-4">
                     <div>
                       <div className="flex items-center gap-2.5">
                         <span className="font-extrabold text-[#F4F6FF] text-base">{claim.itemTitle}</span>
-                        <span className="text-[10px] font-mono font-bold uppercase bg-amber-400/10 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-mono font-bold uppercase bg-amber-400/10 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full">
                           Pending Review
                         </span>
                       </div>
@@ -412,7 +426,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           onApproveClaim(claim.id, claim.itemId);
                           showNotification(`Approved claim for ${claim.claimantName}. Item marked as returned.`);
                         }}
-                        className="flex items-center gap-2 bg-[#C6FF3D] hover:bg-[#b8f52f] text-[#0B1020] text-xs font-extrabold px-4 py-2.5 rounded-full shadow-[0_0_15px_rgba(198,255,61,0.2)] transition-all min-h-[44px] cursor-pointer"
+                        className="flex items-center gap-2 bg-[#0F6E6E] hover:bg-[#b8f52f] text-[#FAF6EF] text-xs font-extrabold px-4 py-2.5 rounded-full shadow-[0_0_15px_rgba(198,255,61,0.2)] transition-all min-h-[44px] cursor-pointer"
                       >
                         <CheckCircle className="w-4 h-4 stroke-[3]" />
                         <span>Approve & Return</span>
@@ -423,7 +437,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           onRejectClaim(claim.id);
                           showNotification(`Rejected claim from ${claim.claimantName}.`);
                         }}
-                        className="flex items-center gap-2 bg-[#0B1020] hover:bg-rose-950/40 text-rose-300 text-xs font-bold px-4 py-2.5 rounded-full border border-rose-500/40 transition-colors min-h-[44px] cursor-pointer"
+                        className="flex items-center gap-2 bg-[#FAF6EF] hover:bg-rose-950/40 text-rose-300 text-xs font-bold px-4 py-2.5 rounded-full border border-rose-500/40 transition-colors min-h-[44px] cursor-pointer"
                       >
                         <XCircle className="w-4 h-4" />
                         <span>Reject</span>
@@ -432,20 +446,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
 
                   {/* Verification QA Comparison */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-[#0B1020] p-4 rounded-xl border border-[#1E294B]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-[#FAF6EF] p-4 rounded-[20px] border border-[#1E294B]">
                     <div>
-                      <span className="font-bold text-slate-400 block mb-1.5 uppercase text-[10px] tracking-wider">Item Details & Question:</span>
+                      <span className="font-bold text-slate-400 block mb-1.5 uppercase text-xs tracking-wider">Item Details & Question:</span>
                       <p className="text-slate-300 leading-relaxed">{matchedItem?.description || 'No public description.'}</p>
                       {matchedItem?.verificationQuestion && (
-                        <p className="mt-2 text-[#C6FF3D] font-medium">
+                        <p className="mt-2 text-[#0F6E6E] font-medium">
                           <strong>Question:</strong> {matchedItem.verificationQuestion}
                         </p>
                       )}
                     </div>
 
                     <div>
-                      <span className="font-bold text-slate-400 block mb-1.5 uppercase text-[10px] tracking-wider">Claimant Submitted Answer:</span>
-                      <p className="bg-[#141B33] p-3 rounded-xl border border-[#1E294B] text-[#F4F6FF] font-mono text-xs leading-relaxed">
+                      <span className="font-bold text-slate-400 block mb-1.5 uppercase text-xs tracking-wider">Claimant Submitted Answer:</span>
+                      <p className="bg-[#1E1C18] p-3 rounded-[20px] border border-[#1E294B] text-[#F4F6FF] font-mono text-xs leading-relaxed">
                         {claim.submittedAnswer || 'No verification answer provided.'}
                       </p>
                     </div>
@@ -460,14 +474,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* TAB 2: Gate Custody Ledger */}
       {activeTab === 'custody' && (
         <div className="space-y-4">
-          <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-5 shadow-lg flex items-center justify-between">
+          <div className="bg-[#1E1C18] rounded-[20px] border border-[#1E294B] p-5 shadow-lg flex items-center justify-between">
             <div>
               <h3 className="font-extrabold text-[#F4F6FF] text-base">Nile University Gate Custody Ledger</h3>
               <p className="text-xs text-slate-400 mt-0.5">
                 Physical inventory logged at security checkpoints and administration desks.
               </p>
             </div>
-            <span className="text-xs bg-[#C6FF3D]/10 text-[#C6FF3D] border border-[#C6FF3D]/30 font-mono font-bold px-3 py-1 rounded-full">
+            <span className="text-xs bg-[#0F6E6E]/10 text-[#0F6E6E] border border-[#0F6E6E]/30 font-mono font-bold px-3 py-1 rounded-full">
               {physicalCustodyItems.length} Held Items
             </span>
           </div>
@@ -476,11 +490,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {physicalCustodyItems.map((item) => (
               <div
                 key={item.id}
-                className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-5 space-y-3 shadow-lg hover:border-[#C6FF3D]/30 transition-all"
+                className="bg-[#1E1C18] rounded-[20px] border border-[#1E294B] p-5 space-y-3 shadow-lg hover:border-[#0F6E6E]/30 transition-all"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-extrabold text-[#F4F6FF] text-sm">{item.title}</span>
-                  <span className="text-[10px] font-mono uppercase bg-[#1E294B] text-[#C6FF3D] border border-[#C6FF3D]/30 px-2.5 py-0.5 rounded-full font-bold">
+                  <span className="text-xs font-mono uppercase bg-[#1E294B] text-[#0F6E6E] border border-[#0F6E6E]/30 px-2.5 py-0.5 rounded-full font-bold">
                     {item.holdingLocation.replace(/_/g, ' ')}
                   </span>
                 </div>
@@ -489,7 +503,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                 <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-[#1E294B]">
                   <span className="flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-[#C6FF3D]" />
+                    <MapPin className="w-3.5 h-3.5 text-[#0F6E6E]" />
                     <span>{item.location}</span>
                   </span>
                   <span>Logged: {formatDateDDMMYYYY(item.dateLostOrFound)}</span>
@@ -503,7 +517,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* TAB 3: All Campus Items (Master Moderation) */}
       {activeTab === 'all_items' && (
         <div className="space-y-4">
-          <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] overflow-hidden shadow-2xl">
+          <div className="bg-[#1E1C18] rounded-[20px] border border-[#1E294B] overflow-hidden shadow-2xl">
             <div className="p-5 border-b border-[#1E294B] flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-[#F4F6FF] text-base">Master Inventory Control</h3>
@@ -521,19 +535,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <div
                       key={item.id}
                       onClick={() => isAdmin && setSelectedItemForDetail(item)}
-                      className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#0B1020]/60 transition-colors cursor-pointer"
+                      className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#FAF6EF]/60 transition-colors cursor-pointer"
                     >
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase ${
-                            item.type === 'found' ? 'bg-[#C6FF3D]/10 text-[#C6FF3D]' : 'bg-amber-400/10 text-amber-300'
+                          <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded uppercase ${
+                            item.type === 'found' ? 'bg-[#0F6E6E]/10 text-[#0F6E6E]' : 'bg-amber-400/10 text-amber-300'
                           }`}>
                             {item.type}
                           </span>
                           <span className="font-bold text-[#F4F6FF] text-sm">{item.title}</span>
                         </div>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          {item.location} • Status: <strong className="text-slate-300">{item.status}</strong> • <span className="text-[#C6FF3D] underline">Click to inspect full details</span>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {item.location} • Status: <strong className="text-slate-300">{item.status}</strong> • <span className="text-[#0F6E6E] underline">Click to inspect full details</span>
                         </p>
                       </div>
 
@@ -541,7 +555,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <select
                           value={item.status}
                           onChange={(e) => onUpdateItemStatus(item.id, e.target.value as CampusItem['status'])}
-                          className="bg-[#0B1020] text-[#F4F6FF] border border-[#1E294B] rounded-xl px-3 py-2 text-xs focus:border-[#C6FF3D] focus:outline-hidden min-h-[44px] cursor-pointer"
+                          className="bg-[#FAF6EF] text-[#F4F6FF] border border-[#1E294B] rounded-[20px] px-3 py-2 text-xs focus:border-[#0F6E6E] focus:outline-hidden min-h-[44px] cursor-pointer"
                         >
                           <option value="open">Open</option>
                           <option value="claim_requested">Claim Pending</option>
@@ -550,12 +564,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         </select>
 
                         <button
-                          onClick={() => {
-                            if (confirm(`Permanently delete "${item.title}"?`)) {
-                              onDeleteItem(item.id);
-                              showNotification(`Removed item ${item.title}.`);
-                            }
-                          }}
+                          onClick={() => setPendingDelete(item)}
                           className="text-slate-400 hover:text-rose-400 p-2 min-h-[44px] flex items-center justify-center transition-colors cursor-pointer"
                           title="Delete item"
                         >
@@ -574,8 +583,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* TAB 4: Staff Roles & Security Provisioning */}
       {activeTab === 'roles' && (
         <div className="space-y-6">
-          {isOwnerEmail ? (
-            <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-6 shadow-2xl space-y-4">
+          {isOwner ? (
+            <div className="bg-[#1E1C18] rounded-[20px] border border-[#1E294B] p-6 shadow-2xl space-y-4">
               <div>
                 <h3 className="font-extrabold text-[#F4F6FF] text-base">Provision Staff or Security Role</h3>
                 <p className="text-xs text-slate-400 mt-1 leading-relaxed">
@@ -585,7 +594,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
               <form onSubmit={handleCreateOrUpdateRole} className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-400 mb-1.5">
+                  <label className="block text-xs font-bold text-slate-400 mb-1.5">
                     User Firebase UID
                   </label>
                   <input
@@ -594,12 +603,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     placeholder="e.g. skBaRQGJm..."
                     value={newTargetUid}
                     onChange={(e) => setNewTargetUid(e.target.value)}
-                    className="w-full text-xs p-3 rounded-xl border border-[#1E294B] bg-[#0B1020] text-[#F4F6FF] focus:border-[#C6FF3D] focus:outline-hidden min-h-[44px]"
+                    className="w-full text-xs p-3 rounded-[20px] border border-[#1E294B] bg-[#FAF6EF] text-[#F4F6FF] focus:border-[#0F6E6E] focus:outline-hidden min-h-[44px]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-400 mb-1.5">
+                  <label className="block text-xs font-bold text-slate-400 mb-1.5">
                     Email Address
                   </label>
                   <input
@@ -608,18 +617,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     placeholder="officer@nileuniversity.edu.ng"
                     value={newTargetEmail}
                     onChange={(e) => setNewTargetEmail(e.target.value)}
-                    className="w-full text-xs p-3 rounded-xl border border-[#1E294B] bg-[#0B1020] text-[#F4F6FF] focus:border-[#C6FF3D] focus:outline-hidden min-h-[44px]"
+                    className="w-full text-xs p-3 rounded-[20px] border border-[#1E294B] bg-[#FAF6EF] text-[#F4F6FF] focus:border-[#0F6E6E] focus:outline-hidden min-h-[44px]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-400 mb-1.5">
+                  <label className="block text-xs font-bold text-slate-400 mb-1.5">
                     Role
                   </label>
                   <select
                     value={newTargetRole}
                     onChange={(e) => setNewTargetRole(e.target.value as 'admin' | 'security')}
-                    className="w-full text-xs p-3 rounded-xl border border-[#1E294B] bg-[#0B1020] text-[#F4F6FF] focus:border-[#C6FF3D] focus:outline-hidden min-h-[44px] cursor-pointer"
+                    className="w-full text-xs p-3 rounded-[20px] border border-[#1E294B] bg-[#FAF6EF] text-[#F4F6FF] focus:border-[#0F6E6E] focus:outline-hidden min-h-[44px] cursor-pointer"
                   >
                     <option value="security">Campus Security Officer</option>
                     <option value="admin">Administrator</option>
@@ -630,7 +639,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <button
                     type="submit"
                     disabled={isSavingRole}
-                    className="w-full min-h-[44px] bg-[#C6FF3D] hover:bg-[#b8f52f] disabled:opacity-50 text-[#0B1020] font-extrabold text-xs py-3 px-4 rounded-full transition-all shadow-[0_0_15px_rgba(198,255,61,0.2)] flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full min-h-[44px] bg-[#0F6E6E] hover:bg-[#b8f52f] disabled:opacity-50 text-[#FAF6EF] font-extrabold text-xs py-3 px-4 rounded-full transition-all shadow-[0_0_15px_rgba(198,255,61,0.2)] flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Plus className="w-4 h-4 stroke-[3]" />
                     <span>{isSavingRole ? 'Saving...' : 'Assign Role'}</span>
@@ -640,22 +649,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           ) : (
             <div className="bg-amber-400/10 border border-amber-400/30 text-amber-300 p-5 rounded-[20px] text-xs">
-              <span className="font-bold">Role Provisioning Restricted:</span> Only the primary system owner (ayomide2289@gmail.com) is authorized to assign new administrator or campus security roles.
+              <span className="font-bold">Role Provisioning Restricted:</span> Only the project owner is authorized to assign new administrator or campus security roles.
             </div>
           )}
 
           {/* Existing Roles List */}
-          <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] overflow-hidden shadow-2xl">
+          <div className="bg-[#1E1C18] rounded-[20px] border border-[#1E294B] overflow-hidden shadow-2xl">
             <div className="p-5 border-b border-[#1E294B] flex items-center justify-between">
               <div>
                 <h4 className="font-extrabold text-[#F4F6FF] text-sm uppercase tracking-wide">
                   Active System Roles (/roles)
                 </h4>
-                <p className="text-[11px] text-slate-400 mt-0.5">Persisted in Cloud Firestore security rules</p>
+                <p className="text-xs text-slate-400 mt-0.5">Persisted in Cloud Firestore security rules</p>
               </div>
               <button
                 onClick={loadRoles}
-                className="text-xs text-[#C6FF3D] font-bold hover:underline flex items-center gap-1.5 min-h-[44px] px-3 cursor-pointer"
+                className="text-xs text-[#0F6E6E] font-bold hover:underline flex items-center gap-1.5 min-h-[44px] px-3 cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoadingRoles ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
@@ -664,24 +673,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="divide-y divide-[#1E294B] text-xs">
               {/* Permanent Owner Entry */}
-              <div className="p-4 sm:p-5 flex items-center justify-between bg-[#0B1020]/50">
+              <div className="p-4 sm:p-5 flex items-center justify-between bg-[#FAF6EF]/50">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-[#C6FF3D] text-[#0B1020] font-extrabold flex items-center justify-center text-xs shadow-md">
+                  <div className="w-9 h-9 rounded-full bg-[#0F6E6E] text-[#FAF6EF] font-extrabold flex items-center justify-center text-xs shadow-md">
                     A
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-extrabold text-[#F4F6FF]">Ayomide (System Lead)</span>
-                      <span className="bg-[#C6FF3D]/15 text-[#C6FF3D] border border-[#C6FF3D]/30 text-[9px] font-mono font-bold px-2 py-0.5 rounded-full uppercase">
+                      <span className="bg-[#0F6E6E]/15 text-[#0F6E6E] border border-[#0F6E6E]/30 text-xs font-mono font-bold px-2 py-0.5 rounded-full uppercase">
                         Master Admin
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-400 font-mono mt-0.5">ayomide2289@gmail.com</p>
+                    <p className="text-xs text-slate-400 font-mono mt-0.5">Project owner</p>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <span className="text-[11px] text-[#C6FF3D] font-mono font-semibold">Active & Root</span>
+                  <span className="text-xs text-[#0F6E6E] font-mono font-semibold">Active & Root</span>
                 </div>
               </div>
 
@@ -692,18 +701,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
               ) : (
                 roleRecords.map((r) => (
-                  <div key={r.uid} className="p-4 sm:p-5 flex items-center justify-between hover:bg-[#0B1020]/30 transition-colors">
+                  <div key={r.uid} className="p-4 sm:p-5 flex items-center justify-between hover:bg-[#FAF6EF]/30 transition-colors">
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-[#F4F6FF]">{r.email || r.uid}</span>
-                        <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full uppercase bg-[#1E294B] text-slate-300 border border-[#2A3B66]">
+                        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full uppercase bg-[#1E294B] text-slate-300 border border-[#2A3B66]">
                           {r.role}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-400 font-mono">UID: {r.uid}</p>
+                      <p className="text-xs text-slate-400 font-mono">UID: {r.uid}</p>
                     </div>
 
-                    <div className="text-right text-[11px] text-slate-400">
+                    <div className="text-right text-xs text-slate-400">
                       <span>Assigned by {r.assignedBy || 'Admin'}</span>
                     </div>
                   </div>
@@ -714,17 +723,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
-      {/* TAB 5: Test Personas (Strictly for ayomide2289@gmail.com) */}
-      {activeTab === 'personas' && isOwnerEmail && (
+      {/* TAB 5: Test Personas (Strictly for the project owner) */}
+      {activeTab === 'personas' && isOwner && (
         <div className="space-y-6">
-          <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-6 shadow-xl space-y-3">
+          <div className="bg-[#1E1C18] rounded-[20px] border border-[#1E294B] p-6 shadow-xl space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-[#F4F6FF] text-base flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-[#C6FF3D]" />
+                <ShieldCheck className="w-5 h-5 text-[#0F6E6E]" />
                 Root Admin Persona Switcher & Test Accounts
               </h3>
-              <span className="text-[10px] bg-[#C6FF3D]/10 text-[#C6FF3D] border border-[#C6FF3D]/30 font-mono font-bold px-2 py-0.5 rounded-full">
-                ayomide2289@gmail.com Only
+              <span className="text-xs bg-[#0F6E6E]/10 text-[#0F6E6E] border border-[#0F6E6E]/30 font-mono font-bold px-2 py-0.5 rounded-full">
+                Project owner only
               </span>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
@@ -734,15 +743,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Persona 1: Student Chidera */}
-            <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-5 space-y-4 hover:border-[#C6FF3D]/30 transition-all flex flex-col justify-between">
+            <div className="bg-[#1E1C18] rounded-[20px] border border-[#1E294B] p-5 space-y-4 hover:border-[#0F6E6E]/30 transition-all flex flex-col justify-between">
               <div className="space-y-2.5">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-sm border border-purple-500/30">
+                <div className="w-10 h-10 rounded-[20px] bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-sm border border-purple-500/30">
                   U
                 </div>
                 <div>
                   <h4 className="font-extrabold text-[#F4F6FF] text-sm">Chidera Eze</h4>
-                  <span className="text-[10px] font-mono text-purple-300 font-bold uppercase">Student</span>
-                  <p className="text-[11px] text-slate-400 font-mono">chidera@nileuniversity.edu.ng</p>
+                  <span className="text-xs font-mono text-purple-300 font-bold uppercase">Student</span>
+                  <p className="text-xs text-slate-400 font-mono">chidera@nileuniversity.edu.ng</p>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
                   Test reporting items with challenge questions, filtering the campus feed, and submitting ownership claim verification answers.
@@ -771,15 +780,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
 
             {/* Persona 2: Security Musa */}
-            <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-5 space-y-4 hover:border-[#C6FF3D]/30 transition-all flex flex-col justify-between">
+            <div className="bg-[#1E1C18] rounded-[20px] border border-[#1E294B] p-5 space-y-4 hover:border-[#0F6E6E]/30 transition-all flex flex-col justify-between">
               <div className="space-y-2.5">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-300 flex items-center justify-center font-bold text-sm border border-blue-500/30">
+                <div className="w-10 h-10 rounded-[20px] bg-blue-500/20 text-blue-300 flex items-center justify-center font-bold text-sm border border-blue-500/30">
                   S
                 </div>
                 <div>
                   <h4 className="font-extrabold text-[#F4F6FF] text-sm">Officer Musa</h4>
-                  <span className="text-[10px] font-mono text-blue-300 font-bold uppercase">Security Guard</span>
-                  <p className="text-[11px] text-slate-400 font-mono">security.gate@nileuniversity.edu.ng</p>
+                  <span className="text-xs font-mono text-blue-300 font-bold uppercase">Security Guard</span>
+                  <p className="text-xs text-slate-400 font-mono">security.gate@nileuniversity.edu.ng</p>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
                   Test physical custody logging at Main Gate, in-person claimant verification handovers, and security desk custody records.
@@ -807,15 +816,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
 
             {/* Persona 3: Campus Administrator */}
-            <div className="bg-[#141B33] rounded-[20px] border border-[#1E294B] p-5 space-y-4 hover:border-[#C6FF3D]/30 transition-all flex flex-col justify-between">
+            <div className="bg-[#1E1C18] rounded-[20px] border border-[#1E294B] p-5 space-y-4 hover:border-[#0F6E6E]/30 transition-all flex flex-col justify-between">
               <div className="space-y-2.5">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-sm border border-amber-500/30">
+                <div className="w-10 h-10 rounded-[20px] bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-sm border border-amber-500/30">
                   A
                 </div>
                 <div>
                   <h4 className="font-extrabold text-[#F4F6FF] text-sm">Campus Administrator</h4>
-                  <span className="text-[10px] font-mono text-amber-300 font-bold uppercase">Admin</span>
-                  <p className="text-[11px] text-slate-400 font-mono">admin@nileuniversity.edu.ng</p>
+                  <span className="text-xs font-mono text-amber-300 font-bold uppercase">Admin</span>
+                  <p className="text-xs text-slate-400 font-mono">admin@nileuniversity.edu.ng</p>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
                   Test claim resolution workflows, CSV audit exporting, auto-expiring old posts, and general campus operations.
@@ -868,7 +877,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
               <button
                 onClick={() => setSelectedItemForDetail(null)}
-                className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] p-1.5 rounded-[6px] cursor-pointer"
+                className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] p-1.5 rounded-[10px] cursor-pointer"
                 aria-label="Close item details"
               >
                 <X className="w-5 h-5" />
@@ -884,13 +893,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     src={selectedItemForDetail.imageUrl}
                     alt={selectedItemForDetail.title}
                     className="w-full max-h-96 object-contain mx-auto"
+                    loading="lazy"
+                    decoding="async"
+                    width={640}
+                    height={360}
                   />
                 </div>
               )}
 
               {/* Full Description */}
               <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-4 space-y-1.5">
-                <span className="text-[10px] font-sans font-medium uppercase text-[#7A7266] dark:text-[#857D71]">Full Description</span>
+                <span className="text-xs font-sans font-medium uppercase text-[#7A7266] dark:text-[#857D71]">Full Description</span>
                 <p className="text-sm text-[#1F1B16] dark:text-[#F5F1EA] leading-relaxed whitespace-pre-wrap">
                   {selectedItemForDetail.description}
                 </p>
@@ -899,21 +912,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {/* Metadata Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 space-y-1">
-                  <span className="text-[10px] uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
+                  <span className="text-xs uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
                     <Tag className="w-3 h-3 text-[#0F6E6E] dark:text-[#199595]" /> Category
                   </span>
                   <p className="font-semibold text-[#1F1B16] dark:text-[#F5F1EA]">{selectedItemForDetail.category}</p>
                 </div>
 
                 <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 space-y-1">
-                  <span className="text-[10px] uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
+                  <span className="text-xs uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
                     <MapPin className="w-3 h-3 text-[#0F6E6E] dark:text-[#199595]" /> Campus Location
                   </span>
                   <p className="font-semibold text-[#1F1B16] dark:text-[#F5F1EA]">{selectedItemForDetail.location}</p>
                 </div>
 
                 <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 space-y-1">
-                  <span className="text-[10px] uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
+                  <span className="text-xs uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
                     <Calendar className="w-3 h-3 text-[#0F6E6E] dark:text-[#199595]" /> Date Lost / Found
                   </span>
                   <p className="font-semibold text-[#1F1B16] dark:text-[#F5F1EA]">
@@ -922,19 +935,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
 
                 <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 space-y-1">
-                  <span className="text-[10px] uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
+                  <span className="text-xs uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
                     <ShieldCheck className="w-3 h-3 text-[#0F6E6E] dark:text-[#199595]" /> Held-At Location
                   </span>
                   <p className="font-semibold text-[#1F1B16] dark:text-[#F5F1EA]">{selectedItemForDetail.holdingLocation}</p>
                 </div>
 
                 <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 space-y-1">
-                  <span className="text-[10px] uppercase text-[#7A7266] dark:text-[#857D71] font-medium">Status</span>
+                  <span className="text-xs uppercase text-[#7A7266] dark:text-[#857D71] font-medium">Status</span>
                   <p className="font-semibold text-[#0F6E6E] dark:text-[#199595] uppercase">{selectedItemForDetail.status}</p>
                 </div>
 
                 <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] p-3.5 space-y-1">
-                  <span className="text-[10px] uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
+                  <span className="text-xs uppercase text-[#7A7266] dark:text-[#857D71] flex items-center gap-1 font-medium">
                     <Clock className="w-3 h-3 text-[#0F6E6E] dark:text-[#199595]" /> Created Time
                   </span>
                   <p className="font-mono text-[#1F1B16] dark:text-[#F5F1EA]">
@@ -946,17 +959,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {/* Admin-Only Private Reporter Details & Verification Answer */}
               <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#0F6E6E]/30 rounded-[10px] p-4 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-sans font-bold uppercase text-[#0F6E6E] dark:text-[#199595]">
+                  <span className="text-xs font-sans font-bold uppercase text-[#0F6E6E] dark:text-[#199595]">
                     Admin-Only Private Reporter & Verification Details
                   </span>
                   {isLoadingPrivate && (
-                    <span className="text-[10px] text-[#7A7266] dark:text-[#857D71]">Loading...</span>
+                    <span className="text-xs text-[#7A7266] dark:text-[#857D71]">Loading...</span>
                   )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                   <div>
-                    <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] flex items-center gap-1">
+                    <span className="text-xs text-[#7A7266] dark:text-[#857D71] flex items-center gap-1">
                       <UserIcon className="w-3 h-3" /> Reporter Name
                     </span>
                     <p className="font-semibold text-[#1F1B16] dark:text-[#F5F1EA] mt-0.5">
@@ -964,7 +977,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </p>
                   </div>
                   <div>
-                    <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] flex items-center gap-1">
+                    <span className="text-xs text-[#7A7266] dark:text-[#857D71] flex items-center gap-1">
                       <Mail className="w-3 h-3" /> Reporter Email
                     </span>
                     <p className="font-mono text-[#1F1B16] dark:text-[#F5F1EA] mt-0.5">
@@ -1008,11 +1021,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <div className="flex items-center justify-between">
                             <div>
                               <span className="font-semibold text-[#1F1B16] dark:text-[#F5F1EA]">{claim.claimantName}</span>
-                              <span className="text-[#7A7266] ml-2 font-mono text-[11px]">
+                              <span className="text-[#7A7266] ml-2 font-mono text-xs">
                                 ({claim.claimantEmail})
                               </span>
                             </div>
-                            <span className="text-[10px] font-sans font-semibold uppercase px-2 py-0.5 rounded-[4px] bg-white dark:bg-[#1E1C18] border border-[#E6DFD2] dark:border-[#2E2A24] text-[#0F6E6E] dark:text-[#199595]">
+                            <span className="text-xs font-sans font-semibold uppercase px-2 py-0.5 rounded-[10px] bg-white dark:bg-[#1E1C18] border border-[#E6DFD2] dark:border-[#2E2A24] text-[#0F6E6E] dark:text-[#199595]">
                               {claim.status}
                             </span>
                           </div>
@@ -1027,7 +1040,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                   onApproveClaim(claim.id, selectedItemForDetail.id);
                                   showNotification(`Approved claim for ${selectedItemForDetail.title}.`);
                                 }}
-                                className="bg-[#2F7D4F] hover:bg-[#266841] text-white font-medium px-3 py-1.5 rounded-[8px] text-xs cursor-pointer btn-campus shadow-xs"
+                                className="bg-[#2F7D4F] hover:bg-[#266841] text-white font-medium px-3 py-1.5 rounded-[10px] text-xs cursor-pointer btn-campus shadow-xs"
                               >
                                 Approve Claim
                               </button>
@@ -1036,7 +1049,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                   onRejectClaim(claim.id);
                                   showNotification(`Rejected claim.`);
                                 }}
-                                className="bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] text-[#9B1C1C] dark:text-[#F87171] border border-[#F87171]/40 font-medium px-3 py-1.5 rounded-[8px] text-xs cursor-pointer btn-campus"
+                                className="bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] text-[#9B1C1C] dark:text-[#F87171] border border-[#F87171]/40 font-medium px-3 py-1.5 rounded-[10px] text-xs cursor-pointer btn-campus"
                               >
                                 Reject
                               </button>
@@ -1067,13 +1080,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </button>
 
               <button
-                onClick={() => {
-                  if (confirm(`Permanently delete "${selectedItemForDetail.title}"?`)) {
-                    onDeleteItem(selectedItemForDetail.id);
-                    showNotification(`Removed item ${selectedItemForDetail.title}.`);
-                    setSelectedItemForDetail(null);
-                  }
-                }}
+                onClick={() => setPendingDelete(selectedItemForDetail)}
                 className="bg-white dark:bg-[#28241F] hover:bg-rose-50 dark:hover:bg-rose-950/20 text-[#9B1C1C] dark:text-[#F87171] border border-[#F87171]/40 font-medium px-4 py-2.5 rounded-[10px] text-xs flex items-center gap-2 cursor-pointer min-h-[44px] btn-campus"
               >
                 <Trash2 className="w-4 h-4" />

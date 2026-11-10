@@ -38,13 +38,13 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
         <div className="flex-1 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <span
-              className="text-[10px] font-sans font-medium px-2 py-0.5 rounded-[4px] border bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border-[#0F6E6E]/20"
+              className="text-xs font-sans font-medium px-2 py-0.5 rounded-[10px] border bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border-[#0F6E6E]/20"
             >
               {notification.type === 'admin_review' ? 'Admin Notice' : 'Campus Update'}
             </span>
             <button
               onClick={onDismiss}
-              className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] p-1 rounded-[6px] cursor-pointer"
+              className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] p-1 rounded-[10px] cursor-pointer"
               aria-label="Dismiss toast"
             >
               <X className="w-3.5 h-3.5" />
@@ -55,7 +55,7 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
             {notification.title}
           </h5>
 
-          <p className="text-[11px] text-[#544E45] dark:text-[#B8B0A2] line-clamp-2 leading-relaxed">
+          <p className="text-xs text-[#544E45] dark:text-[#B8B0A2] line-clamp-2 leading-relaxed">
             {notification.message}
           </p>
 
@@ -65,12 +65,12 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
                 onView(notification);
                 onDismiss();
               }}
-              className="text-[11px] font-medium text-[#0F6E6E] dark:text-[#199595] hover:underline inline-flex items-center gap-1 cursor-pointer"
+              className="text-xs font-medium text-[#0F6E6E] dark:text-[#199595] hover:underline inline-flex items-center gap-1 cursor-pointer"
             >
               <ExternalLink className="w-3 h-3" />
               <span>View details</span>
             </button>
-            <span className="text-[10px] text-[#7A7266] dark:text-[#857D71]">Just now</span>
+            <span className="text-xs text-[#7A7266] dark:text-[#857D71]">Just now</span>
           </div>
         </div>
       </div>

@@ -23,6 +23,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { CampusItem, ClaimRecord, User, CampusNotification } from '../types/index.ts';
+import { PROJECT_OWNER_UID } from '../config/admin.ts';
 
 const ITEMS_COLLECTION = 'items';
 const CLAIMS_COLLECTION = 'claims';
@@ -40,13 +41,12 @@ export interface UserRoleRecord {
 
 /**
  * Fetch role document from /roles/{uid}
- * Specifically designates ayomide2289@gmail.com as Administrator
+ * Specifically designates the project owner's UID as Administrator.
  */
 export async function fetchUserRole(uid: string): Promise<'admin' | 'security' | 'student'> {
   if (!uid) return 'student';
 
-  const currentEmail = auth.currentUser?.email?.trim().toLowerCase();
-  if (currentEmail === 'ayomide2289@gmail.com') {
+  if (auth.currentUser?.uid === PROJECT_OWNER_UID) {
     // Automatically guarantee admin role document exists in /roles/{uid}
     try {
       const roleRef = doc(db, ROLES_COLLECTION, uid);
@@ -54,14 +54,12 @@ export async function fetchUserRole(uid: string): Promise<'admin' | 'security' |
         roleRef,
         {
           role: 'admin',
-          email: 'ayomide2289@gmail.com',
-          name: 'Ayomide (Lead Admin)',
+          name: 'Project Owner',
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
       );
-    } catch (e) {
-      console.debug('Admin self-registration sync:', e);
+    } catch {
     }
     return 'admin';
   }
@@ -75,9 +73,8 @@ export async function fetchUserRole(uid: string): Promise<'admin' | 'security' |
         return data.role;
       }
     }
-  } catch (error) {
-    // Normal when non-admin student is signed in
-    console.debug('Role check:', error);
+  } catch {
+    // A missing or unreadable role record means the user remains a student.
   }
   return 'student';
 }
@@ -89,11 +86,10 @@ export async function assignUserRole(
   targetUid: string,
   targetEmail: string,
   newRole: 'admin' | 'security' | 'student',
-  assignedByEmail: string = 'ayomide2289@gmail.com'
+  assignedByEmail: string = 'owner@example.com'
 ): Promise<void> {
-  const currentEmail = auth.currentUser?.email?.trim().toLowerCase();
-  if (currentEmail !== 'ayomide2289@gmail.com') {
-    throw new Error('Unauthorized: Only ayomide2289@gmail.com is authorized to provision campus administrator and security roles.');
+  if (auth.currentUser?.uid !== PROJECT_OWNER_UID) {
+    throw new Error('Unauthorized: only the project owner can provision campus administrator and security roles.');
   }
 
   const path = `${ROLES_COLLECTION}/${targetUid}`;
@@ -130,8 +126,7 @@ export async function fetchAllRoles(): Promise<UserRoleRecord[]> {
         assignedBy: data.assignedBy,
       };
     });
-  } catch (error) {
-    console.warn('Could not fetch roles collection:', error);
+  } catch {
     return [];
   }
 }
@@ -145,7 +140,7 @@ export function subscribeToRealtimeItems(
   onError?: (err: Error) => void
 ): Unsubscribe {
   const itemsRef = collection(db, ITEMS_COLLECTION);
-  const q = query(itemsRef, orderBy('createdAt', 'desc'));
+  const q = query(itemsRef, orderBy('createdAt', 'desc'), limit(20));
 
   return onSnapshot(
     q,
@@ -282,8 +277,7 @@ export async function fetchItemPrivateDetails(itemId: string): Promise<ItemPriva
       result.authorName = d.authorName;
       result.authorEmail = d.authorEmail;
     }
-  } catch (err) {
-    console.debug('Could not fetch private details:', err);
+  } catch {
   }
 
   try {
@@ -292,8 +286,7 @@ export async function fetchItemPrivateDetails(itemId: string): Promise<ItemPriva
     if (secretSnap.exists()) {
       result.expectedAnswer = secretSnap.data().expectedAnswer;
     }
-  } catch (err) {
-    console.debug('Could not fetch secret verification:', err);
+  } catch {
   }
 
   return result;
@@ -425,7 +418,11 @@ export async function saveClaimToFirestore(
       createdAt: nowIso,
     });
     // Also mark the item as claim_requested
-    await updateItemStatusInFirestore(claim.itemId, 'claim_requested');
+    try {
+      await updateItemStatusInFirestore(claim.itemId, 'claim_requested');
+    } catch {
+      // The claim and its private details are already persisted; status is best effort.
+    }
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, CLAIMS_COLLECTION);
@@ -497,7 +494,7 @@ export function subscribeToRealtimeNotifications(
   }
 
   const notifsRef = collection(db, NOTIFICATIONS_COLLECTION);
-  const isMasterAdmin = currentUser.email?.trim().toLowerCase() === 'ayomide2289@gmail.com';
+  const isMasterAdmin = currentUser.id === PROJECT_OWNER_UID;
   const isAdmin = isMasterAdmin || currentUser.role === 'admin' || currentUser.isAdmin;
 
   // Single onSnapshot listener limited to latest 20 items (free-tier constraint)
@@ -528,7 +525,6 @@ export function subscribeToRealtimeNotifications(
     },
     (error) => {
       if (onError) onError(error);
-      console.warn('Real-time notifications sync error:', error);
     }
   );
 }
@@ -556,12 +552,21 @@ export async function saveNotificationToFirestore(
   const currentUid = auth.currentUser.uid;
   const nowIso = notification.createdAt || new Date().toISOString();
 
+  const templates: Record<CampusNotification['type'], { title: string; message: string }> = {
+    claim_received: { title: 'New claim on your item', message: 'A new ownership claim was filed for your item.' },
+    claim_approved: { title: 'Claim approved', message: 'Your ownership claim was approved.' },
+    claim_rejected: { title: 'Claim rejected', message: 'Your ownership claim was rejected.' },
+    match_alert: { title: 'Possible item match', message: 'A possible match was found for your report.' },
+    item_returned: { title: 'Item returned', message: 'Your reported item was marked returned.' },
+    admin_review: { title: 'Review needed', message: 'A campus record needs administrator review.' },
+  };
+  const template = templates[notification.type];
   const payload: Record<string, any> = {
     recipientUid: notification.recipientUid.slice(0, 128),
     fromUid: currentUid.slice(0, 128),
     type: notification.type,
-    title: notification.title.trim().slice(0, 120),
-    message: notification.message.trim().slice(0, 500),
+    title: template.title,
+    message: template.message,
     read: false,
     createdAt: nowIso.slice(0, 50),
   };
@@ -576,8 +581,7 @@ export async function saveNotificationToFirestore(
   try {
     const docRef = await addDoc(collection(db, NOTIFICATIONS_COLLECTION), payload);
     return docRef.id;
-  } catch (error) {
-    console.warn('Error saving notification to Firestore:', error);
+  } catch {
     throw new Error('Could not save notification. Please try again.');
   }
 }
@@ -593,7 +597,6 @@ export async function markNotificationAsReadInFirestore(notificationId: string):
   try {
     const docRef = doc(db, NOTIFICATIONS_COLLECTION, notificationId);
     await updateDoc(docRef, { read: true });
-  } catch (error) {
-    console.debug('Error marking notification as read in Firestore:', error);
+  } catch {
   }
 }

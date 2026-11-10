@@ -28,6 +28,7 @@ export const ResearchKitView: React.FC = () => {
   // Interactive survey runner
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [submittedCount, setSubmittedCount] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const handleCopySurvey = () => {
     const text = `📋 NILE UNIVERSITY LOST & FOUND - STAGE 1 STUDENT SURVEY\n` +
@@ -58,7 +59,7 @@ export const ResearchKitView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Mentor Header Callout */}
-      <div className="bg-emerald-900 text-white rounded-xl p-5 border border-emerald-800 shadow-sm space-y-2">
+      <div className="bg-emerald-900 text-white rounded-[20px] p-5 border border-emerald-800 shadow-sm space-y-2">
         <div className="flex items-center gap-2 text-amber-300 font-bold text-xs uppercase tracking-wider">
           <BookOpen className="w-4 h-4" />
           <span>Stage 1 Field Research Deliverables (Define & Research)</span>
@@ -123,7 +124,7 @@ export const ResearchKitView: React.FC = () => {
       {/* Tab 1: Student Survey */}
       {activeTab === 'student_survey' && (
         <div className="space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-stone-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-[20px] border border-stone-200">
             <div>
               <h3 className="font-bold text-stone-900 text-sm">Student Survey Questionnaire (5 Questions, &lt; 2 mins)</h3>
               <p className="text-xs text-stone-500 mt-0.5">
@@ -132,7 +133,7 @@ export const ResearchKitView: React.FC = () => {
             </div>
             <button
               onClick={handleCopySurvey}
-              className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg text-xs font-semibold shadow-xs transition-colors shrink-0"
+              className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-[12px] text-xs font-semibold shadow-xs transition-colors shrink-0"
             >
               {copiedSurvey ? (
                 <>
@@ -149,7 +150,7 @@ export const ResearchKitView: React.FC = () => {
           </div>
 
           {/* Interactive Survey Simulation */}
-          <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-6">
+          <div className="bg-white rounded-[20px] border border-stone-200 p-5 space-y-6">
             <div className="flex items-center justify-between border-b border-stone-100 pb-3">
               <span className="text-xs font-bold text-stone-700 uppercase tracking-wider">
                 Live Interactive Survey Runner
@@ -168,7 +169,7 @@ export const ResearchKitView: React.FC = () => {
                     </span>
                     <div>
                       <h4 className="text-xs font-bold text-stone-900 leading-snug">{q.question}</h4>
-                      <span className="text-[10px] text-stone-400 uppercase tracking-wider">
+                      <span className="text-xs text-stone-400 uppercase tracking-wider">
                         {q.category.replace('_', ' ')} • {q.type === 'multi' ? 'Multiple choice' : 'Single select'}
                       </span>
                     </div>
@@ -195,7 +196,7 @@ export const ResearchKitView: React.FC = () => {
                               setAnswers({ ...answers, [q.id]: opt });
                             }
                           }}
-                          className={`w-full text-left text-xs p-2 rounded-lg border transition-all flex items-center justify-between ${
+                          className={`w-full text-left text-xs p-2 rounded-[12px] border transition-all flex items-center justify-between ${
                             isSelected
                               ? 'bg-emerald-50 border-emerald-500 text-emerald-950 font-medium'
                               : 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
@@ -216,13 +217,14 @@ export const ResearchKitView: React.FC = () => {
                   onClick={() => {
                     setSubmittedCount(prev => prev + 1);
                     setAnswers({});
-                    alert('Sample survey response logged! Notice how quick this 5-question format is for mobile students.');
+                    setNotice('Sample survey response logged.');
                   }}
-                  className="bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold px-4 py-2 rounded-lg"
+                  className="bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold px-4 py-2 rounded-[12px]"
                 >
                   Record Another Test Response
                 </button>
               </div>
+              {notice && <p role="status" className="text-xs text-emerald-700">{notice}</p>}
             </div>
           </div>
         </div>
@@ -231,7 +233,7 @@ export const ResearchKitView: React.FC = () => {
       {/* Tab 2: Security & Student Affairs Interview Guide */}
       {activeTab === 'security_script' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-stone-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-[20px] border border-stone-200">
             <div>
               <h3 className="font-bold text-stone-900 text-sm">Security & Administrative Discovery Guide</h3>
               <p className="text-xs text-stone-500 mt-0.5">
@@ -240,7 +242,7 @@ export const ResearchKitView: React.FC = () => {
             </div>
             <button
               onClick={handleCopySecurity}
-              className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg text-xs font-semibold shadow-xs transition-colors shrink-0"
+              className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-[12px] text-xs font-semibold shadow-xs transition-colors shrink-0"
             >
               {copiedSecurity ? (
                 <>
@@ -258,9 +260,9 @@ export const ResearchKitView: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {SECURITY_INTERVIEW_GUIDE.map((guide, idx) => (
-              <div key={idx} className="bg-white rounded-xl border border-stone-200 p-5 space-y-4">
+              <div key={idx} className="bg-white rounded-[20px] border border-stone-200 p-5 space-y-4">
                 <div className="border-b border-stone-100 pb-2">
-                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Stakeholder {idx + 1}</span>
+                  <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Stakeholder {idx + 1}</span>
                   <h4 className="font-bold text-stone-900 text-sm mt-0.5">{guide.role}</h4>
                 </div>
 
@@ -269,16 +271,16 @@ export const ResearchKitView: React.FC = () => {
                   <ul className="space-y-2 text-xs text-stone-600">
                     {guide.keyQuestions.map((q, qIdx) => (
                       <li key={qIdx} className="flex items-start gap-2 bg-stone-50 p-2 rounded border border-stone-100">
-                        <span className="font-bold text-emerald-700 text-[11px] mt-0.5">{qIdx + 1}.</span>
+                        <span className="font-bold text-emerald-700 text-xs mt-0.5">{qIdx + 1}.</span>
                         <span>{q}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-950">
-                  <span className="font-bold block text-amber-900 text-[11px]">Primary Risk to Validate:</span>
-                  <p className="mt-0.5 text-[11px] leading-relaxed">{guide.riskToValidate}</p>
+                <div className="bg-amber-50 border border-amber-200 rounded-[12px] p-3 text-xs text-amber-950">
+                  <span className="font-bold block text-amber-900 text-xs">Primary Risk to Validate:</span>
+                  <p className="mt-0.5 text-xs leading-relaxed">{guide.riskToValidate}</p>
                 </div>
               </div>
             ))}
@@ -288,7 +290,7 @@ export const ResearchKitView: React.FC = () => {
 
       {/* Tab 3: Assumptions vs Reality */}
       {activeTab === 'unknowns_matrix' && (
-        <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-4">
+        <div className="bg-white rounded-[20px] border border-stone-200 p-5 space-y-4">
           <div className="border-b border-stone-100 pb-3">
             <h3 className="font-bold text-stone-900 text-sm">Ayomide's Unknowns & Reality Validation Tracker</h3>
             <p className="text-xs text-stone-500 mt-0.5">
@@ -318,7 +320,7 @@ export const ResearchKitView: React.FC = () => {
                     If freshers don't have it yet, strict email domain gating locks out 100L students who lose the most items!
                   </td>
                   <td className="py-3 px-3">
-                    <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">Needs Check</span>
+                    <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-xs font-bold">Needs Check</span>
                   </td>
                 </tr>
                 <tr>
@@ -332,7 +334,7 @@ export const ResearchKitView: React.FC = () => {
                     If items are kept in an open cardboard box or handed over shift-to-shift without records, items risk going missing.
                   </td>
                   <td className="py-3 px-3">
-                    <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">Needs Check</span>
+                    <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-xs font-bold">Needs Check</span>
                   </td>
                 </tr>
                 <tr>
@@ -346,7 +348,7 @@ export const ResearchKitView: React.FC = () => {
                     Must support dual custody: "I am keeping it safe" vs "Dropped at security".
                   </td>
                   <td className="py-3 px-3">
-                    <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">Validated</span>
+                    <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-xs font-bold">Validated</span>
                   </td>
                 </tr>
                 <tr>
@@ -360,7 +362,7 @@ export const ResearchKitView: React.FC = () => {
                     Zero official database integration needed for v1. Zero dependency on IT staff.
                   </td>
                   <td className="py-3 px-3">
-                    <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">Resolved (Autonomous)</span>
+                    <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-xs font-bold">Resolved (Autonomous)</span>
                   </td>
                 </tr>
               </tbody>
@@ -371,7 +373,7 @@ export const ResearchKitView: React.FC = () => {
 
       {/* Tab 4: STRIDE AppSec Threat Model */}
       {activeTab === 'stride_threats' && (
-        <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-5">
+        <div className="bg-white rounded-[20px] border border-stone-200 p-5 space-y-5">
           <div className="border-b border-stone-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <div className="flex items-center gap-2">
@@ -382,20 +384,20 @@ export const ResearchKitView: React.FC = () => {
                 Application security analysis grounded in OWASP Top 10, ASVS, and the Nigeria Data Protection Act 2023.
               </p>
             </div>
-            <span className="text-[11px] font-mono bg-stone-100 text-stone-700 px-2.5 py-1 rounded-md font-semibold border border-stone-200 self-start sm:self-auto">
+            <span className="text-xs font-mono bg-stone-100 text-stone-700 px-2.5 py-1 rounded-[10px] font-semibold border border-stone-200 self-start sm:self-auto">
               DevSecOps Audit
             </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {NILEFOUND_STRIDE_THREATS.map((t, idx) => (
-              <div key={idx} className="bg-stone-50 border border-stone-200 rounded-xl p-4 space-y-3 flex flex-col justify-between">
+              <div key={idx} className="bg-stone-50 border border-stone-200 rounded-[20px] p-4 space-y-3 flex flex-col justify-between">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-bold text-xs text-stone-900 bg-white px-2 py-0.5 rounded border border-stone-200">
                       {t.category}
                     </span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded uppercase ${
+                    <span className={`text-xs font-bold px-1.5 py-0.2 rounded uppercase ${
                       t.impactLevel === 'CRITICAL'
                         ? 'bg-rose-100 text-rose-800 border border-rose-200'
                         : 'bg-amber-100 text-amber-800 border border-amber-200'
@@ -408,20 +410,20 @@ export const ResearchKitView: React.FC = () => {
                     {t.threatDescription}
                   </p>
 
-                  <div className="text-[11px] text-stone-600 bg-white p-2.5 rounded-lg border border-stone-200 space-y-1">
+                  <div className="text-xs text-stone-600 bg-white p-2.5 rounded-[12px] border border-stone-200 space-y-1">
                     <strong className="text-stone-700 block">Campus Real-World Scenario:</strong>
                     <p className="italic text-stone-600 leading-relaxed">{t.campusContext}</p>
                   </div>
                 </div>
 
                 <div className="pt-2 border-t border-stone-200/80 space-y-1">
-                  <strong className="text-[11px] text-emerald-900 block font-bold">
+                  <strong className="text-xs text-emerald-900 block font-bold">
                     Technical Defense & Countermeasure:
                   </strong>
-                  <p className="text-[11px] text-emerald-800 leading-relaxed font-medium">
+                  <p className="text-xs text-emerald-800 leading-relaxed font-medium">
                     {t.technicalCountermeasure}
                   </p>
-                  <span className="text-[10px] text-stone-400 font-mono block pt-0.5">
+                  <span className="text-xs text-stone-400 font-mono block pt-0.5">
                     Ref: {t.owaspReference}
                   </span>
                 </div>

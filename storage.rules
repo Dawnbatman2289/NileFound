@@ -8,13 +8,13 @@ service firebase.storage {
         && request.auth.token.email is string
         && (
           request.auth.token.email.matches('^[^@]+@nileuniversity\\.edu\\.ng$')
-          || request.auth.token.email == 'ayomide2289@gmail.com'
+          || request.auth.uid == 'nFdIhTjOOqMqMG4y1KIT550Qf5m1'
         );
     }
 
     function isMasterAdmin() {
       return isVerifiedNileUser()
-        && request.auth.uid == 'PASTE_YOUR_UID';
+        && request.auth.uid == 'nFdIhTjOOqMqMG4y1KIT550Qf5m1';
     }
 
     // Default Deny: Block all unmatched paths

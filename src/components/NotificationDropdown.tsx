@@ -118,11 +118,11 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         <div className="flex items-center gap-2">
           <h3 className="font-serif font-bold text-sm text-[#1F1B16] dark:text-[#F5F1EA]">Notifications</h3>
           {unreadCount > 0 ? (
-            <span className="bg-[#E8A317] text-[#1F1B16] text-[10px] font-bold font-sans px-2 py-0.5 rounded-full">
+            <span className="bg-[#E8A317] text-[#1F1B16] text-xs font-bold font-sans px-2 py-0.5 rounded-full">
               {unreadCount} unread
             </span>
           ) : (
-            <span className="text-[11px] text-[#7A7266] dark:text-[#857D71]">All caught up</span>
+            <span className="text-xs text-[#7A7266] dark:text-[#857D71]">All caught up</span>
           )}
         </div>
 
@@ -130,7 +130,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
           {unreadCount > 0 && (
             <button
               onClick={onMarkAllAsRead}
-              className="text-[11px] text-[#0F6E6E] dark:text-[#199595] hover:underline font-medium flex items-center gap-1 cursor-pointer"
+              className="text-xs text-[#0F6E6E] dark:text-[#199595] hover:underline font-medium flex items-center gap-1 cursor-pointer"
               title="Mark all as read"
             >
               <CheckCheck className="w-3.5 h-3.5" />
@@ -139,7 +139,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
           )}
           <button
             onClick={onClose}
-            className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] p-1 rounded-[6px] cursor-pointer"
+            className="text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] p-1 rounded-[10px] cursor-pointer"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -157,7 +157,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
             </div>
             <div className="space-y-1">
               <p className="text-xs font-bold text-[#1F1B16] dark:text-[#F5F1EA]">Nothing here yet</p>
-              <p className="text-[11px] text-[#544E45] dark:text-[#B8B0A2] max-w-xs mx-auto leading-relaxed">
+              <p className="text-xs text-[#544E45] dark:text-[#B8B0A2] max-w-xs mx-auto leading-relaxed">
                 Lost something? Report it. When someone claims your item or a match is found, it will appear here.
               </p>
             </div>
@@ -194,13 +194,13 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <span
-                      className={`text-[9px] font-sans font-bold uppercase px-1.5 py-0.5 rounded-[4px] border ${getTypeBadgeStyle(
+                      className={`text-xs font-sans font-bold uppercase px-1.5 py-0.5 rounded-[10px] border ${getTypeBadgeStyle(
                         notif.type
                       )}`}
                     >
                       {getTypeLabel(notif.type)}
                     </span>
-                    <span className="text-[10px] text-[#7A7266] dark:text-[#857D71] font-sans shrink-0">
+                    <span className="text-xs text-[#7A7266] dark:text-[#857D71] font-sans shrink-0">
                       {formatRelativeTime(notif.createdAt)}
                     </span>
                   </div>
@@ -213,7 +213,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                     {notif.title}
                   </h4>
 
-                  <p className="text-[11px] text-[#7A7266] dark:text-[#857D71] line-clamp-2 leading-relaxed [overflow-wrap:anywhere]">
+                  <p className="text-xs text-[#7A7266] dark:text-[#857D71] line-clamp-2 leading-relaxed [overflow-wrap:anywhere]">
                     {notif.message}
                   </p>
                 </div>
@@ -224,7 +224,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="bg-[#FAF6EF] dark:bg-[#141311] px-4 py-2 text-center text-[10px] text-[#7A7266] dark:text-[#857D71] border-t border-[#E6DFD2] dark:border-[#2E2A24]">
+      <div className="bg-[#FAF6EF] dark:bg-[#141311] px-4 py-2 text-center text-xs text-[#7A7266] dark:text-[#857D71] border-t border-[#E6DFD2] dark:border-[#2E2A24]">
         Nile University Campus Lost & Found System
       </div>
     </div>
