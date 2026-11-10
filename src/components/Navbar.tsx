@@ -18,7 +18,8 @@ import {
   User as UserIcon,
   Bell,
   Sun,
-  Moon
+  Moon,
+  LogOut
 } from 'lucide-react';
 import { User, CampusNotification } from '../types/index.ts';
 import { NotificationDropdown } from './NotificationDropdown.tsx';
@@ -43,6 +44,7 @@ interface NavbarProps {
   onSelectNotificationItem?: (itemId?: string, type?: string) => void;
   isDarkMode?: boolean;
   onToggleDarkMode?: () => void;
+  onLogout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -63,6 +65,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectNotificationItem,
   isDarkMode = false,
   onToggleDarkMode,
+  onLogout,
 }) => {
   const [isNotifOpen, setIsNotifOpen] = React.useState(false);
   const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin;
@@ -167,23 +170,37 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          {/* Account Login Button */}
+          {/* Account Login / User Profile & Logout Button */}
           {currentUser ? (
-            <button
-              onClick={() => setActiveTab('login')}
-              className="flex items-center gap-2 bg-white dark:bg-[#1E1C18] hover:bg-[#F5EFE4] dark:hover:bg-[#28241F] text-[#1F1B16] dark:text-[#F5F1EA] px-3 py-2 rounded-[10px] text-xs font-medium border border-[#E6DFD2] dark:border-[#2E2A24] transition-colors min-h-[44px] cursor-pointer btn-campus"
-              title="Account Settings"
-            >
-              <div className="w-6 h-6 rounded-full bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] font-bold flex items-center justify-center text-xs border border-[#0F6E6E]/20">
-                {currentUser.name.charAt(0)}
-              </div>
-              <span className="max-w-[100px] truncate hidden sm:inline">{currentUser.name}</span>
-              {isAdmin && (
-                <span className="bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] text-xs font-bold px-1.5 py-0.5 rounded-[10px] border border-[#0F6E6E]/30">
-                  <span className="hidden sm:inline">Admin</span>
-                </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setActiveTab(canAccessAdmin ? 'admin' : 'feed')}
+                className="flex items-center gap-2 bg-white dark:bg-[#1E1C18] hover:bg-[#F5EFE4] dark:hover:bg-[#28241F] text-[#1F1B16] dark:text-[#F5F1EA] px-3 py-2 rounded-[10px] text-xs font-medium border border-[#E6DFD2] dark:border-[#2E2A24] transition-colors min-h-[44px] cursor-pointer btn-campus"
+                title={canAccessAdmin ? 'Open Admin Control Center' : 'Signed in account'}
+              >
+                <div className="w-6 h-6 rounded-full bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] font-bold flex items-center justify-center text-xs border border-[#0F6E6E]/20">
+                  {currentUser.name.charAt(0)}
+                </div>
+                <span className="max-w-[100px] truncate hidden sm:inline">{currentUser.name}</span>
+                {isAdmin && (
+                  <span className="bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] text-xs font-bold px-1.5 py-0.5 rounded-[10px] border border-[#0F6E6E]/30">
+                    <span className="hidden sm:inline">Admin</span>
+                  </span>
+                )}
+              </button>
+
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="flex items-center gap-1.5 bg-white dark:bg-[#1E1C18] hover:bg-[#FDF2F2] dark:hover:bg-[#2B0E0E] text-[#544E45] hover:text-[#9B1C1C] dark:text-[#B8B0A2] dark:hover:text-[#F87171] px-2.5 sm:px-3 py-2 rounded-[10px] text-xs font-medium border border-[#E6DFD2] dark:border-[#2E2A24] hover:border-[#F87171]/40 transition-colors min-h-[44px] cursor-pointer btn-campus"
+                  title="Sign out of your account"
+                  aria-label="Log Out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Log Out</span>
+                </button>
               )}
-            </button>
+            </div>
           ) : (
             <button
               onClick={() => setActiveTab('login')}
