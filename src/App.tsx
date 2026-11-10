@@ -717,6 +717,20 @@ export default function App() {
 
   const isPrivileged = currentUser?.role === 'admin' || currentUser?.isAdmin || currentUser?.role === 'security';
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch {
+      // Ignore if offline
+    }
+    setIsSimulating(false);
+    setIsDemoMode(false);
+    localStorage.removeItem('nilefound_user_v1');
+    localStorage.removeItem('nilefound_admin_simulating');
+    setCurrentUser(null);
+    setActiveTab('feed');
+  };
+
   return (
     <div className="min-h-screen bg-[var(--color-paper)] text-[var(--color-ink)] flex flex-col font-sans selection:bg-[#0F6E6E] selection:text-white transition-colors duration-150">
       {/* Top App Bar & Navigation */}
@@ -738,6 +752,7 @@ export default function App() {
         onSelectNotificationItem={handleSelectNotificationItem}
         isDarkMode={isDarkMode}
         onToggleDarkMode={() => setIsDarkMode((prev) => !prev)}
+        onLogout={handleLogout}
       />
 
       {/* Simulation Banner: visible only during an owner-controlled simulation. */}
@@ -832,14 +847,7 @@ export default function App() {
                   }
                 }
               }}
-              onLogout={() => {
-                setIsSimulating(false);
-                setIsDemoMode(false);
-                localStorage.removeItem('nilefound_user_v1');
-                localStorage.removeItem('nilefound_admin_simulating');
-                setCurrentUser(null);
-                setActiveTab('login');
-              }}
+              onLogout={handleLogout}
               onNavigateToFeed={() => setActiveTab('feed')}
               isDemoMode={isDemoMode}
             />
