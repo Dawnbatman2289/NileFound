@@ -142,6 +142,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       const result = await compressImageFile(file, 800, 0.7);
       setCompressionResult(result);
     } catch {
+      setPiiError('We could not compress that image. Please try a smaller JPEG, PNG, or WebP file.');
     } finally {
       setIsCompressing(false);
     }

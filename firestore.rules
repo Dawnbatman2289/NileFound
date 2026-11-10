@@ -44,7 +44,10 @@ service cloud.firestore {
 
     // Master Admin check (Sole user permitted to provision admin and security roles)
     function isMasterAdmin() {
-      return isConfiguredAdmin();
+      return isSignedIn()
+        && request.auth.token.keys().hasAll(['email_verified'])
+        && request.auth.token.email_verified == true
+        && isConfiguredAdmin();
     }
 
     // Check roles document in /roles/{uid}
