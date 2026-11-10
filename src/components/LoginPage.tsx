@@ -27,9 +27,8 @@ import {
   signOut,
   updateProfile,
 } from 'firebase/auth';
-import { fetchUserRole } from '../services/firestoreService.ts';
+import { fetchUserRole, isConfiguredAdmin } from '../services/firestoreService.ts';
 import { validateFullName, validateNileEmail, validatePassword } from '../utils/authValidation.ts';
-import { PROJECT_OWNER_UID } from '../config/admin.ts';
 
 interface LoginPageProps {
   currentUser: User | null;
@@ -64,7 +63,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     getRedirectResult(auth).then(async (result) => {
       if (!active || !result?.user) return;
       const email = result.user.email?.toLowerCase() || '';
-      if (result.user.uid !== PROJECT_OWNER_UID && !validateNileEmail(email)) {
+      if (!(await isConfiguredAdmin(result.user.uid)) && !validateNileEmail(email)) {
         await signOut(auth);
         setErrorMessage('Please use your @nileuniversity.edu.ng email.');
         return;
@@ -111,15 +110,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const userFromFirebase = async (fbUser: import('firebase/auth').User): Promise<User> => {
     const userEmail = (fbUser.email || '').trim().toLowerCase();
     const assignedRole = await fetchUserRole(fbUser.uid);
-    const isOwner = fbUser.uid === PROJECT_OWNER_UID;
-    const role: UserRole = isOwner ? 'admin' : assignedRole;
+    const role: UserRole = assignedRole;
     return {
       id: fbUser.uid,
-      name: isOwner ? 'Project Owner' : (fbUser.displayName || userEmail.split('@')[0] || 'Campus User').split(' ')[0],
+      name: (fbUser.displayName || userEmail.split('@')[0] || 'Campus User').split(' ')[0],
       email: userEmail,
       role,
       isAdmin: role === 'admin',
-      department: isOwner ? 'Project Owner & University Administration' : 'Nile University Member',
+      department: role === 'admin' ? 'University Administration' : 'Nile University Member',
     };
   };
 
@@ -194,7 +192,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     try {
       const result = await signInWithPopup(auth, provider);
       const email = result.user.email?.toLowerCase() || '';
-      if (result.user.uid !== PROJECT_OWNER_UID && !validateNileEmail(email)) {
+      if (!(await isConfiguredAdmin(result.user.uid)) && !validateNileEmail(email)) {
         await signOut(auth);
         setErrorMessage('Please use your @nileuniversity.edu.ng email.');
         return;

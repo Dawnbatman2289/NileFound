@@ -28,7 +28,6 @@ import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
 import { calculateMatchScore } from '../utils/matching.ts';
 import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
 import { filterCampusItems } from '../utils/feedFilters.ts';
-import { PROJECT_OWNER_UID } from '../config/admin.ts';
 
 interface FeedViewProps {
   items: CampusItem[];
@@ -38,6 +37,9 @@ interface FeedViewProps {
   currentUser?: User | null;
   isDemoMode?: boolean;
   onNavigateToLogin?: () => void;
+  onLoadMore?: () => void;
+  hasMoreItems?: boolean;
+  isLoadingMoreItems?: boolean;
 }
 
 export const FeedView: React.FC<FeedViewProps> = ({
@@ -47,7 +49,10 @@ export const FeedView: React.FC<FeedViewProps> = ({
   onOpenReportModal,
   currentUser,
   isDemoMode,
-  onNavigateToLogin
+  onNavigateToLogin,
+  onLoadMore,
+  hasMoreItems = false,
+  isLoadingMoreItems = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<'all' | ItemType>('all');
@@ -85,8 +90,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
     }));
   }, [selectedCategory, selectedLocation, selectedType]);
 
-  const isOwner = currentUser?.id === PROJECT_OWNER_UID;
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwner;
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin;
 
   // Combine real items from Firestore with verified sample items so feed is never bare
   const displayableItems = useMemo(() => {
@@ -501,6 +505,18 @@ export const FeedView: React.FC<FeedViewProps> = ({
                 </motion.article>
               );
             })}
+          </div>
+        )}
+        {onLoadMore && hasMoreItems && filteredItems.length > 0 && (
+          <div className="flex justify-center pt-5">
+            <button
+              type="button"
+              onClick={onLoadMore}
+              disabled={isLoadingMoreItems}
+              className="min-h-[44px] rounded-[10px] border border-[#E6DFD2] px-5 text-xs font-medium text-[#1F1B16] disabled:opacity-60"
+            >
+              {isLoadingMoreItems ? 'Loading more…' : 'Load more'}
+            </button>
           </div>
         )}
       </div>

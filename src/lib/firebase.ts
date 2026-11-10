@@ -7,16 +7,35 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signOut } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// CRITICAL: Must pass custom firestoreDatabaseId if configured
-export const db =
-  firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId.length > 0
+const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY;
+if (appCheckSiteKey) {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(appCheckSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
+
+let firestore: ReturnType<typeof getFirestore>;
+try {
+  const localCache = persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  });
+  firestore = firebaseConfig.firestoreDatabaseId
+    ? initializeFirestore(app, { localCache }, firebaseConfig.firestoreDatabaseId)
+    : initializeFirestore(app, { localCache });
+} catch {
+  firestore = firebaseConfig.firestoreDatabaseId
     ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
     : getFirestore(app);
+}
+
+export const db = firestore;
 
 export const auth = getAuth(app);
 

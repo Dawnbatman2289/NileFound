@@ -141,7 +141,7 @@
       const search = document.getElementById('search-input').value.toLowerCase();
       const loc = document.getElementById('location-filter').value;
       const container = document.getElementById('feed-container');
-      container.innerHTML = '';
+      container.replaceChildren();
 
       const filtered = data.filter(item => 
         (item.title.toLowerCase().includes(search) || item.desc.toLowerCase().includes(search)) &&
@@ -149,22 +149,40 @@
       );
 
       if (filtered.length === 0) {
-        container.innerHTML = `<p class="text-xs text-center text-slate-400 py-6">No matching lost or found records on campus.</p>`;
+        const empty = document.createElement('p');
+        empty.className = 'text-xs text-center text-slate-400 py-6';
+        empty.textContent = 'No matching lost or found records on campus.';
+        container.appendChild(empty);
         return;
       }
 
       filtered.forEach(item => {
         const card = document.createElement('div');
         card.className = "bg-white p-3 rounded shadow-sm border border-slate-100 space-y-2";
-        card.innerHTML = `
-          <div class="flex justify-between items-start">
-            <span class="text-[10px] font-bold px-2 py-0.5 rounded ${item.type === 'LOST' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}">${item.type}</span>
-            <span class="text-[10px] text-slate-400">${item.location}</span>
-          </div>
-          <h3 class="text-sm font-bold ${item.sensitive ? 'blur-[2px] select-none' : ''}">${item.title}</h3>
-          <p class="text-xs text-slate-600">${item.desc}</p>
-          ${item.type === 'FOUND' ? `<button onclick="promptClaim('${item.id}')" class="w-full mt-2 bg-slate-800 text-white text-xs py-1.5 rounded hover:bg-slate-900">Claim This Item</button>` : ''}
-        `;
+        const header = document.createElement('div');
+        header.className = 'flex justify-between items-start';
+        const type = document.createElement('span');
+        type.className = `text-[10px] font-bold px-2 py-0.5 rounded ${item.type === 'LOST' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`;
+        type.textContent = item.type;
+        const location = document.createElement('span');
+        location.className = 'text-[10px] text-slate-400';
+        location.textContent = item.location;
+        header.append(type, location);
+        const title = document.createElement('h3');
+        title.className = `text-sm font-bold ${item.sensitive ? 'blur-[2px] select-none' : ''}`;
+        title.textContent = item.title;
+        const description = document.createElement('p');
+        description.className = 'text-xs text-slate-600';
+        description.textContent = item.desc;
+        card.appendChild(header);
+        card.append(title, description);
+        if (item.type === 'FOUND') {
+          const claimButton = document.createElement('button');
+          claimButton.className = 'w-full mt-2 bg-slate-800 text-white text-xs py-1.5 rounded hover:bg-slate-900';
+          claimButton.textContent = 'Claim This Item';
+          claimButton.addEventListener('click', () => promptClaim(item.id));
+          card.appendChild(claimButton);
+        }
         container.appendChild(card);
       });
     }
@@ -181,17 +199,24 @@
       document.getElementById('stat-total').innerText = data.length;
       document.getElementById('stat-pending').innerText = data.filter(i => i.status === 'CLAIM_PENDING').length;
       const list = document.getElementById('admin-items-list');
-      list.innerHTML = '';
+      list.replaceChildren();
       data.forEach(i => {
-        list.innerHTML += `
-          <div class="p-2 border rounded flex justify-between items-center">
-            <div>
-              <p class="font-bold">${i.title} (${i.type})</p>
-              <p class="text-[10px] text-slate-400">${i.location} | Hidden: ${i.verification || 'None'}</p>
-            </div>
-            <button onclick="deleteItem('${i.id}')" class="text-red-600 hover:underline">Purge</button>
-          </div>
-        `;
+        const row = document.createElement('div');
+        row.className = 'p-2 border rounded flex justify-between items-center';
+        const details = document.createElement('div');
+        const title = document.createElement('p');
+        title.className = 'font-bold';
+        title.textContent = `${i.title} (${i.type})`;
+        const verification = document.createElement('p');
+        verification.className = 'text-[10px] text-slate-400';
+        verification.textContent = `${i.location} | Hidden: ${i.verification || 'None'}`;
+        details.append(title, verification);
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'text-red-600 hover:underline';
+        deleteButton.textContent = 'Purge';
+        deleteButton.addEventListener('click', () => deleteItem(i.id));
+        row.append(details, deleteButton);
+        list.appendChild(row);
       });
     }
 

@@ -18,12 +18,14 @@ import {
   orderBy,
   where,
   limit,
+  startAfter,
   getDocs,
+  QueryDocumentSnapshot,
+  DocumentData,
   Unsubscribe,
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { CampusItem, ClaimRecord, User, CampusNotification } from '../types/index.ts';
-import { PROJECT_OWNER_UID } from '../config/admin.ts';
 
 const ITEMS_COLLECTION = 'items';
 const CLAIMS_COLLECTION = 'claims';
@@ -41,28 +43,9 @@ export interface UserRoleRecord {
 
 /**
  * Fetch role document from /roles/{uid}
- * Specifically designates the project owner's UID as Administrator.
  */
 export async function fetchUserRole(uid: string): Promise<'admin' | 'security' | 'student'> {
   if (!uid) return 'student';
-
-  if (auth.currentUser?.uid === PROJECT_OWNER_UID) {
-    // Automatically guarantee admin role document exists in /roles/{uid}
-    try {
-      const roleRef = doc(db, ROLES_COLLECTION, uid);
-      await setDoc(
-        roleRef,
-        {
-          role: 'admin',
-          name: 'Project Owner',
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
-    } catch {
-    }
-    return 'admin';
-  }
 
   try {
     const roleDocRef = doc(db, ROLES_COLLECTION, uid);
@@ -88,8 +71,8 @@ export async function assignUserRole(
   newRole: 'admin' | 'security' | 'student',
   assignedByEmail: string = 'owner@example.com'
 ): Promise<void> {
-  if (auth.currentUser?.uid !== PROJECT_OWNER_UID) {
-    throw new Error('Unauthorized: only the project owner can provision campus administrator and security roles.');
+  if (!auth.currentUser || (await fetchUserRole(auth.currentUser.uid)) !== 'admin') {
+    throw new Error('Unauthorized: only an administrator can provision campus roles.');
   }
 
   const path = `${ROLES_COLLECTION}/${targetUid}`;
@@ -113,10 +96,18 @@ export async function assignUserRole(
 /**
  * Fetch all role records from /roles (Admin only)
  */
-export async function fetchAllRoles(): Promise<UserRoleRecord[]> {
+export async function fetchRolesPage(
+  cursor?: QueryDocumentSnapshot<DocumentData>
+): Promise<{ records: UserRoleRecord[]; nextCursor?: QueryDocumentSnapshot<DocumentData> }> {
   try {
-    const snap = await getDocs(collection(db, ROLES_COLLECTION));
-    return snap.docs.map((d) => {
+    const rolesQuery = query(
+      collection(db, ROLES_COLLECTION),
+      orderBy('__name__'),
+      limit(50),
+      ...(cursor ? [startAfter(cursor)] : [])
+    );
+    const snap = await getDocs(rolesQuery);
+    const records = snap.docs.map((d) => {
       const data = d.data();
       return {
         uid: d.id,
@@ -126,8 +117,68 @@ export async function fetchAllRoles(): Promise<UserRoleRecord[]> {
         assignedBy: data.assignedBy,
       };
     });
+    return { records, nextCursor: snap.docs.at(-1) };
   } catch {
-    return [];
+    return { records: [] };
+  }
+}
+
+export async function fetchAllRoles(): Promise<UserRoleRecord[]> {
+  const { records } = await fetchRolesPage();
+  return records;
+}
+
+export async function isConfiguredAdmin(uid: string): Promise<boolean> {
+  if (!uid) return false;
+  try {
+    const snapshot = await getDoc(doc(db, 'config', 'admins', uid));
+    return snapshot.exists() && snapshot.data().enabled === true;
+  } catch {
+    return false;
+  }
+}
+
+export interface ItemPage {
+  items: CampusItem[];
+  nextCursor?: QueryDocumentSnapshot<DocumentData>;
+}
+
+export async function fetchItemsPage(
+  cursor?: QueryDocumentSnapshot<DocumentData>
+): Promise<ItemPage> {
+  const itemsRef = collection(db, ITEMS_COLLECTION);
+  const itemsQuery = query(
+    itemsRef,
+    orderBy('createdAt', 'desc'),
+    limit(20),
+    ...(cursor ? [startAfter(cursor)] : [])
+  );
+  try {
+    const snapshot = await getDocs(itemsQuery);
+    const items = snapshot.docs.map((docSnap) => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        type: data.type || 'lost',
+        title: data.title || '',
+        category: data.category || 'other',
+        description: data.description || '',
+        location: data.location || '',
+        locationDetails: data.locationDetails || undefined,
+        dateLostOrFound: data.dateLostOrFound || data.createdAt || new Date().toISOString(),
+        status: data.status || 'open',
+        holdingLocation: data.holdingLocation || 'finder_holding',
+        imageUrl: data.imageUrl || undefined,
+        isSensitiveId: data.isSensitiveId || false,
+        verificationQuestion: data.verificationQuestion || undefined,
+        reportedByEmailDomain: 'nileuniversity.edu.ng',
+        authorId: data.authorId || undefined,
+        createdAt: data.createdAt || new Date().toISOString(),
+      } as CampusItem;
+    });
+    return { items, nextCursor: snapshot.docs.at(-1) };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, ITEMS_COLLECTION);
   }
 }
 
@@ -494,8 +545,7 @@ export function subscribeToRealtimeNotifications(
   }
 
   const notifsRef = collection(db, NOTIFICATIONS_COLLECTION);
-  const isMasterAdmin = currentUser.id === PROJECT_OWNER_UID;
-  const isAdmin = isMasterAdmin || currentUser.role === 'admin' || currentUser.isAdmin;
+  const isAdmin = currentUser.role === 'admin' || currentUser.isAdmin;
 
   // Single onSnapshot listener limited to latest 20 items (free-tier constraint)
   const q = isAdmin

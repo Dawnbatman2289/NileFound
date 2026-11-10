@@ -9,6 +9,7 @@
  */
 
 import React, { lazy, Suspense, useState, useEffect } from 'react';
+import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { motion } from 'motion/react';
 import { Navbar, AppTab } from './components/Navbar.tsx';
 import { FeedView } from './components/FeedView.tsx';
@@ -24,7 +25,7 @@ import { expireOldItems } from './utils/admin.ts';
 import { auth, testConnection } from './lib/firebase.ts';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import {
-  subscribeToRealtimeItems,
+  fetchItemsPage,
   subscribeToRealtimeClaims,
   saveItemToFirestore,
   updateItemStatusInFirestore,
@@ -41,7 +42,6 @@ import {
   playNotificationChime,
   sendBrowserPushNotification,
 } from './services/notificationService.ts';
-import { PROJECT_OWNER_UID } from './config/admin.ts';
 
 export default function App() {
   // Admin Simulation mode: strictly reserved for the project owner.
@@ -69,6 +69,9 @@ export default function App() {
 
     return INITIAL_ITEMS;
   });
+  const [itemsCursor, setItemsCursor] = useState<QueryDocumentSnapshot<DocumentData>>();
+  const [hasMoreItems, setHasMoreItems] = useState(true);
+  const [isLoadingMoreItems, setIsLoadingMoreItems] = useState(false);
 
   const [claims, setClaims] = useState<ClaimRecord[]>(() => {
     if (isDemoMode) {
@@ -171,21 +174,13 @@ export default function App() {
     }
   };
 
-  // Exit simulation and return to the project owner
+  // Exit simulation and return to the sign-in screen.
   const handleExitSimulation = () => {
     setIsSimulating(false);
     setIsDemoMode(false);
     localStorage.removeItem('nilefound_admin_simulating');
-    const masterUser: User = {
-      id: PROJECT_OWNER_UID,
-      name: 'Project Owner',
-      email: 'owner@example.com',
-      role: 'admin',
-      isAdmin: true,
-      department: 'Project Owner & University Administration',
-    };
-    setCurrentUser(masterUser);
-    setActiveTab('admin');
+    setCurrentUser(null);
+    setActiveTab('login');
   };
 
   // Handle switching between Demo Mode and Real Mode
@@ -235,21 +230,19 @@ export default function App() {
         }
 
         const email = fbUser.email.trim().toLowerCase();
-        const isOwner = fbUser.uid === PROJECT_OWNER_UID;
         // Check role in /roles/{uid}
         const assignedRole = await fetchUserRole(fbUser.uid);
-        const isStaffOrAdmin = isOwner || assignedRole === 'admin' || assignedRole === 'security';
-        const role = isOwner ? 'admin' : (isStaffOrAdmin ? assignedRole : 'student');
+        const role = assignedRole;
 
         const user: User = {
           id: fbUser.uid,
-          name: isOwner ? 'Project Owner' : (fbUser.displayName || email.split('@')[0]).split(' ')[0],
+          name: (fbUser.displayName || email.split('@')[0]).split(' ')[0],
           email,
           role,
           isAdmin: role === 'admin',
-          department: isOwner
-            ? 'System Owner & University Administration'
-            : isStaffOrAdmin
+          department: role === 'admin'
+            ? 'University Administration'
+            : role === 'security'
             ? (assignedRole === 'security' ? 'Campus Security & Safety' : 'University Administration')
             : 'Nile University Member',
         };
@@ -271,20 +264,19 @@ export default function App() {
   useEffect(() => {
     if (isDemoMode || !currentUser || !auth.currentUser?.emailVerified) return;
 
-    // Real-time items subscription (publicly readable so everyone sees campus items)
-    const unsubscribeItems = subscribeToRealtimeItems(
-      (realtimeItems) => {
-        if (realtimeItems && realtimeItems.length > 0) {
-          setItems(realtimeItems);
-        } else {
-          // If Firestore collection has not been populated yet, keep initial items
-          setItems(realtimeItems);
-        }
-      },
-      (err) => {
-        setItems([]);
-      }
-    );
+    let cancelled = false;
+    setItemsCursor(undefined);
+    setHasMoreItems(true);
+    fetchItemsPage()
+      .then(({ items: pageItems, nextCursor }) => {
+        if (cancelled) return;
+        setItems(pageItems);
+        setItemsCursor(nextCursor);
+        setHasMoreItems(Boolean(nextCursor));
+      })
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      });
 
     // Claims subscription (requires authenticated user)
     let unsubscribeClaims = () => {};
@@ -302,10 +294,23 @@ export default function App() {
     }
 
     return () => {
-      unsubscribeItems();
+      cancelled = true;
       unsubscribeClaims();
     };
   }, [isDemoMode, currentUser]);
+
+  const handleLoadMoreItems = async () => {
+    if (!itemsCursor || isLoadingMoreItems || !hasMoreItems) return;
+    setIsLoadingMoreItems(true);
+    try {
+      const page = await fetchItemsPage(itemsCursor);
+      setItems((previous) => [...previous, ...page.items]);
+      setItemsCursor(page.nextCursor);
+      setHasMoreItems(Boolean(page.nextCursor));
+    } finally {
+      setIsLoadingMoreItems(false);
+    }
+  };
 
   // Real-time campus & admin notifications subscription
   useEffect(() => {
@@ -710,8 +715,7 @@ export default function App() {
     }
   };
 
-  const isOwner = currentUser?.id === PROJECT_OWNER_UID;
-  const isPrivileged = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwner;
+  const isPrivileged = currentUser?.role === 'admin' || currentUser?.isAdmin || currentUser?.role === 'security';
 
   return (
     <div className="min-h-screen bg-[var(--color-paper)] text-[var(--color-ink)] flex flex-col font-sans selection:bg-[#0F6E6E] selection:text-white transition-colors duration-150">
@@ -790,6 +794,9 @@ export default function App() {
               currentUser={currentUser}
               isDemoMode={isDemoMode}
               onNavigateToLogin={() => setActiveTab('login')}
+              onLoadMore={handleLoadMoreItems}
+              hasMoreItems={hasMoreItems}
+              isLoadingMoreItems={isLoadingMoreItems}
             />
           )}
 
@@ -814,7 +821,7 @@ export default function App() {
             <LoginPage
               currentUser={currentUser}
               onLogin={(user) => {
-                if (user.id.startsWith('demo-') || user.id !== PROJECT_OWNER_UID && isSimulating) {
+                if (user.id.startsWith('demo-') && isSimulating) {
                   handleSwitchPersona(user);
                 } else {
                   setCurrentUser(user);

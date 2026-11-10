@@ -41,7 +41,6 @@ import {
   fetchItemPrivateDetails,
   ItemPrivateDetails
 } from '../services/firestoreService.ts';
-import { PROJECT_OWNER_UID } from '../config/admin.ts';
 
 interface AdminPanelProps {
   currentUser: User | null;
@@ -102,8 +101,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newTargetRole, setNewTargetRole] = useState<'admin' | 'security'>('security');
   const [isSavingRole, setIsSavingRole] = useState(false);
 
-  const isOwner = currentUser?.id === PROJECT_OWNER_UID;
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwner;
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin;
   const isSecurity = currentUser?.role === 'security';
   const canUsePersonaSimulation = import.meta.env.DEV && currentUser?.role === 'admin';
   const hasAccess = isAdmin;
@@ -142,7 +140,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleCreateOrUpdateRole = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isOwner) {
+    if (!isAdmin) {
       showNotification('Unauthorized: only the project owner can provision new roles.');
       return;
     }
@@ -223,7 +221,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] font-semibold text-xs px-2.5 py-0.5 rounded-[10px] border border-[#0F6E6E]/20 flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5" />
-              {isOwner ? 'Project Owner & Primary Admin' : 'Campus Administrator'}
+              {isAdmin ? 'Campus Administrator' : 'Restricted Access'}
             </span>
             <span className="text-xs text-[#7A7266] dark:text-[#857D71] font-mono">
               Project owner
@@ -583,7 +581,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* TAB 4: Staff Roles & Security Provisioning */}
       {activeTab === 'roles' && (
         <div className="space-y-6">
-          {isOwner ? (
+          {isAdmin ? (
             <div className="bg-[#1E1C18] rounded-[20px] border border-[#1E294B] p-6 shadow-2xl space-y-4">
               <div>
                 <h3 className="font-extrabold text-[#F4F6FF] text-base">Provision Staff or Security Role</h3>
@@ -724,7 +722,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       )}
 
       {/* TAB 5: Test Personas (Strictly for the project owner) */}
-      {activeTab === 'personas' && isOwner && (
+      {activeTab === 'personas' && isAdmin && (
         <div className="space-y-6">
           <div className="bg-[#1E1C18] rounded-[20px] border border-[#1E294B] p-6 shadow-xl space-y-3">
             <div className="flex items-center justify-between">

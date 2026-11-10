@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import { User, CampusNotification } from '../types/index.ts';
 import { NotificationDropdown } from './NotificationDropdown.tsx';
-import { PROJECT_OWNER_UID } from '../config/admin.ts';
 
 export type AppTab = 'feed' | 'admin' | 'login';
 
@@ -66,8 +65,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleDarkMode,
 }) => {
   const [isNotifOpen, setIsNotifOpen] = React.useState(false);
-  const isOwner = currentUser?.id === PROJECT_OWNER_UID;
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin || isOwner;
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin;
   const isSecurity = currentUser?.role === 'security';
   const canAccessAdmin = isAdmin || isSecurity;
 
