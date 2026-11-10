@@ -6,12 +6,14 @@ A privacy-focused campus lost-and-found app for Nile University of Nigeria.
 
 ## Features
 
-- Verified Nile University email authentication with Firebase Auth.
+- Google sign-in and email/password authentication with verified Nile University email access.
+- Email verification, password reset, and account-provider error handling.
 - Lost and found item reporting with official campus locations.
-- Privacy-conscious item descriptions, claim workflow, and restricted private details.
-- Recipient-scoped notifications and responsive campus feed.
-- Firebase Firestore and Storage rules with ownership checks.
-- Installable PWA assets and an offline fallback page.
+- Claim workflow with owner/admin moderation and restricted private details.
+- Recipient-scoped notifications and a responsive feed with debounced search and saved filters.
+- Firebase Firestore and Storage rules with UID-based ownership and verified-user checks.
+- Installable PWA manifest, hashed-asset caching, and an offline navigation fallback.
+- Admin Control Center for moderation, roles, private item details, and audit views.
 
 ## How it works
 
@@ -25,7 +27,7 @@ flowchart LR
 
 ## Security and privacy
 
-The app requires a verified school email for normal access. Ownership checks protect item changes, while reporter contact information, claim details, and verification answers are kept in restricted item subcollections. Student ID details are withheld from the public feed.
+The app requires a verified Nile University email for normal user access. Ownership checks protect item changes, while reporter contact information, claim details, and verification answers are kept in restricted item subcollections. Student ID details are withheld from the public feed. Firebase rules—not the UI—enforce the access boundary.
 
 The Firebase web configuration contains public client identifiers. Protection comes from Firebase rules and domain-restricted API-key settings; never commit private credentials.
 
@@ -63,7 +65,7 @@ npx vite build
 
 ## Known limitations and roadmap
 
-This prototype has no Cloud Functions, server-side email service, or production moderation operations. Planned work includes stronger pagination, broader browser testing, App Check enforcement, and student usability research.
+This prototype has no Cloud Functions or server-side email service. The feed currently loads the latest 20 items rather than providing full pagination, and the service worker only provides static-asset caching and an offline navigation fallback; it does not cache private Firebase data. Broader browser testing, App Check enforcement, and student usability research remain outstanding.
 
 ## Screenshots
 
