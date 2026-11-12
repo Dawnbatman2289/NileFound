@@ -8,7 +8,7 @@
  * Main Action: Browse campus listings, report lost/found items, and verify ownership claims.
  */
 
-import React, { lazy, Suspense, useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { motion } from 'motion/react';
 import { Navbar, AppTab } from './components/Navbar.tsx';
@@ -49,10 +49,18 @@ export default function App() {
     return localStorage.getItem('nilefound_admin_simulating') === 'true';
   });
 
-  // Demo Mode is only enabled during an owner-controlled persona simulation.
+  const isSimulatingRef = useRef(isSimulating);
+  useEffect(() => {
+    isSimulatingRef.current = isSimulating;
+  }, [isSimulating]);
+
+  // Demo Mode is enabled during an owner-controlled persona simulation.
   const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
-    return false;
+    return localStorage.getItem('nilefound_admin_simulating') === 'true';
   });
+
+  // Real authenticated user (tracks underlying Firebase identity while simulating other personas)
+  const [realUser, setRealUser] = useState<User | null>(null);
 
   const [items, setItems] = useState<CampusItem[]>(() => {
     if (isDemoMode) {
@@ -89,8 +97,29 @@ export default function App() {
     return INITIAL_CLAIMS;
   });
 
-  // Active user session
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  // Active user session (can be real user or simulated persona)
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const isSimulating = localStorage.getItem('nilefound_admin_simulating') === 'true';
+    if (isSimulating) {
+      const savedPersona = localStorage.getItem('nilefound_simulated_persona');
+      if (savedPersona) {
+        try {
+          return JSON.parse(savedPersona);
+        } catch {
+          // ignore
+        }
+      }
+    }
+    const saved = localStorage.getItem('nilefound_user_v1');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
 
   // Students and staff land on Campus Feed by default
   const [activeTab, setActiveTab] = useState<AppTab>('feed');
@@ -122,15 +151,20 @@ export default function App() {
     return [];
   });
   const [activeToast, setActiveToast] = useState<CampusNotification | null>(null);
-  const canUsePersonaSimulation = import.meta.env.DEV && currentUser?.role === 'admin';
+
+  const isRealUserAdmin = realUser?.role === 'admin' || realUser?.isAdmin;
+  const canUsePersonaSimulation = Boolean(
+    import.meta.env.DEV && (isRealUserAdmin || currentUser?.role === 'admin' || isSimulating)
+  );
 
   useEffect(() => {
-    if (!canUsePersonaSimulation) {
+    if (realUser && !isRealUserAdmin && !isSimulating) {
       setIsSimulating(false);
       setIsDemoMode(false);
       localStorage.removeItem('nilefound_admin_simulating');
+      localStorage.removeItem('nilefound_simulated_persona');
     }
-  }, [canUsePersonaSimulation]);
+  }, [realUser, isRealUserAdmin, isSimulating]);
 
   useEffect(() => {
     if (currentUser && activeTab === 'login') {
@@ -163,6 +197,7 @@ export default function App() {
     setIsDemoMode(true);
     setCurrentUser(user);
     localStorage.setItem('nilefound_admin_simulating', 'true');
+    localStorage.setItem('nilefound_simulated_persona', JSON.stringify(user));
     const saved = localStorage.getItem('nilefound_demo_items_v1');
     setItems(saved ? JSON.parse(saved) : DEMO_ITEMS);
     const savedClaims = localStorage.getItem('nilefound_demo_claims_v1');
@@ -174,13 +209,19 @@ export default function App() {
     }
   };
 
-  // Exit simulation and return to the sign-in screen.
+  // Exit simulation and return to real authenticated user
   const handleExitSimulation = () => {
     setIsSimulating(false);
     setIsDemoMode(false);
     localStorage.removeItem('nilefound_admin_simulating');
-    setCurrentUser(null);
-    setActiveTab('login');
+    localStorage.removeItem('nilefound_simulated_persona');
+    if (realUser) {
+      setCurrentUser(realUser);
+      setActiveTab(realUser.role === 'admin' || realUser.role === 'security' ? 'admin' : 'feed');
+    } else {
+      setCurrentUser(null);
+      setActiveTab('login');
+    }
   };
 
   // Handle switching between Demo Mode and Real Mode
@@ -214,7 +255,8 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser && fbUser.email) {
         if (!fbUser.emailVerified) {
-          if (!isDemoMode) setCurrentUser(null);
+          setRealUser(null);
+          if (!isSimulatingRef.current) setCurrentUser(null);
           return;
         }
 
@@ -223,7 +265,8 @@ export default function App() {
           await fbUser.getIdToken(false);
         } catch (tokenErr: any) {
           await signOut(auth);
-          if (!isDemoMode) {
+          setRealUser(null);
+          if (!isSimulatingRef.current) {
             setCurrentUser(null);
           }
           return;
@@ -246,19 +289,26 @@ export default function App() {
             ? (assignedRole === 'security' ? 'Campus Security & Safety' : 'University Administration')
             : 'Nile University Member',
         };
-        setCurrentUser(user);
-        syncUserProfile(user).catch(() => {});
+        setRealUser(user);
+
+        const isCurrentlySimulating = isSimulatingRef.current || localStorage.getItem('nilefound_admin_simulating') === 'true';
+        if (!isCurrentlySimulating) {
+          setCurrentUser(user);
+          syncUserProfile(user).catch(() => {});
+        }
       } else {
+        setRealUser(null);
         setCurrentUser(null);
         setIsSimulating(false);
         setIsDemoMode(false);
         localStorage.removeItem('nilefound_user_v1');
         localStorage.removeItem('nilefound_admin_simulating');
+        localStorage.removeItem('nilefound_simulated_persona');
         setActiveTab('login');
       }
     });
     return () => unsubscribe();
-  }, [isDemoMode]);
+  }, []);
 
   // Real-time Firestore sync when in real mode
   useEffect(() => {
@@ -723,10 +773,12 @@ export default function App() {
     } catch {
       // Ignore if offline
     }
+    setRealUser(null);
     setIsSimulating(false);
     setIsDemoMode(false);
     localStorage.removeItem('nilefound_user_v1');
     localStorage.removeItem('nilefound_admin_simulating');
+    localStorage.removeItem('nilefound_simulated_persona');
     setCurrentUser(null);
     setActiveTab('feed');
   };

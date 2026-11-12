@@ -103,8 +103,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin;
   const isSecurity = currentUser?.role === 'security';
-  const canUsePersonaSimulation = import.meta.env.DEV && currentUser?.role === 'admin';
-  const hasAccess = isAdmin;
+  const canUsePersonaSimulation = Boolean(onSwitchPersona);
+  const hasAccess = isAdmin || isSecurity || Boolean(onSwitchPersona);
 
   const stats = generateCampusAuditReport(items, claims);
 
