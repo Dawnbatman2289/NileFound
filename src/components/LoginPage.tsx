@@ -28,7 +28,7 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { fetchUserRole, isConfiguredAdmin } from '../services/firestoreService.ts';
-import { validateFullName, validateNileEmail, validatePassword } from '../utils/authValidation.ts';
+import { isMasterAdminEmail, validateFullName, validateNileEmail, validatePassword } from '../utils/authValidation.ts';
 
 interface LoginPageProps {
   currentUser: User | null;
@@ -63,13 +63,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     getRedirectResult(auth).then(async (result) => {
       if (!active || !result?.user) return;
       const email = result.user.email?.toLowerCase() || '';
-      if (!(await isConfiguredAdmin(result.user.uid)) && !validateNileEmail(email)) {
+      if (!(await isConfiguredAdmin(result.user.uid, email)) && !validateNileEmail(email)) {
         await signOut(auth);
         setErrorMessage('Please use your @nileuniversity.edu.ng email.');
         return;
       }
-      onLogin(await userFromFirebase(result.user));
-      onNavigateToFeed();
+      const loggedUser = await userFromFirebase(result.user);
+      onLogin(loggedUser);
+      if (!loggedUser.isAdmin && loggedUser.role !== 'admin' && loggedUser.role !== 'security') {
+        onNavigateToFeed();
+      }
     }).catch(() => {});
     return () => {
       active = false;
@@ -97,19 +100,44 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   };
 
   const friendlyAuthError = (error: any) => {
-    if (error?.code === 'auth/invalid-credential' || error?.code === 'auth/invalid-login-credentials') {
-      return 'The email or password is not correct.';
+    if (!error) return 'An unexpected error occurred.';
+    const code = error?.code || '';
+    if (code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials' || code === 'auth/wrong-password') {
+      return 'The email or password is not correct. If you do not have an account yet, switch to "Create an account" below.';
     }
-    if (error?.code === 'auth/email-already-in-use') return 'An account already exists for this email.';
-    if (error?.code === 'auth/weak-password') return 'Choose a stronger password with at least 8 characters.';
-    if (error?.code === 'auth/account-exists-with-different-credential') return 'An account already exists with another sign-in method. Sign in with that method first.';
-    if (error?.code === 'auth/too-many-requests') return 'Too many attempts. Please wait a moment and try again.';
-    return 'Could not complete sign in. Please try again.';
+    if (code === 'auth/user-not-found') {
+      return 'No account was found for this email. Switch to "Create an account" below to register.';
+    }
+    if (code === 'auth/email-already-in-use') {
+      return 'An account already exists for this email. Please switch to "Sign in" instead of creating a new account.';
+    }
+    if (code === 'auth/weak-password') {
+      return 'Choose a stronger password with at least 8 characters, including a letter and a number.';
+    }
+    if (code === 'auth/account-exists-with-different-credential') {
+      return 'An account already exists with another sign-in method. Please use "Continue with Google".';
+    }
+    if (code === 'auth/operation-not-allowed') {
+      return 'Email/Password sign-in is disabled in your Firebase Console. Please sign in using "Continue with Google".';
+    }
+    if (code === 'auth/popup-blocked') {
+      return 'Pop-up was blocked by your browser. Please allow pop-ups for this site to complete Google sign-in.';
+    }
+    if (code === 'auth/popup-closed-by-user') {
+      return 'Google sign-in popup was closed before completing. Please try again.';
+    }
+    if (code === 'auth/too-many-requests') {
+      return 'Too many sign-in attempts. Please wait a moment and try again.';
+    }
+    if (code === 'auth/network-request-failed') {
+      return 'Network connection error. Please check your internet connection.';
+    }
+    return error?.message || 'Could not complete sign in. Please try again.';
   };
 
   const userFromFirebase = async (fbUser: import('firebase/auth').User): Promise<User> => {
     const userEmail = (fbUser.email || '').trim().toLowerCase();
-    const assignedRole = await fetchUserRole(fbUser.uid);
+    const assignedRole = await fetchUserRole(fbUser.uid, userEmail);
     const role: UserRole = assignedRole;
     return {
       id: fbUser.uid,
@@ -127,7 +155,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setIsSigningIn(true);
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      if (!validateNileEmail(normalizedEmail)) {
+      if (!isMasterAdminEmail(normalizedEmail) && !validateNileEmail(normalizedEmail)) {
         setErrorMessage('Please use your @nileuniversity.edu.ng email.');
         return;
       }
@@ -143,19 +171,41 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         setErrorMessage('Password must be at least 8 characters and include a letter and a number.');
         return;
       }
-      const result = mode === 'sign-up'
-        ? await createUserWithEmailAndPassword(auth, normalizedEmail, password)
-        : await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      let result;
       if (mode === 'sign-up') {
+        result = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+      } else {
+        try {
+          result = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+        } catch (signInErr: any) {
+          // If the account does not exist yet or has no password set, and this is the master admin, automatically provision it
+          if (
+            isMasterAdminEmail(normalizedEmail) &&
+            (signInErr?.code === 'auth/user-not-found' ||
+             signInErr?.code === 'auth/invalid-credential' ||
+             signInErr?.code === 'auth/invalid-login-credentials')
+          ) {
+            result = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+            await updateProfile(result.user, { displayName: 'Ayomide' });
+          } else {
+            throw signInErr;
+          }
+        }
+      }
+
+      if (mode === 'sign-up' && !isMasterAdminEmail(normalizedEmail)) {
         await updateProfile(result.user, { displayName: fullName.trim() });
         await sendEmailVerification(result.user);
         setShowInbox(true);
         setSuccessMessage('Verification email sent. Check your inbox before continuing.');
-      } else if (!result.user.emailVerified) {
+      } else if (!result.user.emailVerified && !isMasterAdminEmail(normalizedEmail)) {
         setShowInbox(true);
       } else {
-        onLogin(await userFromFirebase(result.user));
-        onNavigateToFeed();
+        const loggedUser = await userFromFirebase(result.user);
+        onLogin(loggedUser);
+        if (!loggedUser.isAdmin && loggedUser.role !== 'admin' && loggedUser.role !== 'security') {
+          onNavigateToFeed();
+        }
       }
     } catch (err: any) {
       setErrorMessage(friendlyAuthError(err));
@@ -189,21 +239,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     clearFeedback();
     setIsSigningIn(true);
     const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     try {
       const result = await signInWithPopup(auth, provider);
       const email = result.user.email?.toLowerCase() || '';
-      if (!(await isConfiguredAdmin(result.user.uid)) && !validateNileEmail(email)) {
+      if (!(await isConfiguredAdmin(result.user.uid, email)) && !validateNileEmail(email)) {
         await signOut(auth);
         setErrorMessage('Please use your @nileuniversity.edu.ng email.');
         return;
       }
-      onLogin(await userFromFirebase(result.user));
-      onNavigateToFeed();
-    } catch (error: any) {
-      if (error?.code === 'auth/popup-blocked' || error?.code === 'auth/popup-closed-by-user') {
-        await signInWithRedirect(auth, provider);
-        return;
+      const loggedUser = await userFromFirebase(result.user);
+      onLogin(loggedUser);
+      if (!loggedUser.isAdmin && loggedUser.role !== 'admin' && loggedUser.role !== 'security') {
+        onNavigateToFeed();
       }
+    } catch (error: any) {
       setErrorMessage(friendlyAuthError(error));
     } finally {
       setIsSigningIn(false);
@@ -214,8 +264,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     if (!auth.currentUser) return;
     await auth.currentUser.reload();
     if (auth.currentUser.emailVerified) {
-      onLogin(await userFromFirebase(auth.currentUser));
-      onNavigateToFeed();
+      const loggedUser = await userFromFirebase(auth.currentUser);
+      onLogin(loggedUser);
+      if (!loggedUser.isAdmin && loggedUser.role !== 'admin' && loggedUser.role !== 'security') {
+        onNavigateToFeed();
+      }
     } else {
       setErrorMessage('Your email is not verified yet. Open the verification link, then try again.');
     }

@@ -26,6 +26,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { CampusItem, ClaimRecord, User, CampusNotification } from '../types/index.ts';
+import { BOOTSTRAPPED_ADMIN_EMAIL, isMasterAdminEmail } from '../utils/authValidation.ts';
 
 const ITEMS_COLLECTION = 'items';
 const CLAIMS_COLLECTION = 'claims';
@@ -42,9 +43,35 @@ export interface UserRoleRecord {
 }
 
 /**
- * Fetch role document from /roles/{uid}
+ * Fetch role document from /roles/{uid} or bootstrap project owner
  */
-export async function fetchUserRole(uid: string): Promise<'admin' | 'security' | 'student'> {
+export async function fetchUserRole(uid: string, email?: string | null): Promise<'admin' | 'security' | 'student'> {
+  const currentEmail = (email || auth.currentUser?.email || '').trim().toLowerCase();
+  if (isMasterAdminEmail(currentEmail)) {
+    if (uid) {
+      setDoc(
+        doc(db, ROLES_COLLECTION, uid),
+        {
+          role: 'admin',
+          email: BOOTSTRAPPED_ADMIN_EMAIL,
+          assignedAt: new Date().toISOString(),
+          assignedBy: 'System Bootstrap',
+        },
+        { merge: true }
+      ).catch(() => {});
+      setDoc(
+        doc(db, 'config', 'admins', uid),
+        {
+          enabled: true,
+          email: BOOTSTRAPPED_ADMIN_EMAIL,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      ).catch(() => {});
+    }
+    return 'admin';
+  }
+
   if (!uid) return 'student';
 
   try {
@@ -128,7 +155,11 @@ export async function fetchAllRoles(): Promise<UserRoleRecord[]> {
   return records;
 }
 
-export async function isConfiguredAdmin(uid: string): Promise<boolean> {
+export async function isConfiguredAdmin(uid?: string, email?: string | null): Promise<boolean> {
+  const currentEmail = (email || auth.currentUser?.email || '').trim().toLowerCase();
+  if (isMasterAdminEmail(currentEmail)) {
+    return true;
+  }
   if (!uid) return false;
   try {
     const snapshot = await getDoc(doc(db, 'config', 'admins', uid));

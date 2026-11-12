@@ -22,6 +22,7 @@ import { NotificationToast } from './components/NotificationToast.tsx';
 import { CampusItem, ClaimRecord, User, CampusNotification } from './types/index.ts';
 import { DEMO_ITEMS, DEMO_CLAIMS, INITIAL_ITEMS, INITIAL_CLAIMS } from './data/mockItems.ts';
 import { expireOldItems } from './utils/admin.ts';
+import { isMasterAdminEmail } from './utils/authValidation.ts';
 import { auth, testConnection } from './lib/firebase.ts';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import {
@@ -254,7 +255,10 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser && fbUser.email) {
-        if (!fbUser.emailVerified) {
+        const email = fbUser.email.trim().toLowerCase();
+        const isMaster = isMasterAdminEmail(email);
+
+        if (!fbUser.emailVerified && !isMaster) {
           setRealUser(null);
           if (!isSimulatingRef.current) setCurrentUser(null);
           return;
@@ -272,9 +276,8 @@ export default function App() {
           return;
         }
 
-        const email = fbUser.email.trim().toLowerCase();
-        // Check role in /roles/{uid}
-        const assignedRole = await fetchUserRole(fbUser.uid);
+        // Check role in /roles/{uid} or bootstrapped admin
+        const assignedRole = await fetchUserRole(fbUser.uid, email);
         const role = assignedRole;
 
         const user: User = {
