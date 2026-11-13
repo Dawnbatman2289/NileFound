@@ -9,23 +9,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { 
-  Search, 
-  MapPin, 
-  Calendar, 
-  ShieldCheck, 
-  AlertCircle, 
-  Lock, 
-  CheckCircle2,
-  Shield,
-  LogIn,
-  SlidersHorizontal,
-  PackageSearch
-} from 'lucide-react';
+import { Search, MapPin, Calendar, ShieldCheck, Lock, Shield, LogIn, PackageSearch } from 'lucide-react';
 import { CampusItem, ItemType, User } from '../types/index.ts';
 import { CATEGORIES, DEMO_ITEMS } from '../data/mockItems.ts';
 import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
-import { calculateMatchScore } from '../utils/matching.ts';
 import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
 import { filterCampusItems } from '../utils/feedFilters.ts';
 
@@ -60,7 +47,6 @@ export const FeedView: React.FC<FeedViewProps> = ({
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'active' | 'claimed' | 'resolved'>('all');
   const [selectedDateRange, setSelectedDateRange] = useState<'all' | '24h' | '7d'>('all');
-  const [selectedLostItemForMatch, setSelectedLostItemForMatch] = useState<CampusItem | null>(null);
   const [includeDemoSeed, setIncludeDemoSeed] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -163,7 +149,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7A7266] hover:text-[#1F1B16] text-xs font-bold p-1 cursor-pointer"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7A7266] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] text-xs font-bold p-1 cursor-pointer"
                 aria-label="Clear search"
               >
                 ✕
@@ -178,7 +164,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
               className={`px-3 py-1.5 text-xs font-medium rounded-[10px] transition-colors min-h-[38px] cursor-pointer ${
                 selectedType === 'all'
                   ? 'bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] border border-[#E6DFD2] dark:border-[#2E2A24] shadow-xs'
-                  : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16]'
+                  : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
               }`}
             >
               All ({displayableItems.length})
@@ -188,7 +174,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
               className={`px-3 py-1.5 text-xs font-medium rounded-[10px] transition-colors min-h-[38px] cursor-pointer ${
                 selectedType === 'found'
                   ? 'bg-[#2F7D4F] text-white shadow-xs'
-                  : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16]'
+                  : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
               }`}
             >
               Found ({foundItems.length})
@@ -198,7 +184,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
               className={`px-3 py-1.5 text-xs font-medium rounded-[10px] transition-colors min-h-[38px] cursor-pointer ${
                 selectedType === 'lost'
                   ? 'bg-[#E8A317] text-[#1F1B16] font-semibold shadow-xs'
-                  : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16]'
+                  : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
               }`}
             >
               Lost ({lostItems.length})
@@ -309,8 +295,6 @@ export const FeedView: React.FC<FeedViewProps> = ({
                   setSelectedCategory('all');
                   setSelectedLocation('all');
                   setSelectedType('all');
-                  setSelectedStatus('all');
-                  setSelectedDateRange('all');
                   setSelectedStatus('all');
                   setSelectedDateRange('all');
                 }}
@@ -513,7 +497,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
               type="button"
               onClick={onLoadMore}
               disabled={isLoadingMoreItems}
-              className="min-h-[44px] rounded-[10px] border border-[#E6DFD2] px-5 text-xs font-medium text-[#1F1B16] disabled:opacity-60"
+              className="min-h-[44px] rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#1E1C18] hover:bg-[#FAF6EF] dark:hover:bg-[#28241F] px-5 text-xs font-medium text-[#1F1B16] dark:text-[#F5F1EA] disabled:opacity-60 cursor-pointer btn-campus"
             >
               {isLoadingMoreItems ? 'Loading more…' : 'Load more'}
             </button>

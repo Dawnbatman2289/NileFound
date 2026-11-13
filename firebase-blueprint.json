@@ -90,6 +90,18 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["enabled", "email", "updatedAt"]
+    },
+    "StaffInvite": {
+      "title": "StaffInvite",
+      "description": "Email-keyed staff role assignment before or upon first sign-in.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "enum": ["admin", "security", "student"] },
+        "assignedBy": { "type": "string", "maxLength": 128 },
+        "assignedAt": { "type": "string" }
+      },
+      "required": ["email", "role", "assignedAt"]
     }
   },
   "firestore": {
@@ -108,6 +120,10 @@
     "/roles/{userId}": {
       "schema": "Role",
       "description": "Role document defining administrative or security personnel access."
+    },
+    "/staffInvites/{inviteEmail}": {
+      "schema": "StaffInvite",
+      "description": "Pending email-based staff role assignments."
     },
     "/admins/{adminUid}": {
       "schema": "AdminConfig",

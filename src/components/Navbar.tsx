@@ -7,19 +7,8 @@
  */
 
 import React from 'react';
-import { motion } from 'motion/react';
-import { 
-  Wifi, 
-  WifiOff, 
-  Zap, 
-  Search, 
-  Plus,
-  KeyRound,
-  User as UserIcon,
-  Bell,
-  Sun,
-  Moon,
-  LogOut
+import {
+  WifiOff, Zap, Search, Plus, KeyRound, User as UserIcon, Bell, Sun, Moon, LogOut,
 } from 'lucide-react';
 import { User, CampusNotification } from '../types/index.ts';
 import { NotificationDropdown } from './NotificationDropdown.tsx';
@@ -89,7 +78,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               Beta
             </span>
           </div>
-          <span className="hidden md:inline text-xs text-[#7A7266] dark:text-[#857D71] border-l border-[#E6DFD2] dark:border-[#2E2A24] pl-3">
+          <span className="hidden lg:inline text-xs text-[#7A7266] dark:text-[#857D71] border-l border-[#E6DFD2] dark:border-[#2E2A24] pl-3">
             Nile University Campus Board
           </span>
         </div>
@@ -152,11 +141,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             title="Saves mobile data by hiding photos"
           >
             <Zap className="w-3.5 h-3.5 text-[#0F6E6E] dark:text-[#199595]" />
-            <span className="hidden sm:inline">Low-Data:</span> {lowDataMode ? 'ON' : 'OFF'}
+            <span className="hidden xl:inline">Low-Data:</span> {lowDataMode ? 'ON' : 'OFF'}
           </button>
 
           {/* Connection Status indicator */}
-          <div className="hidden sm:flex items-center text-xs text-[#7A7266] dark:text-[#857D71]">
+          <div className="hidden lg:flex items-center text-xs text-[#7A7266] dark:text-[#857D71]">
             {isOnline ? (
               <span className="flex items-center gap-1.5 text-[#544E45] dark:text-[#B8B0A2]" title="Connected to campus network">
                 <span className="w-2 h-2 rounded-full bg-[#2F7D4F]" />
@@ -197,7 +186,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   aria-label="Log Out"
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Log Out</span>
+                  <span className="hidden lg:inline">Log Out</span>
                 </button>
               )}
             </div>
@@ -228,45 +217,30 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Navigation Tabs Bar */}
-      <nav className="max-w-7xl mx-auto px-4 flex gap-4 overflow-x-auto text-xs border-t border-[#E6DFD2] dark:border-[#2E2A24]">
+      <nav className="max-w-7xl mx-auto px-4 flex gap-5 overflow-x-auto text-xs border-t border-[#E6DFD2] dark:border-[#2E2A24]">
         <button
           onClick={() => setActiveTab('feed')}
-          className={`relative flex items-center gap-1.5 py-2.5 border-b-2 font-medium whitespace-nowrap transition-colors min-h-[44px] cursor-pointer ${
+          className={`flex items-center gap-1.5 py-2.5 border-b-2 font-medium whitespace-nowrap transition-colors min-h-[44px] cursor-pointer ${
             activeTab === 'feed'
-              ? 'border-[#0F6E6E] text-[#0F6E6E] dark:text-[#199595] font-bold'
-              : 'border-transparent text-[#7A7266] dark:text-[#857D71] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
+              ? 'border-[#0F6E6E] dark:border-[#199595] text-[#0F6E6E] dark:text-[#199595] font-bold'
+              : 'border-transparent text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
           }`}
         >
           <Search className="w-3.5 h-3.5" />
           <span>Campus Feed</span>
-          {activeTab === 'feed' && (
-            <motion.span
-              layoutId="active-nav-tab"
-              className="absolute inset-x-0 -bottom-px h-0.5 bg-[#0F6E6E] dark:bg-[#199595]"
-              transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-            />
-          )}
         </button>
 
-        {/* Admin Control Center Tab */}
         {canAccessAdmin && (
           <button
             onClick={() => setActiveTab('admin')}
-            className={`relative flex items-center gap-1.5 py-2.5 border-b-2 font-medium whitespace-nowrap transition-colors min-h-[44px] cursor-pointer ${
+            className={`flex items-center gap-1.5 py-2.5 border-b-2 font-medium whitespace-nowrap transition-colors min-h-[44px] cursor-pointer ${
               activeTab === 'admin'
-                ? 'border-[#0F6E6E] text-[#0F6E6E] dark:text-[#199595] font-bold'
-                : 'border-transparent text-[#7A7266] dark:text-[#857D71] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
+                ? 'border-[#0F6E6E] dark:border-[#199595] text-[#0F6E6E] dark:text-[#199595] font-bold'
+                : 'border-transparent text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
             }`}
           >
             <KeyRound className="w-3.5 h-3.5 text-[#0F6E6E] dark:text-[#199595]" />
             <span>Admin Control Center</span>
-            {activeTab === 'admin' && (
-              <motion.span
-                layoutId="active-nav-tab"
-                className="absolute inset-x-0 -bottom-px h-0.5 bg-[#0F6E6E] dark:bg-[#199595]"
-                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-              />
-            )}
             {pendingClaimsCount > 0 && (
               <span className="bg-[#E8A317] text-[#1F1B16] font-sans text-xs px-1.5 py-0.2 rounded-full font-bold ml-0.5">
                 {pendingClaimsCount}

@@ -55,11 +55,18 @@ service cloud.firestore {
         && isConfiguredAdmin();
     }
 
-    // Check roles document in /roles/{uid}
+    // Check roles document in /roles/{uid} or /staffInvites/{email}
     function hasRole(roleName) {
-      return isVerifiedUser()
-        && exists(/databases/$(database)/documents/roles/$(request.auth.uid))
-        && get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == roleName;
+      return isVerifiedUser() && (
+        (
+          exists(/databases/$(database)/documents/roles/$(request.auth.uid))
+          && get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == roleName
+        ) || (
+          request.auth.token.email is string
+          && exists(/databases/$(database)/documents/staffInvites/$(request.auth.token.email))
+          && get(/databases/$(database)/documents/staffInvites/$(request.auth.token.email)).data.role == roleName
+        )
+      );
     }
 
     function isAdmin() {
@@ -259,6 +266,22 @@ service cloud.firestore {
       allow get: if isValidId(userId) && isVerifiedUser() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
       allow write: if isMasterAdmin();
+    }
+
+    // Email-keyed pending staff role assignments (/staffInvites/{inviteEmail})
+    match /staffInvites/{inviteEmail} {
+      allow get: if isVerifiedUser() && (isAdmin() || request.auth.token.email == inviteEmail);
+      allow list: if isAdmin();
+      allow create, update: if isMasterAdmin()
+        && inviteEmail.size() <= 128
+        && inviteEmail.matches('^[^/]+@nileuniversity\\.edu\\.ng$')
+        && incoming().keys().hasAll(['email', 'role', 'assignedAt'])
+        && incoming().keys().hasOnly(['email', 'role', 'assignedAt', 'assignedBy'])
+        && incoming().email == inviteEmail
+        && incoming().role in ['admin', 'security', 'student']
+        && incoming().assignedAt is string && incoming().assignedAt.size() <= 50
+        && (!('assignedBy' in incoming()) || (incoming().assignedBy is string && incoming().assignedBy.size() <= 128));
+      allow delete: if isMasterAdmin();
     }
 
     // Configured admins collection

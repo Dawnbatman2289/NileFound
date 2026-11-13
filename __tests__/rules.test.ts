@@ -35,3 +35,10 @@ test('Admin configuration uses valid 2-segment /admins/{uid} document path', () 
   assert.ok(!firestoreRules.includes('/config/admins/'));
   assert.match(firestoreRules, /match \/admins\/\{adminUid\}/);
 });
+
+test('Staff invites support email-based role lookup gated by verified Nile email and master admin', () => {
+  assert.match(firestoreRules, /match \/staffInvites\/\{inviteEmail\}/);
+  assert.match(firestoreRules, /allow create, update: if isMasterAdmin\(\)/);
+  assert.match(firestoreRules, /request\.auth\.token\.email == inviteEmail/);
+});
+

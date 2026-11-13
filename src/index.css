@@ -20,6 +20,7 @@
   }
 
   :root {
+    color-scheme: light;
     --font-heading: 'Fraunces', Georgia, serif;
     --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 
@@ -51,6 +52,7 @@
   }
 
   .dark {
+    color-scheme: dark;
     --color-paper: #141311;
     --color-surface: #1E1C18;
     --color-surface-hover: #28241F;
@@ -183,6 +185,11 @@
 input, select, textarea {
   border-radius: 10px;
   transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+select, option {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
 }
 
 input:hover, select:hover, textarea:hover {

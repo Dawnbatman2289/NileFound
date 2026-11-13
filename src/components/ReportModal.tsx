@@ -8,19 +8,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Upload, 
-  MapPin, 
-  Calendar, 
-  Save, 
-  AlertTriangle, 
-  Lock, 
-  CheckCircle,
-  HelpCircle,
-  ShieldAlert
-} from 'lucide-react';
-import { CampusItem, ItemType, ItemCategory, HoldingLocation, User, UserRole } from '../types/index.ts';
+import { X, Upload, Save, AlertTriangle, Lock, CheckCircle, ShieldAlert } from 'lucide-react';
+import { CampusItem, ItemType, ItemCategory, HoldingLocation, User } from '../types/index.ts';
 import { CATEGORIES } from '../data/mockItems.ts';
 import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
 import { detectPii } from '../utils/piiDetector.ts';
@@ -219,7 +208,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
-      <div className="w-full max-w-[480px] bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] shadow-xl max-h-[100dvh] overflow-hidden border border-[#E6DFD2] dark:border-[#2E2A24] my-3 sm:my-6 flex flex-col min-w-0">
+      <div className="w-full max-w-[480px] bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] shadow-xl max-h-[90dvh] overflow-hidden border border-[#E6DFD2] dark:border-[#2E2A24] flex flex-col min-w-0">
         {/* Header */}
         <div className="bg-[#FAF6EF] dark:bg-[#141311] px-5 sm:px-6 py-4 border-b border-[#E6DFD2] dark:border-[#2E2A24] flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -274,9 +263,9 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             </div>
           )}
           {hasRestoredDraft && (
-            <div className="flex items-center justify-between text-xs bg-amber-400/10 text-amber-300 border border-amber-400/30 p-3 rounded-[20px]">
+            <div className="flex items-center justify-between text-xs bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C] border border-[#E8A317]/40 p-3 rounded-[10px]">
               <span className="flex items-center gap-2">
-                <Save className="w-3.5 h-3.5 text-amber-400" />
+                <Save className="w-3.5 h-3.5 shrink-0" />
                 Restored unfinished draft from local storage
               </span>
               <button
@@ -289,7 +278,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   setVerificationQuestion('');
                   setVerificationAnswer('');
                 }}
-                className="text-amber-300 font-bold underline hover:text-white cursor-pointer"
+                className="font-bold underline hover:opacity-80 cursor-pointer shrink-0 ml-2"
               >
                 Clear
               </button>
@@ -297,18 +286,18 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           )}
 
           {saveNotice && (
-            <div className="text-xs bg-[#0F6E6E]/10 text-[#0F6E6E] border border-[#0F6E6E]/30 p-3 rounded-[20px] flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-[#0F6E6E]" />
+            <div className="text-xs bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border border-[#0F6E6E]/30 p-3 rounded-[10px] flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 shrink-0" />
               <span>{saveNotice}</span>
             </div>
           )}
 
           {piiError && (
-            <div className="bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs p-3.5 rounded-[20px] flex items-start gap-2.5">
-              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div className="bg-[#FDF2F2] dark:bg-[#2B0E0E] border border-[#F87171]/40 text-[#9B1C1C] dark:text-[#F87171] text-xs p-3.5 rounded-[10px] flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-rose-200">Personal details detected</p>
-                <p className="mt-0.5 text-rose-300">{piiError}</p>
+                <p className="font-bold">Personal details detected</p>
+                <p className="mt-0.5">{piiError}</p>
               </div>
             </div>
           )}
@@ -324,7 +313,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               className={`py-2 text-xs font-semibold rounded-[10px] transition-colors min-h-[44px] cursor-pointer btn-campus ${
                 reportType === 'lost'
                   ? 'bg-[#E8A317] text-[#1F1B16] shadow-xs'
-                  : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16]'
+                  : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
               }`}
             >
               I Lost Something
@@ -338,7 +327,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               className={`py-2 text-xs font-semibold rounded-[10px] transition-colors min-h-[44px] cursor-pointer btn-campus ${
                 reportType === 'found'
                   ? 'bg-[#2F7D4F] text-white shadow-xs'
-                  : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16]'
+                  : 'text-[#544E45] dark:text-[#B8B0A2] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
               }`}
             >
               I Found Something
@@ -426,23 +415,6 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               </select>
             </div>
 
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1.5">
-                Specific Spot <span className="text-xs font-normal text-[#7A7266]">(optional)</span>
-              </label>
-              <input
-                type="text"
-                value={locationDetails}
-                onChange={(e) => {
-                  setLocationDetails(e.target.value.slice(0, 160));
-                  saveDraftLocally();
-                }}
-                placeholder="e.g. Room 205, Ground Floor Corridor"
-                maxLength={160}
-                className="w-full text-xs px-3.5 py-2.5 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] focus:border-[#0F6E6E] focus:outline-hidden min-h-[44px]"
-              />
-            </div>
-
             <div>
               <label className="block text-xs font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1.5">
                 Date {reportType === 'lost' ? 'Lost' : 'Found'}:
@@ -456,6 +428,23 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 }}
                 className="w-full text-xs px-3.5 py-2.5 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] focus:border-[#0F6E6E] focus:outline-hidden min-h-[44px]"
                 required
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-medium text-[#544E45] dark:text-[#B8B0A2] mb-1.5">
+                Specific Spot <span className="text-xs font-normal text-[#7A7266] dark:text-[#857D71]">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={locationDetails}
+                onChange={(e) => {
+                  setLocationDetails(e.target.value.slice(0, 160));
+                  saveDraftLocally();
+                }}
+                placeholder="e.g. Room 205, Ground Floor Corridor"
+                maxLength={160}
+                className="w-full text-xs px-3.5 py-2.5 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] focus:border-[#0F6E6E] focus:outline-hidden min-h-[44px]"
               />
             </div>
           </div>

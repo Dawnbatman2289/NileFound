@@ -391,40 +391,40 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
           {showInbox ? (
             <div className="space-y-4 text-center">
-              <h3 className="font-serif font-bold text-base">Check your inbox</h3>
+              <h3 className="font-serif font-bold text-base text-[#1F1B16] dark:text-[#F5F1EA]">Check your inbox</h3>
               <p className="text-xs text-[#544E45] dark:text-[#B8B0A2]">Verify your email address before posting, claiming, or reading campus items.</p>
-              <p className="text-xs text-[#7A7266]">Check your spam or junk folder if it does not arrive.</p>
-              <button type="button" onClick={resendVerification} disabled={cooldown > 0} className="w-full min-h-[44px] bg-white dark:bg-[#28241F] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] text-xs font-medium">
+              <p className="text-xs text-[#7A7266] dark:text-[#857D71]">Check your spam or junk folder if it does not arrive.</p>
+              <button type="button" onClick={resendVerification} disabled={cooldown > 0} className="w-full min-h-[44px] bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] dark:hover:bg-[#332E27] text-[#1F1B16] dark:text-[#F5F1EA] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] text-xs font-medium cursor-pointer transition-colors">
                 {cooldown > 0 ? `Resend email (${cooldown}s)` : 'Resend email'}
               </button>
-              <button type="button" onClick={confirmVerified} className="w-full min-h-[44px] bg-[#0F6E6E] text-white rounded-[10px] text-xs font-medium">
+              <button type="button" onClick={confirmVerified} className="w-full min-h-[44px] bg-[#0F6E6E] hover:bg-[#0C5656] text-white rounded-[10px] text-xs font-medium cursor-pointer transition-colors">
                 I've verified
               </button>
-              <button type="button" onClick={handleSignOut} className="text-xs text-[#0F6E6E] underline">Wrong email? Use a different one</button>
+              <button type="button" onClick={handleSignOut} className="text-xs text-[#0F6E6E] dark:text-[#199595] underline cursor-pointer">Wrong email? Use a different one</button>
             </div>
           ) : (
           <>
           <form onSubmit={handleEmailAuth} className="space-y-3">
-            {mode === 'sign-up' && <input type="text" required minLength={2} maxLength={100} value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />}
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@nileuniversity.edu.ng" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />
+            {mode === 'sign-up' && <input type="text" required minLength={2} maxLength={100} value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] placeholder:text-[#7A7266] dark:placeholder:text-[#857D71] text-xs" />}
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@nileuniversity.edu.ng" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] placeholder:text-[#7A7266] dark:placeholder:text-[#857D71] text-xs" />
             <div className="relative">
-              <input type={showPassword ? 'text' : 'password'} required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full min-h-[44px] px-3 pr-20 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />
-              <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#0F6E6E]" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? 'Hide' : 'Show'}</button>
+              <input type={showPassword ? 'text' : 'password'} required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full min-h-[44px] px-3 pr-20 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] placeholder:text-[#7A7266] dark:placeholder:text-[#857D71] text-xs" />
+              <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs font-medium text-[#0F6E6E] dark:text-[#199595] hover:underline cursor-pointer" aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? 'Hide' : 'Show'}</button>
             </div>
-            {mode === 'sign-up' && <input type={showPassword ? 'text' : 'password'} required minLength={8} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm password" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-xs" />}
+            {mode === 'sign-up' && <input type={showPassword ? 'text' : 'password'} required minLength={8} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm password" className="w-full min-h-[44px] px-3 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] placeholder:text-[#7A7266] dark:placeholder:text-[#857D71] text-xs" />}
             {mode === 'sign-up' && <p className="text-xs text-[#544E45] dark:text-[#B8B0A2]">Password: 8+ characters, including one letter and one number.</p>}
-            <button type="submit" disabled={isSigningIn} className="w-full min-h-[44px] bg-[#2F7D4F] text-white rounded-[10px] text-xs font-medium">
+            <button type="submit" disabled={isSigningIn} className="w-full min-h-[44px] bg-[#2F7D4F] hover:bg-[#266841] text-white rounded-[10px] text-xs font-medium cursor-pointer">
               {mode === 'sign-up' ? 'Create account' : 'Sign in with email'}
             </button>
             <div className="flex items-center justify-between text-xs">
-              <button type="button" onClick={() => { clearFeedback(); setMode(mode === 'sign-up' ? 'sign-in' : 'sign-up'); }} className="text-[#0F6E6E] underline">
+              <button type="button" onClick={() => { clearFeedback(); setMode(mode === 'sign-up' ? 'sign-in' : 'sign-up'); }} className="text-[#0F6E6E] dark:text-[#199595] underline cursor-pointer">
                 {mode === 'sign-up' ? 'Already have an account? Sign in' : 'Create an account'}
               </button>
-              {mode === 'sign-in' && <button type="button" onClick={handleForgotPassword} className="text-[#0F6E6E] underline">Forgot password</button>}
+              {mode === 'sign-in' && <button type="button" onClick={handleForgotPassword} className="text-[#0F6E6E] dark:text-[#199595] underline cursor-pointer">Forgot password</button>}
             </div>
           </form>
-          <div className="flex items-center gap-3 text-xs text-[#7A7266]"><span className="h-px flex-1 bg-[#E6DFD2]" /><span>or</span><span className="h-px flex-1 bg-[#E6DFD2]" /></div>
-          <button type="button" onClick={handleGoogleSignIn} disabled={isSigningIn} className="w-full min-h-[44px] border border-[#E6DFD2] rounded-[10px] text-xs font-medium">Continue with Google</button>
+          <div className="flex items-center gap-3 text-xs text-[#7A7266] dark:text-[#857D71]"><span className="h-px flex-1 bg-[#E6DFD2] dark:bg-[#2E2A24]" /><span>or</span><span className="h-px flex-1 bg-[#E6DFD2] dark:bg-[#2E2A24]" /></div>
+          <button type="button" onClick={handleGoogleSignIn} disabled={isSigningIn} className="w-full min-h-[44px] bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] dark:hover:bg-[#332E27] text-[#1F1B16] dark:text-[#F5F1EA] border border-[#E6DFD2] dark:border-[#2E2A24] rounded-[10px] text-xs font-medium cursor-pointer">Continue with Google</button>
           </>
           )}
         </div>
