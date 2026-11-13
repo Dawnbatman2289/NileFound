@@ -27,8 +27,8 @@ try {
     tabManager: persistentMultipleTabManager(),
   });
   firestore = firebaseConfig.firestoreDatabaseId
-    ? initializeFirestore(app, { localCache }, firebaseConfig.firestoreDatabaseId)
-    : initializeFirestore(app, { localCache });
+    ? initializeFirestore(app, { localCache, experimentalAutoDetectLongPolling: true }, firebaseConfig.firestoreDatabaseId)
+    : initializeFirestore(app, { localCache, experimentalAutoDetectLongPolling: true });
 } catch {
   firestore = firebaseConfig.firestoreDatabaseId
     ? getFirestore(app, firebaseConfig.firestoreDatabaseId)

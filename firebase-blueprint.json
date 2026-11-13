@@ -79,6 +79,17 @@
         "createdAt": { "type": "string" }
       },
       "required": ["name", "email", "role", "createdAt"]
+    },
+    "AdminConfig": {
+      "title": "AdminConfig",
+      "description": "Authorized master administrator marker document.",
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "email": { "type": "string", "maxLength": 100 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["enabled", "email", "updatedAt"]
     }
   },
   "firestore": {
@@ -97,6 +108,10 @@
     "/roles/{userId}": {
       "schema": "Role",
       "description": "Role document defining administrative or security personnel access."
+    },
+    "/admins/{adminUid}": {
+      "schema": "AdminConfig",
+      "description": "Configured administrator access flags."
     },
     "/users/{userId}": {
       "schema": "UserProfile",

@@ -315,7 +315,7 @@ export default function App() {
 
   // Real-time Firestore sync when in real mode
   useEffect(() => {
-    if (isDemoMode || !currentUser || !auth.currentUser?.emailVerified) return;
+    if (isDemoMode || !currentUser || (!auth.currentUser?.emailVerified && !isMasterAdminEmail(auth.currentUser?.email))) return;
 
     let cancelled = false;
     setItemsCursor(undefined);
@@ -367,7 +367,7 @@ export default function App() {
 
   // Real-time campus & admin notifications subscription
   useEffect(() => {
-    if (isDemoMode || !currentUser || !auth.currentUser?.emailVerified) {
+    if (isDemoMode || !currentUser || (!auth.currentUser?.emailVerified && !isMasterAdminEmail(auth.currentUser?.email))) {
       setNotifications([]);
       return;
     }

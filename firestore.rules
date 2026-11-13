@@ -30,8 +30,8 @@ service cloud.firestore {
         && (
           (request.auth.token.email is string && request.auth.token.email == 'ayomide2289@gmail.com')
           || (
-            exists(/databases/$(database)/documents/config/admins/$(request.auth.uid))
-            && get(/databases/$(database)/documents/config/admins/$(request.auth.uid)).data.enabled == true
+            exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+            && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.enabled == true
           )
         );
     }
@@ -145,7 +145,8 @@ service cloud.firestore {
 
     // Items collection (verified campus members only)
     match /items/{itemId} {
-      allow get, list: if isVerifiedUser() && isValidId(itemId);
+      allow get: if isVerifiedUser() && isValidId(itemId);
+      allow list: if isVerifiedUser();
       allow create: if isValidId(itemId) && isVerifiedUser()
         && isValidItem(incoming())
         && incoming().authorId == request.auth.uid
@@ -261,10 +262,10 @@ service cloud.firestore {
     }
 
     // Configured admins collection
-    match /config/admins/{adminUid} {
-      allow get: if isSignedIn() && (request.auth.uid == adminUid || isMasterAdmin());
+    match /admins/{adminUid} {
+      allow get: if isValidId(adminUid) && isSignedIn() && (request.auth.uid == adminUid || isMasterAdmin());
       allow list: if isMasterAdmin();
-      allow write: if isMasterAdmin();
+      allow write: if isValidId(adminUid) && isMasterAdmin();
     }
 
     // Users directory

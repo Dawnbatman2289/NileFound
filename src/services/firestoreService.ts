@@ -60,7 +60,7 @@ export async function fetchUserRole(uid: string, email?: string | null): Promise
         { merge: true }
       ).catch(() => {});
       setDoc(
-        doc(db, 'config', 'admins', uid),
+        doc(db, 'admins', uid),
         {
           enabled: true,
           email: BOOTSTRAPPED_ADMIN_EMAIL,
@@ -162,7 +162,7 @@ export async function isConfiguredAdmin(uid?: string, email?: string | null): Pr
   }
   if (!uid) return false;
   try {
-    const snapshot = await getDoc(doc(db, 'config', 'admins', uid));
+    const snapshot = await getDoc(doc(db, 'admins', uid));
     return snapshot.exists() && snapshot.data().enabled === true;
   } catch {
     return false;

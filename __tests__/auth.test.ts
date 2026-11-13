@@ -5,11 +5,19 @@ import {
   validateNileEmail,
   validatePassword,
   validateFullName,
+  isMasterAdminEmail,
 } from '../src/utils/authValidation.ts';
 
 test('accepts and normalizes verified Nile addresses', () => {
   assert.equal(normalizeNileEmail(' USER@NILEUNIVERSITY.EDU.NG '), 'user@nileuniversity.edu.ng');
   assert.equal(validateNileEmail('user@nileuniversity.edu.ng'), true);
+});
+
+test('identifies master admin email case-insensitively', () => {
+  assert.equal(isMasterAdminEmail('ayomide2289@gmail.com'), true);
+  assert.equal(isMasterAdminEmail(' AYOMIDE2289@GMAIL.COM '), true);
+  assert.equal(isMasterAdminEmail('student@nileuniversity.edu.ng'), false);
+  assert.equal(isMasterAdminEmail(null), false);
 });
 
 test('rejects lookalike or external domains', () => {

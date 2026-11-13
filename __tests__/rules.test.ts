@@ -30,3 +30,8 @@ test('Storage rules restrict MIME, size, UID paths, and Nile verification', () =
   assert.match(storageRules, /request\.resource\.size <= 5 \* 1024 \* 1024/);
   assert.match(storageRules, /image\/\(jpeg\|png\|webp\)/);
 });
+
+test('Admin configuration uses valid 2-segment /admins/{uid} document path', () => {
+  assert.ok(!firestoreRules.includes('/config/admins/'));
+  assert.match(firestoreRules, /match \/admins\/\{adminUid\}/);
+});

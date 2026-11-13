@@ -4,7 +4,7 @@ import { join, relative } from 'node:path';
 import { test } from 'node:test';
 
 const repoRoot = process.cwd();
-const ignoredDirectories = new Set(['.git', 'node_modules', 'dist', 'build', 'coverage']);
+const ignoredDirectories = new Set(['.git', 'node_modules', 'dist', 'build', 'coverage', '.playwright-cli']);
 const ignoredFiles = new Set(['firebase-applet-config.json']);
 const allowedEmail = /^(?:ayomide2289@gmail\.com|[^@\s]+@(?:nileuniversity\.edu\.ng|(?:[A-Z0-9.-]+\.)?example\.com|(?:[A-Z0-9.-]+\.)?test\.invalid))$/i;
 const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;

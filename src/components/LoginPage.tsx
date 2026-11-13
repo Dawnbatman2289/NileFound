@@ -275,16 +275,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   };
 
   const handleForgotPassword = async () => {
-    if (!email.trim()) {
+    clearFeedback();
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
       setErrorMessage('Enter your email address first.');
       return;
     }
-    if (!validateNileEmail(email.trim().toLowerCase())) {
+    if (!isMasterAdminEmail(normalizedEmail) && !validateNileEmail(normalizedEmail)) {
       setErrorMessage('Please use your @nileuniversity.edu.ng email.');
       return;
     }
     try {
-      await sendPasswordResetEmail(auth, email.trim());
+      await sendPasswordResetEmail(auth, normalizedEmail);
       setSuccessMessage('If an account exists for that email, a reset link has been sent.');
     } catch {
       setSuccessMessage('If an account exists for that email, a reset link has been sent.');
@@ -415,7 +417,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               {mode === 'sign-up' ? 'Create account' : 'Sign in with email'}
             </button>
             <div className="flex items-center justify-between text-xs">
-              <button type="button" onClick={() => setMode(mode === 'sign-up' ? 'sign-in' : 'sign-up')} className="text-[#0F6E6E] underline">
+              <button type="button" onClick={() => { clearFeedback(); setMode(mode === 'sign-up' ? 'sign-in' : 'sign-up'); }} className="text-[#0F6E6E] underline">
                 {mode === 'sign-up' ? 'Already have an account? Sign in' : 'Create an account'}
               </button>
               {mode === 'sign-in' && <button type="button" onClick={handleForgotPassword} className="text-[#0F6E6E] underline">Forgot password</button>}
