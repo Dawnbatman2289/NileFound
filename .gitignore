@@ -2,9 +2,14 @@ node_modules/
 build/
 dist/
 coverage/
+.firebase/
 .DS_Store
 *.log
+*.tsbuildinfo
 .env*
 !.env.example
+service-account*.json
+*serviceAccountKey*.json
 .aistudio/
+.playwright-cli/
 functions/lib/

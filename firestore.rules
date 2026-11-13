@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Default deny: Block all unmatched paths
+    // Explicit default-deny sentinel; Firestore rules are additive so unmatched paths remain denied.
     match /{document=**} {
       allow read, write: if false;
     }
@@ -20,39 +20,37 @@ service cloud.firestore {
       return resource.data;
     }
 
-    function isSignedIn() {
-      return request.auth != null;
+    // Root project owner identity (update UID and email if self-hosting a different Firebase project)
+    function isMasterAdmin() {
+      return request.auth != null
+        && request.auth.uid == 'nFdIhTjOOqMqMG4y1KIT550Qf5m1'
+        && request.auth.token.keys().hasAll(['email_verified'])
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string
+        && request.auth.token.email == 'ayomide2289@gmail.com';
     }
 
-    // Auth + Email Verification requirement
+    // Delegated admin flag in /admins/{uid} (does NOT grant master admin privileges)
     function isConfiguredAdmin() {
-      return isSignedIn()
-        && (
-          (request.auth.token.email is string && request.auth.token.email == 'ayomide2289@gmail.com')
-          || (
-            exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-            && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.enabled == true
-          )
-        );
+      return request.auth != null
+        && request.auth.token.keys().hasAll(['email_verified'])
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.enabled == true;
     }
 
     function isVerifiedUser() {
-      return isSignedIn()
-        && (
-          isConfiguredAdmin()
-          || (
-            request.auth.token.keys().hasAll(['email_verified'])
-            && request.auth.token.email_verified == true
-            && request.auth.token.email is string
-            && request.auth.token.email.matches('^[^@]+@nileuniversity\\.edu\\.ng$')
+      return isMasterAdmin()
+        || (
+          request.auth != null
+          && request.auth.token.keys().hasAll(['email_verified'])
+          && request.auth.token.email_verified == true
+          && request.auth.token.email is string
+          && (
+            request.auth.token.email.matches('^[^@]+@nileuniversity\\.edu\\.ng$')
+            || isConfiguredAdmin()
           )
         );
-    }
-
-    // Master Admin check (Sole user permitted to provision admin and security roles)
-    function isMasterAdmin() {
-      return isSignedIn()
-        && isConfiguredAdmin();
     }
 
     // Check roles document in /roles/{uid} or /staffInvites/{email}
@@ -70,7 +68,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isMasterAdmin() || hasRole('admin');
+      return isMasterAdmin() || isConfiguredAdmin() || hasRole('admin');
     }
 
     function isSecurity() {
@@ -81,71 +79,88 @@ service cloud.firestore {
       return isAdmin() || isSecurity();
     }
 
-    // Item schema and field validation
+    // Item schema and field validation (no PII or imageUrl for student_id)
     function isValidItem(data) {
       return data.keys().hasAll(['title', 'type', 'category', 'description', 'location', 'status', 'holdingLocation', 'authorId', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['title', 'type', 'category', 'description', 'location', 'locationDetails', 'dateLostOrFound', 'status', 'holdingLocation', 'authorId', 'imageUrl', 'isSensitiveId', 'verificationQuestion', 'createdAt', 'updatedAt'])
         && data.title is string && data.title.size() >= 2 && data.title.size() <= 100
         && data.type in ['lost', 'found']
         && data.category in ['student_id', 'phone_tech', 'power_bank', 'calculator', 'flash_drive', 'keys', 'bag_backpack', 'lab_coat_clothing', 'books_notes', 'other']
         && data.description is string && data.description.size() <= 1000
         && data.location is string && data.location.size() >= 2 && data.location.size() <= 100
         && (!('locationDetails' in data) || (data.locationDetails is string && data.locationDetails.size() <= 160))
+        && (!('dateLostOrFound' in data) || (data.dateLostOrFound is string && data.dateLostOrFound.size() <= 40))
         && data.status in ['open', 'claim_requested', 'verified', 'returned', 'expired']
         && data.holdingLocation in ['finder_holding', 'security_main_gate', 'student_affairs_office', 'faculty_officer', 'library_desk']
         && data.authorId is string && data.authorId.size() <= 128
-        && data.createdAt is string && data.createdAt.size() <= 50
-        && data.updatedAt is string && data.updatedAt.size() <= 50
-        && (!('imageUrl' in data) || (data.imageUrl is string && (data.imageUrl.matches('^https://kempt-coyote-nc70r\\.firebasestorage\\.app/.*') || data.imageUrl.matches('^data:image/(jpeg|png|webp);base64,.*')) && data.imageUrl.size() <= 100000))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && !(data.category == 'student_id' && 'imageUrl' in data)
+        && (data.category != 'student_id' || data.isSensitiveId == true)
+        && (!('imageUrl' in data) || (
+          data.imageUrl is string
+          && data.imageUrl.size() <= 140000
+          && (
+            data.imageUrl.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')
+            || data.imageUrl.matches('^https://firebasestorage\\.googleapis\\.com/v0/b/kempt-coyote-nc70r\\.firebasestorage\\.app/o/items%2F' + data.authorId + '%2F[^?]+\\?alt=media(&token=[a-zA-Z0-9-]+)?$')
+          )
+        ))
         && (!('verificationQuestion' in data) || (data.verificationQuestion is string && data.verificationQuestion.size() <= 300))
         && (!('isSensitiveId' in data) || (data.isSensitiveId is bool));
     }
 
     function isValidItemSecret(data, itemId) {
       return data.keys().hasAll(['itemId', 'authorId', 'expectedAnswer', 'createdAt'])
+        && data.keys().hasOnly(['itemId', 'authorId', 'expectedAnswer', 'createdAt'])
         && data.itemId is string && data.itemId == itemId
         && data.authorId is string && data.authorId == request.auth.uid
         && data.expectedAnswer is string && data.expectedAnswer.size() >= 1 && data.expectedAnswer.size() <= 500
-        && data.createdAt is string && data.createdAt.size() <= 50;
+        && data.createdAt is timestamp;
     }
 
     function isValidClaim(data) {
       return data.keys().hasAll(['itemId', 'itemTitle', 'claimantId', 'finderId', 'status', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['itemId', 'itemTitle', 'claimantId', 'status', 'createdAt', 'updatedAt', 'finderId'])
+        && data.keys().hasOnly(['itemId', 'itemTitle', 'claimantId', 'finderId', 'status', 'createdAt', 'updatedAt'])
         && data.itemId is string && data.itemId.size() <= 128
         && data.itemTitle is string && data.itemTitle.size() <= 100
         && data.claimantId is string && data.claimantId.size() <= 128
+        && data.finderId is string && data.finderId.size() <= 128
         && data.status in ['pending', 'approved', 'rejected']
-        && data.createdAt is string && data.createdAt.size() <= 50
-        && data.updatedAt is string && data.updatedAt.size() <= 50
-        && data.finderId is string && data.finderId.size() <= 128;
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
     }
 
     function isValidPrivateClaim(data, itemId, claimId) {
-      return data.keys().hasOnly(['itemId', 'claimId', 'claimantId', 'claimantName', 'claimantEmail', 'submittedAnswer', 'createdAt'])
+      return data.keys().hasAll(['itemId', 'claimId', 'claimantId', 'claimantName', 'claimantEmail', 'submittedAnswer', 'createdAt'])
+        && data.keys().hasOnly(['itemId', 'claimId', 'claimantId', 'claimantName', 'claimantEmail', 'submittedAnswer', 'createdAt'])
         && data.itemId == itemId
         && data.claimId == claimId
         && data.claimantId == request.auth.uid
         && data.claimantName is string && data.claimantName.size() >= 2 && data.claimantName.size() <= 100
         && data.claimantEmail is string && data.claimantEmail.size() >= 3 && data.claimantEmail.size() <= 100
         && data.submittedAnswer is string && data.submittedAnswer.size() <= 500
-        && data.createdAt is string && data.createdAt.size() <= 50;
+        && data.createdAt is timestamp;
     }
 
     function isValidPrivateDetails(data, itemId) {
-      return data.keys().hasOnly(['itemId', 'authorId', 'authorName', 'authorEmail', 'createdAt'])
+      return data.keys().hasAll(['itemId', 'authorId', 'authorName', 'authorEmail', 'createdAt'])
+        && data.keys().hasOnly(['itemId', 'authorId', 'authorName', 'authorEmail', 'createdAt'])
         && data.itemId is string && data.itemId == itemId
         && data.authorId is string && data.authorId == request.auth.uid
         && data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 100
         && data.authorEmail is string && data.authorEmail.size() >= 3 && data.authorEmail.size() <= 100
-        && data.createdAt is string && data.createdAt.size() <= 50;
+        && data.createdAt is timestamp;
     }
 
     function isValidUser(data) {
       return data.keys().hasAll(['name', 'email', 'role', 'createdAt'])
+        && data.keys().hasOnly(['name', 'email', 'role', 'department', 'matricNumber', 'createdAt', 'updatedAt'])
         && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
         && data.email is string && data.email.size() <= 100
+        && request.auth.token.email is string && data.email == request.auth.token.email
         && data.role in ['student', 'security', 'admin']
-        && data.createdAt is string && data.createdAt.size() <= 50
+        && data.createdAt is timestamp
+        && (!('updatedAt' in data) || (data.updatedAt is timestamp))
         && (!('department' in data) || (data.department is string && data.department.size() <= 100))
         && (!('matricNumber' in data) || (data.matricNumber is string && data.matricNumber.size() <= 20));
     }
@@ -157,121 +172,175 @@ service cloud.firestore {
       allow create: if isValidId(itemId) && isVerifiedUser()
         && isValidItem(incoming())
         && incoming().authorId == request.auth.uid
-        && incoming().status == 'open';
+        && incoming().status == 'open'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
       allow update: if isValidId(itemId) && isVerifiedUser()
         && isValidItem(incoming())
+        && incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
         && (
-          isAdmin() ||
-          (
+          isStaffOrAdmin()
+          || (
             existing().authorId == request.auth.uid
-            && incoming().authorId == existing().authorId
-            && incoming().createdAt == existing().createdAt
             && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
             && existing().status != 'returned'
-            && incoming().status in ['open', 'claim_requested', 'returned', 'expired']
+            && incoming().status in ['open', 'claim_requested', 'verified', 'returned', 'expired']
           )
           || (
             existing().status == 'open'
+            && existing().type == 'found'
+            && existing().authorId != request.auth.uid
             && incoming().status == 'claim_requested'
             && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && existsAfter(/databases/$(database)/documents/claims/$(itemId + '_' + request.auth.uid))
           )
         );
       allow delete: if isValidId(itemId) && (
-        isAdmin() ||
+        isStaffOrAdmin() ||
         (isVerifiedUser() && existing().authorId == request.auth.uid)
       );
 
-      // Private secret verification answer subcollection (Only author and admin can read)
+      // Private secret verification answer subcollection
       match /secrets/{secretId} {
         allow get: if isValidId(secretId) && isVerifiedUser() && (
-          isAdmin() ||
+          isStaffOrAdmin() ||
           resource.data.authorId == request.auth.uid
         );
-        allow list: if isAdmin();
+        allow list: if isStaffOrAdmin();
         allow create: if isValidId(secretId) && isVerifiedUser()
-          && isValidItemSecret(incoming(), itemId);
-        allow update, delete: if isValidId(secretId) && (
-          isAdmin() ||
+          && isValidItemSecret(incoming(), itemId)
+          && incoming().createdAt == request.time
+          && existsAfter(/databases/$(database)/documents/items/$(itemId))
+          && getAfter(/databases/$(database)/documents/items/$(itemId)).data.authorId == request.auth.uid;
+        allow update: if isValidId(secretId) && isVerifiedUser()
+          && isValidItemSecret(incoming(), itemId)
+          && incoming().createdAt == existing().createdAt
+          && (isStaffOrAdmin() || resource.data.authorId == request.auth.uid);
+        allow delete: if isValidId(secretId) && (
+          isStaffOrAdmin() ||
           (isVerifiedUser() && resource.data.authorId == request.auth.uid)
         );
       }
 
-      // Private reporter details subcollection (Only item owner and admin can read)
+      // Private reporter details subcollection (author, staff/admin, or approved claimant for handover)
       match /private/{docId} {
         allow get: if isValidId(docId) && isVerifiedUser() && (
-          isMasterAdmin() ||
-          isAdmin() ||
-          resource.data.authorId == request.auth.uid
+          isStaffOrAdmin()
+          || resource.data.authorId == request.auth.uid
+          || (
+            exists(/databases/$(database)/documents/claims/$(itemId + '_' + request.auth.uid))
+            && get(/databases/$(database)/documents/claims/$(itemId + '_' + request.auth.uid)).data.status == 'approved'
+          )
         );
-        allow list: if isMasterAdmin() || isAdmin();
+        allow list: if isStaffOrAdmin();
         allow create: if isValidId(docId) && isVerifiedUser()
-          && isValidPrivateDetails(incoming(), itemId);
-        allow update, delete: if isValidId(docId) && (
-          isMasterAdmin() ||
-          isAdmin() ||
+          && isValidPrivateDetails(incoming(), itemId)
+          && incoming().createdAt == request.time
+          && existsAfter(/databases/$(database)/documents/items/$(itemId))
+          && getAfter(/databases/$(database)/documents/items/$(itemId)).data.authorId == request.auth.uid;
+        allow update: if isValidId(docId) && isVerifiedUser()
+          && isValidPrivateDetails(incoming(), itemId)
+          && incoming().createdAt == existing().createdAt
+          && (isStaffOrAdmin() || resource.data.authorId == request.auth.uid);
+        allow delete: if isValidId(docId) && (
+          isStaffOrAdmin() ||
           (isVerifiedUser() && resource.data.authorId == request.auth.uid)
         );
-
       }
 
+      // Private claim details (claimant, item author, and campus staff/admin)
       match /privateClaims/{claimId} {
         allow get: if isValidId(claimId) && isVerifiedUser() && (
-          isAdmin() ||
-          resource.data.claimantId == request.auth.uid ||
-          get(/databases/$(database)/documents/items/$(itemId)).data.authorId == request.auth.uid
+          isStaffOrAdmin()
+          || resource.data.claimantId == request.auth.uid
+          || get(/databases/$(database)/documents/items/$(itemId)).data.authorId == request.auth.uid
         );
         allow list: if isVerifiedUser() && (
-          isAdmin() ||
-          get(/databases/$(database)/documents/items/$(itemId)).data.authorId == request.auth.uid
+          isStaffOrAdmin()
+          || get(/databases/$(database)/documents/items/$(itemId)).data.authorId == request.auth.uid
         );
         allow create: if isValidId(claimId) && isVerifiedUser()
-          && isValidPrivateClaim(incoming(), itemId, claimId);
-        allow update, delete: if isValidId(claimId) && isAdmin();
+          && isValidPrivateClaim(incoming(), itemId, claimId)
+          && incoming().createdAt == request.time
+          && existsAfter(/databases/$(database)/documents/claims/$(claimId))
+          && getAfter(/databases/$(database)/documents/claims/$(claimId)).data.claimantId == request.auth.uid
+          && getAfter(/databases/$(database)/documents/claims/$(claimId)).data.itemId == itemId;
+        allow update: if isValidId(claimId) && isStaffOrAdmin();
+        allow delete: if isValidId(claimId) && (
+          isStaffOrAdmin()
+          || (isVerifiedUser() && resource.data.claimantId == request.auth.uid)
+          || (isVerifiedUser() && get(/databases/$(database)/documents/items/$(itemId)).data.authorId == request.auth.uid)
+        );
       }
     }
 
-    // Claims collection
+    // Claims collection (deterministic ID: ${itemId}_${claimantUid})
     match /claims/{claimId} {
       allow get: if isValidId(claimId) && isVerifiedUser() && (
-        isAdmin() || resource.data.claimantId == request.auth.uid
+        isStaffOrAdmin()
+        || resource.data.claimantId == request.auth.uid
+        || resource.data.finderId == request.auth.uid
       );
       allow list: if isVerifiedUser() && (
-        isAdmin() || resource.data.claimantId == request.auth.uid
+        isStaffOrAdmin()
+        || resource.data.claimantId == request.auth.uid
+        || resource.data.finderId == request.auth.uid
       );
       allow create: if isValidId(claimId) && isVerifiedUser()
         && isValidClaim(incoming())
+        && claimId == incoming().itemId + '_' + request.auth.uid
+        && !exists(/databases/$(database)/documents/claims/$(claimId))
         && incoming().claimantId == request.auth.uid
         && incoming().status == 'pending'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
         && exists(/databases/$(database)/documents/items/$(incoming().itemId))
+        && get(/databases/$(database)/documents/items/$(incoming().itemId)).data.type == 'found'
+        && get(/databases/$(database)/documents/items/$(incoming().itemId)).data.status == 'open'
+        && get(/databases/$(database)/documents/items/$(incoming().itemId)).data.authorId != request.auth.uid
         && incoming().finderId == get(/databases/$(database)/documents/items/$(incoming().itemId)).data.authorId;
       allow update: if isValidId(claimId) && isVerifiedUser()
         && isValidClaim(incoming())
         && incoming().claimantId == existing().claimantId
+        && incoming().finderId == existing().finderId
         && incoming().itemId == existing().itemId
         && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
         && (
-          isAdmin() ||
+          isStaffOrAdmin() ||
           (
             resource.data.finderId == request.auth.uid
             && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
             && incoming().status in ['pending', 'approved', 'rejected']
           )
         );
-      allow delete: if isValidId(claimId) && isAdmin();
+      allow delete: if isValidId(claimId) && (
+        isStaffOrAdmin() ||
+        (isVerifiedUser() && resource.data.finderId == request.auth.uid)
+      );
     }
 
-    // Role assignment collection (/roles/{userId})
-    // Strictly restricted to the project owner's UID.
+    // Role assignment collection (/roles/{userId}) - only Master Admin writes
     match /roles/{userId} {
-      allow get: if isValidId(userId) && isVerifiedUser() && (request.auth.uid == userId || isAdmin());
-      allow list: if isAdmin();
-      allow write: if isMasterAdmin();
+      allow get: if isValidId(userId) && isVerifiedUser() && (request.auth.uid == userId || isStaffOrAdmin());
+      allow list: if isStaffOrAdmin();
+      allow create, update: if isValidId(userId) && isMasterAdmin()
+        && incoming().keys().hasAll(['role', 'email', 'assignedAt'])
+        && incoming().keys().hasOnly(['role', 'email', 'assignedAt', 'assignedBy', 'updatedAt'])
+        && incoming().role in ['admin', 'security', 'student']
+        && incoming().email is string && incoming().email.size() <= 100
+        && incoming().assignedAt is timestamp
+        && (!('assignedBy' in incoming()) || (incoming().assignedBy is string && incoming().assignedBy.size() <= 128))
+        && (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp));
+      allow delete: if isValidId(userId) && isMasterAdmin();
     }
 
     // Email-keyed pending staff role assignments (/staffInvites/{inviteEmail})
     match /staffInvites/{inviteEmail} {
-      allow get: if isVerifiedUser() && (isAdmin() || request.auth.token.email == inviteEmail);
-      allow list: if isAdmin();
+      allow get: if isVerifiedUser() && (isStaffOrAdmin() || request.auth.token.email == inviteEmail);
+      allow list: if isStaffOrAdmin();
       allow create, update: if isMasterAdmin()
         && inviteEmail.size() <= 128
         && inviteEmail.matches('^[^/]+@nileuniversity\\.edu\\.ng$')
@@ -279,33 +348,53 @@ service cloud.firestore {
         && incoming().keys().hasOnly(['email', 'role', 'assignedAt', 'assignedBy'])
         && incoming().email == inviteEmail
         && incoming().role in ['admin', 'security', 'student']
-        && incoming().assignedAt is string && incoming().assignedAt.size() <= 50
+        && incoming().assignedAt is timestamp
+        && incoming().assignedAt == request.time
         && (!('assignedBy' in incoming()) || (incoming().assignedBy is string && incoming().assignedBy.size() <= 128));
       allow delete: if isMasterAdmin();
     }
 
-    // Configured admins collection
+    // Delegated admins collection (/admins/{adminUid}) - only Master Admin writes
     match /admins/{adminUid} {
-      allow get: if isValidId(adminUid) && isSignedIn() && (request.auth.uid == adminUid || isMasterAdmin());
+      allow get: if isValidId(adminUid) && request.auth != null
+        && request.auth.token.keys().hasAll(['email_verified'])
+        && request.auth.token.email_verified == true
+        && (request.auth.uid == adminUid || isMasterAdmin());
       allow list: if isMasterAdmin();
-      allow write: if isValidId(adminUid) && isMasterAdmin();
+      allow create, update: if isValidId(adminUid) && isMasterAdmin()
+        && incoming().keys().hasAll(['enabled', 'email', 'updatedAt'])
+        && incoming().keys().hasOnly(['enabled', 'email', 'updatedAt'])
+        && incoming().enabled is bool
+        && incoming().email is string && incoming().email.size() <= 100
+        && incoming().updatedAt is timestamp
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(adminUid) && isMasterAdmin();
     }
 
     // Users directory
     match /users/{userId} {
-      allow get: if isValidId(userId) && isVerifiedUser() && (request.auth.uid == userId || isAdmin());
-      allow list: if isAdmin();
-      allow create, update: if isValidId(userId) && isVerifiedUser()
+      allow get: if isValidId(userId) && isVerifiedUser() && (request.auth.uid == userId || isStaffOrAdmin());
+      allow list: if isStaffOrAdmin();
+      allow create: if isValidId(userId) && isVerifiedUser()
         && request.auth.uid == userId
         && isValidUser(incoming())
+        && incoming().createdAt == request.time
         && (incoming().role == 'student' || isMasterAdmin());
-      allow delete: if isValidId(userId) && isAdmin();
+      allow update: if isValidId(userId) && isVerifiedUser()
+        && request.auth.uid == userId
+        && isValidUser(incoming())
+        && incoming().createdAt == existing().createdAt
+        && (!('updatedAt' in incoming()) || incoming().updatedAt == request.time)
+        && (incoming().role == existing().role || isMasterAdmin());
+      allow delete: if isValidId(userId) && (
+        isAdmin() || (isVerifiedUser() && request.auth.uid == userId)
+      );
     }
 
     // Campus and Admin Notifications
     function isValidNotification(data) {
       return data.keys().hasAll(['recipientUid', 'fromUid', 'type', 'title', 'message', 'read', 'createdAt'])
-        && data.keys().hasOnly(['recipientUid', 'fromUid', 'type', 'title', 'message', 'read', 'createdAt', 'itemId', 'claimId'])
+        && data.keys().hasOnly(['recipientUid', 'fromUid', 'type', 'title', 'message', 'read', 'createdAt', 'itemId', 'itemTitle', 'claimId', 'sourceItemId'])
         && data.fromUid is string && data.fromUid == request.auth.uid
         && data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid.size() <= 128
         && data.type in ['claim_received', 'claim_approved', 'claim_rejected', 'match_alert', 'item_returned', 'admin_review']
@@ -314,8 +403,9 @@ service cloud.firestore {
         && data.message is string && data.message.size() >= 2 && data.message.size() <= 500
         && !data.message.matches('.*@.*')
         && data.read is bool && data.read == false
-        && data.createdAt is string && data.createdAt.size() <= 50
+        && data.createdAt is timestamp && data.createdAt == request.time
         && (!('itemId' in data) || (data.itemId is string && data.itemId.size() <= 128))
+        && (!('sourceItemId' in data) || (data.sourceItemId is string && data.sourceItemId.size() <= 128))
         && (!('itemTitle' in data) || (data.itemTitle is string && data.itemTitle.size() <= 100 && !data.itemTitle.matches('.*@.*')))
         && (!('claimId' in data) || (data.claimId is string && data.claimId.size() <= 128))
         && (
@@ -329,12 +419,13 @@ service cloud.firestore {
     }
 
     function canCreateNotification(data) {
-      return data.recipientUid == request.auth.uid
+      return (data.recipientUid == request.auth.uid && data.type == 'match_alert')
         || (
           data.recipientUid == 'admin'
           && data.type == 'admin_review'
           && (
-            (
+            isStaffOrAdmin()
+            || (
               'itemId' in data
               && exists(/databases/$(database)/documents/items/$(data.itemId))
               && get(/databases/$(database)/documents/items/$(data.itemId)).data.authorId == request.auth.uid
@@ -347,33 +438,64 @@ service cloud.firestore {
           )
         )
         || (
-          'itemId' in data
-          && exists(/databases/$(database)/documents/items/$(data.itemId))
-          && get(/databases/$(database)/documents/items/$(data.itemId)).data.authorId == data.recipientUid
-          && data.type in ['claim_received', 'item_returned', 'match_alert']
+          data.type == 'claim_received'
+          && 'claimId' in data
+          && 'itemId' in data
+          && exists(/databases/$(database)/documents/claims/$(data.claimId))
+          && get(/databases/$(database)/documents/claims/$(data.claimId)).data.claimantId == request.auth.uid
+          && get(/databases/$(database)/documents/claims/$(data.claimId)).data.finderId == data.recipientUid
+          && get(/databases/$(database)/documents/claims/$(data.claimId)).data.itemId == data.itemId
         )
         || (
-          'claimId' in data
+          data.type == 'item_returned'
+          && 'itemId' in data
+          && exists(/databases/$(database)/documents/items/$(data.itemId))
+          && get(/databases/$(database)/documents/items/$(data.itemId)).data.authorId == data.recipientUid
+          && (
+            isStaffOrAdmin()
+            || get(/databases/$(database)/documents/items/$(data.itemId)).data.authorId == request.auth.uid
+          )
+        )
+        || (
+          data.type == 'match_alert'
+          && 'itemId' in data
+          && exists(/databases/$(database)/documents/items/$(data.itemId))
+          && get(/databases/$(database)/documents/items/$(data.itemId)).data.authorId == data.recipientUid
+          && (
+            isStaffOrAdmin()
+            || (
+              'sourceItemId' in data
+              && exists(/databases/$(database)/documents/items/$(data.sourceItemId))
+              && get(/databases/$(database)/documents/items/$(data.sourceItemId)).data.authorId == request.auth.uid
+            )
+          )
+        )
+        || (
+          data.type in ['claim_approved', 'claim_rejected']
+          && 'claimId' in data
           && exists(/databases/$(database)/documents/claims/$(data.claimId))
           && get(/databases/$(database)/documents/claims/$(data.claimId)).data.claimantId == data.recipientUid
-          && data.type in ['claim_approved', 'claim_rejected']
+          && (
+            isStaffOrAdmin()
+            || get(/databases/$(database)/documents/claims/$(data.claimId)).data.finderId == request.auth.uid
+          )
         );
     }
 
     match /notifications/{notificationId} {
       allow get, list: if isVerifiedUser() && (
         resource.data.recipientUid == request.auth.uid ||
-        (isAdmin() && resource.data.recipientUid == 'admin')
+        (isStaffOrAdmin() && resource.data.recipientUid == 'admin')
       );
       allow create: if isValidId(notificationId) && isVerifiedUser()
         && isValidNotification(incoming())
         && canCreateNotification(incoming());
       allow update: if isValidId(notificationId) && isVerifiedUser()
-        && (resource.data.recipientUid == request.auth.uid || (isAdmin() && resource.data.recipientUid == 'admin'))
+        && (resource.data.recipientUid == request.auth.uid || (isStaffOrAdmin() && resource.data.recipientUid == 'admin'))
         && incoming().diff(existing()).affectedKeys().hasOnly(['read'])
         && incoming().read is bool;
       allow delete: if isValidId(notificationId) && (
-        isAdmin() ||
+        isStaffOrAdmin() ||
         (isVerifiedUser() && resource.data.recipientUid == request.auth.uid)
       );
     }

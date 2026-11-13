@@ -23,6 +23,7 @@ interface ReportModalProps {
   currentUser?: User | null;
   onLogin?: (user: User) => void;
   onOpenLogin?: () => void;
+  initialPrefill?: Partial<Pick<CampusItem, 'type' | 'title' | 'category' | 'location'>> | null;
 }
 
 const DRAFT_STORAGE_KEY = 'nilefound_report_draft_v1';
@@ -34,6 +35,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   onDraftSaved,
   currentUser,
   onOpenLogin,
+  initialPrefill,
 }) => {
   const [reportType, setReportType] = useState<ItemType>('lost');
   const [title, setTitle] = useState('');
@@ -65,34 +67,41 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     }
   }, [isFoundStudentId]);
 
-  // Load draft on mount
+  // Load prefill or local draft on open
   useEffect(() => {
-    if (isOpen) {
-      setPiiError(null);
-      setSaveNotice(null);
-      const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed.title || parsed.description) {
-            setReportType(parsed.reportType || 'lost');
-            setTitle(parsed.title || '');
-            setCategory(parsed.category || 'calculator');
-            setLocation(parsed.location || NILE_CAMPUS_LOCATIONS[0]);
-            setLocationDetails(parsed.locationDetails || '');
-            setDescription(parsed.description || '');
-            setDateLostOrFound(parsed.dateLostOrFound || new Date().toISOString().split('T')[0]);
-            setHoldingLocation(parsed.holdingLocation || 'finder_holding');
-            setVerificationQuestion(parsed.verificationQuestion || '');
-            setVerificationAnswer(parsed.verificationAnswer || '');
-            setHasRestoredDraft(true);
-          }
-        } catch {
-          // Ignore json parse error
+    if (!isOpen) return;
+    setPiiError(null);
+    setSaveNotice(null);
+    if (initialPrefill) {
+      setReportType(initialPrefill.type || 'found');
+      setCategory(initialPrefill.category || 'other');
+      setLocation(initialPrefill.location || NILE_CAMPUS_LOCATIONS[0]);
+      setTitle(initialPrefill.title || '');
+      setHasRestoredDraft(false);
+      return;
+    }
+    const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.title || parsed.description) {
+          setReportType(parsed.reportType || 'lost');
+          setTitle(parsed.title || '');
+          setCategory(parsed.category || 'calculator');
+          setLocation(parsed.location || NILE_CAMPUS_LOCATIONS[0]);
+          setLocationDetails(parsed.locationDetails || '');
+          setDescription(parsed.description || '');
+          setDateLostOrFound(parsed.dateLostOrFound || new Date().toISOString().split('T')[0]);
+          setHoldingLocation(parsed.holdingLocation || 'finder_holding');
+          setVerificationQuestion(parsed.verificationQuestion || '');
+          setVerificationAnswer(parsed.verificationAnswer || '');
+          setHasRestoredDraft(true);
         }
+      } catch {
+        // Ignore json parse error
       }
     }
-  }, [isOpen]);
+  }, [isOpen, initialPrefill]);
 
   // Auto-save draft
   const saveDraftLocally = () => {

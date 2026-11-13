@@ -111,6 +111,7 @@ export interface CampusNotification {
   createdAt: string;
   itemId?: string;
   claimId?: string;
+  sourceItemId?: string;
   linkTab?: 'feed' | 'admin';
   itemTitle?: string;
 }

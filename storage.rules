@@ -1,23 +1,27 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    function isVerifiedNileUser() {
+    function isMasterAdmin() {
       return request.auth != null
+        && request.auth.uid == 'nFdIhTjOOqMqMG4y1KIT550Qf5m1'
         && request.auth.token.keys().hasAll(['email_verified'])
         && request.auth.token.email_verified == true
         && request.auth.token.email is string
-        && (
-          request.auth.token.email.matches('^[^@]+@nileuniversity\\.edu\\.ng$')
-          || request.auth.uid == 'nFdIhTjOOqMqMG4y1KIT550Qf5m1'
+        && request.auth.token.email == 'ayomide2289@gmail.com';
+    }
+
+    function isVerifiedNileUser() {
+      return isMasterAdmin()
+        || (
+          request.auth != null
+          && request.auth.token.keys().hasAll(['email_verified'])
+          && request.auth.token.email_verified == true
+          && request.auth.token.email is string
+          && request.auth.token.email.matches('^[^@]+@nileuniversity\\.edu\\.ng$')
         );
     }
 
-    function isMasterAdmin() {
-      return isVerifiedNileUser()
-        && request.auth.uid == 'nFdIhTjOOqMqMG4y1KIT550Qf5m1';
-    }
-
-    // Default Deny: Block all unmatched paths
+    // Block all unmatched paths by default
     match /{allPaths=**} {
       allow read, write: if false;
     }
@@ -27,9 +31,11 @@ service firebase.storage {
       // Verified Nile members can view item photos in the campus feed
       allow read: if isVerifiedNileUser();
 
-      // Users can only upload to their own user path, max 5MB, strict image content types
-      allow write: if isVerifiedNileUser()
+      // Users can only create/update within their own path, max 5MB, strict image MIME types
+      allow create, update: if isVerifiedNileUser()
         && request.auth.uid == userId
+        && fileName.size() <= 128
+        && request.resource != null
         && request.resource.size <= 5 * 1024 * 1024
         && request.resource.contentType.matches('^image/(jpeg|png|webp)$');
 

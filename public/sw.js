@@ -1,8 +1,16 @@
-const CACHE = 'nilefound-static-v2';
+const CACHE = 'nilefound-static-v3';
 const OFFLINE = '/offline.html';
+const PRECACHE = [
+  OFFLINE,
+  '/manifest.webmanifest',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/apple-touch-icon.png',
+  '/og-card.png',
+];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll([OFFLINE])));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)));
   self.skipWaiting();
 });
 
@@ -25,10 +33,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (/\.[a-f0-9]{8,}\.(?:js|css)$/.test(url.pathname)) {
+  if (/\.(?:js|css|woff2)$/.test(url.pathname) || url.pathname.startsWith('/icons/')) {
     event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-      const copy = response.clone();
-      caches.open(CACHE).then((cache) => cache.put(request, copy));
+      if (response.ok) {
+        const copy = response.clone();
+        caches.open(CACHE).then((cache) => cache.put(request, copy));
+      }
       return response;
     })));
   }

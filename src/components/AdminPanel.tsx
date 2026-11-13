@@ -229,13 +229,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <button
             onClick={() => {
               onExpireOldItems();
-              showNotification('Evaluated items: posts older than 30 days marked as expired.');
+              showNotification('Evaluated items: posts older than 60 days marked as expired.');
             }}
             className="flex items-center gap-1.5 bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] dark:hover:bg-[#332E27] text-[#544E45] dark:text-[#B8B0A2] text-xs font-medium px-3.5 py-2 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] transition-colors min-h-[44px] cursor-pointer btn-campus"
-            title="Auto-expire posts older than 30 days"
+            title="Auto-expire posts older than 60 days"
           >
             <Archive className="w-4 h-4 text-[#7A7266] dark:text-[#B8B0A2]" />
-            <span>Auto-Expire (&gt;30d)</span>
+            <span>Auto-Expire (&gt;60d)</span>
           </button>
         </div>
       </div>
@@ -456,7 +456,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               items.map((item) => (
                 <div
                   key={item.id}
-                  onClick={() => isAdmin && setSelectedItem(item)}
+                  onClick={() => (isAdmin || isSecurity) && setSelectedItem(item)}
                   className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#FAF6EF] dark:hover:bg-[#141311]/70 transition-colors cursor-pointer"
                 >
                   <div>
@@ -678,8 +678,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
-      {/* Admin Item Detail Panel Modal */}
-      {selectedItem && isAdmin && (
+      {/* Admin / Security Item Detail Panel Modal */}
+      {selectedItem && (isAdmin || isSecurity) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/50 backdrop-blur-xs overflow-y-auto" onClick={() => setSelectedItem(null)}>
           <div className={`w-full max-w-[672px] shadow-xl max-h-[90dvh] overflow-hidden flex flex-col min-w-0 ${CARD}`} onClick={(e) => e.stopPropagation()}>
             <div className="bg-[#FAF6EF] dark:bg-[#141311] px-5 sm:px-6 py-4 border-b border-[#E6DFD2] dark:border-[#2E2A24] flex items-center justify-between gap-3">

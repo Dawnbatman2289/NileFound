@@ -9,35 +9,47 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Search, MapPin, Calendar, ShieldCheck, Lock, Shield, LogIn, PackageSearch } from 'lucide-react';
-import { CampusItem, ItemType, User } from '../types/index.ts';
+import { Search, MapPin, Calendar, ShieldCheck, Lock, Shield, LogIn, PackageSearch, Mail } from 'lucide-react';
+import { CampusItem, ClaimRecord, ItemType, User } from '../types/index.ts';
 import { CATEGORIES, DEMO_ITEMS } from '../data/mockItems.ts';
 import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
 import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
-import { filterCampusItems } from '../utils/feedFilters.ts';
+import { filterCampusItems, FeedStatusFilter } from '../utils/feedFilters.ts';
 
 interface FeedViewProps {
   items: CampusItem[];
+  claims?: ClaimRecord[];
   lowDataMode: boolean;
   onClaimItem: (item: CampusItem) => void;
   onOpenReportModal: () => void;
+  onFoundMatch?: (lostItem: CampusItem) => void;
+  onFetchHandoverContact?: (itemId: string) => Promise<{ authorName?: string; authorEmail?: string } | null>;
+  onApproveClaim?: (claimId: string, itemId: string) => void;
+  onRejectClaim?: (claimId: string) => void;
   currentUser?: User | null;
   isDemoMode?: boolean;
   onNavigateToLogin?: () => void;
   onLoadMore?: () => void;
+  onLoadAll?: () => void;
   hasMoreItems?: boolean;
   isLoadingMoreItems?: boolean;
 }
 
 export const FeedView: React.FC<FeedViewProps> = ({
   items,
+  claims = [],
   lowDataMode,
   onClaimItem,
   onOpenReportModal,
+  onFoundMatch,
+  onFetchHandoverContact,
+  onApproveClaim,
+  onRejectClaim,
   currentUser,
   isDemoMode,
   onNavigateToLogin,
   onLoadMore,
+  onLoadAll,
   hasMoreItems = false,
   isLoadingMoreItems = false
 }) => {
@@ -45,15 +57,23 @@ export const FeedView: React.FC<FeedViewProps> = ({
   const [selectedType, setSelectedType] = useState<'all' | ItemType>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<'all' | 'active' | 'claimed' | 'resolved'>('all');
+  const [selectedStatus, setSelectedStatus] = useState<FeedStatusFilter>('all');
   const [selectedDateRange, setSelectedDateRange] = useState<'all' | '24h' | '7d'>('all');
   const [includeDemoSeed, setIncludeDemoSeed] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [handoverContacts, setHandoverContacts] = useState<Record<string, { authorName?: string; authorEmail?: string } | null>>({});
+  const [loadingHandoverId, setLoadingHandoverId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchTerm), 250);
     return () => window.clearTimeout(timer);
   }, [searchTerm]);
+
+  useEffect(() => {
+    if (debouncedSearch.trim() && hasMoreItems && onLoadAll && !isDemoMode) {
+      onLoadAll();
+    }
+  }, [debouncedSearch, hasMoreItems, onLoadAll, isDemoMode]);
 
   useEffect(() => {
     const saved = sessionStorage.getItem('nilefound_feed_filters');
@@ -220,13 +240,14 @@ export const FeedView: React.FC<FeedViewProps> = ({
             </label>
             <select
               value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value as typeof selectedStatus)}
+              onChange={(e) => setSelectedStatus(e.target.value as FeedStatusFilter)}
               className="w-full text-xs px-3 py-2 rounded-[10px] border border-[#E6DFD2] dark:border-[#2E2A24] focus:border-[#0F6E6E] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] focus:outline-hidden min-h-[44px] cursor-pointer"
             >
-              <option value="all">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="claimed">Claimed</option>
-              <option value="resolved">Resolved</option>
+              <option value="all">All Active Statuses</option>
+              <option value="active">Open</option>
+              <option value="claimed">Claim Pending</option>
+              <option value="resolved">Returned</option>
+              <option value="expired">Expired (&gt;60 days)</option>
             </select>
           </div>
           <div>
@@ -466,25 +487,127 @@ export const FeedView: React.FC<FeedViewProps> = ({
                   </div>
 
                   {/* Card Action Footer */}
-                  <div className="p-3.5 bg-[#FAF6EF]/50 dark:bg-[#141311]/50 border-t border-[#E6DFD2] dark:border-[#2E2A24]">
-                    {isFound ? (
-                      <button
-                        onClick={() => onClaimItem(item)}
-                        disabled={isReturned}
-                        className={`w-full py-2.5 px-4 rounded-[10px] text-xs font-medium transition-colors flex items-center justify-center gap-2 min-h-[44px] cursor-pointer btn-campus ${
-                          isReturned
-                            ? 'bg-[#E6DFD2]/60 dark:bg-[#2E2A24] text-[#7A7266] dark:text-[#857D71] cursor-not-allowed'
-                            : 'bg-[#0F6E6E] hover:bg-[#0C5656] text-white active:scale-98 shadow-xs'
-                        }`}
-                      >
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>{isReturned ? 'Item Reunited' : 'This is Mine (Claim)'}</span>
-                      </button>
-                    ) : (
-                      <div className="w-full text-center py-2 px-3 text-xs text-[#7A5000] dark:text-[#F9CF7C] bg-[#FEF7E9] dark:bg-[#2B210A] rounded-[10px] border border-[#E8A317]/30 min-h-[44px] flex items-center justify-center font-medium">
-                        Looking for this item • Report if seen
-                      </div>
-                    )}
+                  <div className="p-3.5 bg-[#FAF6EF]/50 dark:bg-[#141311]/50 border-t border-[#E6DFD2] dark:border-[#2E2A24] space-y-2.5">
+                    {(() => {
+                      const myApprovedClaim = currentUser
+                        ? claims.find((c) => c.itemId === item.id && c.claimantId === currentUser.id && c.status === 'approved')
+                        : undefined;
+                      const myPendingClaim = currentUser
+                        ? claims.find((c) => c.itemId === item.id && c.claimantId === currentUser.id && c.status === 'pending')
+                        : undefined;
+                      const pendingFinderClaims = currentUser && item.authorId === currentUser.id
+                        ? claims.filter((c) => c.itemId === item.id && c.status === 'pending')
+                        : [];
+                      const handoverInfo = handoverContacts[item.id];
+
+                      return (
+                        <>
+                          {myApprovedClaim && (
+                            <div className="bg-[#EDF7F1] dark:bg-[#0E2417] border border-[#2F7D4F]/30 rounded-[10px] p-3 text-xs space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-semibold text-[#1B5633] dark:text-[#75CE9A]">Claim Approved</span>
+                                {!handoverInfo && onFetchHandoverContact && (
+                                  <button
+                                    type="button"
+                                    disabled={loadingHandoverId === item.id}
+                                    onClick={async () => {
+                                      setLoadingHandoverId(item.id);
+                                      try {
+                                        const info = await onFetchHandoverContact(item.id);
+                                        setHandoverContacts((prev) => ({ ...prev, [item.id]: info }));
+                                      } finally {
+                                        setLoadingHandoverId(null);
+                                      }
+                                    }}
+                                    className="text-xs font-semibold text-[#0F6E6E] dark:text-[#199595] underline cursor-pointer"
+                                  >
+                                    {loadingHandoverId === item.id ? 'Loading…' : 'View handover contact'}
+                                  </button>
+                                )}
+                              </div>
+                              {handoverInfo && (
+                                <div className="text-[#1F1B16] dark:text-[#F5F1EA] flex items-center gap-1.5 flex-wrap">
+                                  <Mail className="w-3.5 h-3.5 text-[#0F6E6E] dark:text-[#199595] shrink-0" />
+                                  <span>{handoverInfo.authorName || 'Finder'}:</span>
+                                  {handoverInfo.authorEmail ? (
+                                    <a href={`mailto:${handoverInfo.authorEmail}`} className="font-mono underline text-[#0F6E6E] dark:text-[#199595] break-all">
+                                      {handoverInfo.authorEmail}
+                                    </a>
+                                  ) : (
+                                    <span>Collect from {item.holdingLocation.replace(/_/g, ' ')}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {pendingFinderClaims.map((fc) => (
+                            <div key={fc.id} className="bg-[#FEF7E9] dark:bg-[#2B210A] border border-[#E8A317]/40 rounded-[10px] p-3 text-xs space-y-2">
+                              <p className="font-semibold text-[#7A5000] dark:text-[#F9CF7C]">
+                                Claim from {fc.claimantName}
+                              </p>
+                              <p className="text-[#544E45] dark:text-[#B8B0A2]">
+                                Answer: {fc.submittedAnswer || 'None provided'}
+                              </p>
+                              {onApproveClaim && onRejectClaim && (
+                                <div className="flex gap-2 pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => onApproveClaim(fc.id, item.id)}
+                                    className="flex-1 min-h-[38px] bg-[#2F7D4F] text-white rounded-[10px] font-medium cursor-pointer"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => onRejectClaim(fc.id)}
+                                    className="flex-1 min-h-[38px] bg-white dark:bg-[#1E1C18] text-[#9B1C1C] dark:text-[#F87171] border border-[#F87171]/40 rounded-[10px] font-medium cursor-pointer"
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+
+                          {isFound ? (
+                            <button
+                              onClick={() => onClaimItem(item)}
+                              disabled={isReturned || item.status === 'expired' || Boolean(myPendingClaim) || Boolean(myApprovedClaim) || item.authorId === currentUser?.id}
+                              className={`w-full py-2.5 px-4 rounded-[10px] text-xs font-medium transition-colors flex items-center justify-center gap-2 min-h-[44px] cursor-pointer btn-campus ${
+                                isReturned || item.status === 'expired' || myPendingClaim || myApprovedClaim || item.authorId === currentUser?.id
+                                  ? 'bg-[#E6DFD2]/60 dark:bg-[#2E2A24] text-[#7A7266] dark:text-[#857D71] cursor-not-allowed'
+                                  : 'bg-[#0F6E6E] hover:bg-[#0C5656] text-white active:scale-98 shadow-xs'
+                              }`}
+                            >
+                              <ShieldCheck className="w-4 h-4" />
+                              <span>
+                                {isReturned
+                                  ? 'Item Reunited'
+                                  : item.status === 'expired'
+                                  ? 'Notice Expired'
+                                  : myApprovedClaim
+                                  ? 'Claim Approved'
+                                  : myPendingClaim
+                                  ? 'Claim Submitted'
+                                  : item.authorId === currentUser?.id
+                                  ? 'Your Found Post'
+                                  : 'This is Mine (Claim)'}
+                              </span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => (onFoundMatch ? onFoundMatch(item) : onOpenReportModal())}
+                              disabled={isReturned || item.status === 'expired'}
+                              className="w-full text-center py-2 px-3 text-xs text-[#7A5000] dark:text-[#F9CF7C] bg-[#FEF7E9] dark:bg-[#2B210A] hover:bg-[#FCEEC9] dark:hover:bg-[#3A2B0D] rounded-[10px] border border-[#E8A317]/40 min-h-[44px] flex items-center justify-center font-semibold cursor-pointer disabled:opacity-60 transition-colors"
+                            >
+                              {isReturned ? 'Item Returned' : 'I Found This — Post Match'}
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </motion.article>
               );

@@ -18,12 +18,12 @@ import { NotificationToast } from './components/NotificationToast.tsx';
 import { CampusItem, ClaimRecord, User, CampusNotification } from './types/index.ts';
 import { DEMO_ITEMS, DEMO_CLAIMS, INITIAL_ITEMS, INITIAL_CLAIMS } from './data/mockItems.ts';
 import { expireOldItems } from './utils/admin.ts';
-import { isMasterAdminEmail } from './utils/authValidation.ts';
 import { auth, testConnection } from './lib/firebase.ts';
 import {
   fetchItemsPage, subscribeToRealtimeClaims, saveItemToFirestore, updateItemStatusInFirestore,
   deleteItemFromFirestore, saveClaimToFirestore, updateClaimStatusInFirestore, syncUserProfile,
   fetchUserRole, subscribeToRealtimeNotifications, saveNotificationToFirestore, markNotificationAsReadInFirestore,
+  fetchApprovedHandoverContact,
 } from './services/firestoreService.ts';
 import { playNotificationChime, sendBrowserPushNotification } from './services/notificationService.ts';
 
@@ -65,6 +65,7 @@ export default function App() {
   const [lowDataMode, setLowDataMode] = useState(() => localStorage.getItem('nilefound_low_data') === 'true');
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('nilefound_theme') === 'dark');
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportPrefill, setReportPrefill] = useState<Partial<Pick<CampusItem, 'type' | 'title' | 'category' | 'location'>> | null>(null);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [selectedItemForClaim, setSelectedItemForClaim] = useState<CampusItem | null>(null);
   const [savedDraftCount, setSavedDraftCount] = useState(0);
@@ -114,7 +115,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser?.email) {
         const email = fbUser.email.trim().toLowerCase();
-        if (!fbUser.emailVerified && !isMasterAdminEmail(email)) {
+        if (!fbUser.emailVerified) {
           setRealUser(null);
           if (!isSimulatingRef.current) setCurrentUser(null);
           return;
@@ -156,7 +157,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (isDemoMode || !currentUser || (!auth.currentUser?.emailVerified && !isMasterAdminEmail(auth.currentUser?.email))) return;
+    if (isDemoMode || !currentUser || !auth.currentUser?.emailVerified) return;
     let cancelled = false;
     setItemsCursor(undefined);
     setHasMoreItems(true);
@@ -174,7 +175,7 @@ export default function App() {
   }, [isDemoMode, currentUser]);
 
   useEffect(() => {
-    if (isDemoMode || !currentUser || (!auth.currentUser?.emailVerified && !isMasterAdminEmail(auth.currentUser?.email))) {
+    if (isDemoMode || !currentUser || !auth.currentUser?.emailVerified) {
       setNotifications([]);
       return;
     }
@@ -263,6 +264,32 @@ export default function App() {
     }
   };
 
+  const handleLoadAllItems = async () => {
+    if (!itemsCursor || isLoadingMoreItems || !hasMoreItems) return;
+    setIsLoadingMoreItems(true);
+    try {
+      let cursor: QueryDocumentSnapshot<DocumentData> | undefined = itemsCursor;
+      const loaded: CampusItem[] = [];
+      let pages = 0;
+      while (cursor && pages < 10) {
+        const page = await fetchItemsPage(cursor);
+        loaded.push(...page.items);
+        cursor = page.nextCursor;
+        pages += 1;
+      }
+      if (loaded.length > 0) {
+        setItems((prev) => {
+          const seen = new Set(prev.map((p) => p.id));
+          return [...prev, ...loaded.filter((it) => !seen.has(it.id))];
+        });
+      }
+      setItemsCursor(cursor);
+      setHasMoreItems(Boolean(cursor));
+    } finally {
+      setIsLoadingMoreItems(false);
+    }
+  };
+
   const handleAddItem = async (newItem: CampusItem): Promise<boolean> => {
     setSavedDraftCount(0);
     let finalItemId = newItem.id;
@@ -284,13 +311,28 @@ export default function App() {
     if (newItem.type === 'found') {
       items.filter((it) => sameCategoryAndLocation(it, 'lost')).forEach((lostItem) => {
         if (lostItem.authorId && lostItem.authorId !== fromUid) {
-          dispatchNotification({ recipientUid: lostItem.authorId, fromUid, type: 'match_alert', title: `Possible match: ${lostItem.title}`, message: `A found item in the same category was just reported at ${newItem.location}. Check the feed!`, itemId: lostItem.id });
+          dispatchNotification({
+            recipientUid: lostItem.authorId,
+            fromUid,
+            type: 'match_alert',
+            title: `Possible match: ${lostItem.title}`,
+            message: `A found item in the same category was just reported at ${newItem.location}. Check the feed!`,
+            itemId: lostItem.id,
+            sourceItemId: finalItemId,
+          });
         }
       });
     } else {
       const foundMatch = items.find((it) => sameCategoryAndLocation(it, 'found'));
       if (foundMatch) {
-        dispatchNotification({ recipientUid: fromUid, fromUid, type: 'match_alert', title: `Possible match found: ${newItem.title}`, message: `A matching ${newItem.category.replace(/_/g, ' ')} was already turned in at ${foundMatch.location}. Check feed to claim it.`, itemId: foundMatch.id });
+        dispatchNotification({
+          recipientUid: fromUid,
+          fromUid,
+          type: 'match_alert',
+          title: `Possible match found: ${newItem.title}`,
+          message: `A matching ${newItem.category.replace(/_/g, ' ')} was already turned in at ${foundMatch.location}. Check feed to claim it.`,
+          itemId: foundMatch.id,
+        });
       }
     }
 
@@ -304,18 +346,36 @@ export default function App() {
   const handleClaimSuccess = async (newClaim: ClaimRecord) => {
     const fromUid = auth.currentUser?.uid || currentUser?.id || 'claimant';
     const matchingItem = items.find((i) => i.id === newClaim.itemId);
+    let finalClaimId = newClaim.id;
     if (isDemoMode) {
       setClaims((prev) => [{ ...newClaim, claimantId: fromUid }, ...prev]);
       setItems((prev) => prev.map((it) => (it.id === newClaim.itemId ? { ...it, status: 'claim_requested' } : it)));
     } else {
-      await saveClaimToFirestore(newClaim, currentUser, matchingItem?.authorId);
+      finalClaimId = await saveClaimToFirestore(newClaim, currentUser, matchingItem?.authorId);
+      setItems((prev) => prev.map((it) => (it.id === newClaim.itemId ? { ...it, status: 'claim_requested' } : it)));
     }
 
     if (matchingItem?.authorId && matchingItem.authorId !== fromUid) {
-      dispatchNotification({ recipientUid: matchingItem.authorId, fromUid, type: 'claim_received', title: `New claim on ${matchingItem.title}`, message: 'A new ownership claim was filed for your found item. Review it in the Admin Desk.', itemId: matchingItem.id });
+      dispatchNotification({
+        recipientUid: matchingItem.authorId,
+        fromUid,
+        type: 'claim_received',
+        title: `New claim on ${matchingItem.title}`,
+        message: 'A new ownership claim was filed for your found item. Review it in the Admin Desk.',
+        itemId: matchingItem.id,
+        claimId: finalClaimId,
+      });
     }
     dispatchNotification(
-      { recipientUid: 'admin', fromUid, type: 'admin_review', title: `Claim needs review: ${matchingItem?.title || 'Campus Item'}`, message: `A new ownership claim was filed for "${matchingItem?.title || 'item'}". Physical verification pending.`, itemId: newClaim.itemId },
+      {
+        recipientUid: 'admin',
+        fromUid,
+        type: 'admin_review',
+        title: `Claim needs review: ${matchingItem?.title || 'Campus Item'}`,
+        message: `A new ownership claim was filed for "${matchingItem?.title || 'item'}". Physical verification pending.`,
+        itemId: newClaim.itemId,
+        claimId: finalClaimId,
+      },
       { toast: true }
     );
   };
@@ -410,7 +470,7 @@ export default function App() {
         setLowDataMode={setLowDataMode}
         isDemoMode={isDemoMode}
         setIsDemoMode={(v) => (v ? setIsDemoMode(true) : handleExitSimulation())}
-        onOpenReportModal={() => setIsReportModalOpen(true)}
+        onOpenReportModal={() => { setReportPrefill(null); setIsReportModalOpen(true); }}
         savedDraftCount={savedDraftCount}
         currentUser={currentUser}
         pendingClaimsCount={claims.filter((c) => c.status === 'pending').length}
@@ -455,13 +515,27 @@ export default function App() {
           {activeTab === 'feed' && (
             <FeedView
               items={items}
+              claims={claims}
               lowDataMode={lowDataMode}
               onClaimItem={(item) => (currentUser ? setSelectedItemForClaim(item) : setActiveTab('login'))}
-              onOpenReportModal={() => setIsReportModalOpen(true)}
+              onOpenReportModal={() => { setReportPrefill(null); setIsReportModalOpen(true); }}
+              onFoundMatch={(lostItem) => {
+                setReportPrefill({
+                  type: 'found',
+                  category: lostItem.category,
+                  location: lostItem.location,
+                  title: lostItem.title,
+                });
+                setIsReportModalOpen(true);
+              }}
+              onFetchHandoverContact={(itemId) => (isDemoMode ? Promise.resolve({ authorName: 'Finder', authorEmail: 'finder@nileuniversity.edu.ng' }) : fetchApprovedHandoverContact(itemId))}
+              onApproveClaim={handleApproveClaim}
+              onRejectClaim={handleRejectClaim}
               currentUser={currentUser}
               isDemoMode={isDemoMode}
               onNavigateToLogin={() => setActiveTab('login')}
               onLoadMore={handleLoadMoreItems}
+              onLoadAll={handleLoadAllItems}
               hasMoreItems={hasMoreItems}
               isLoadingMoreItems={isLoadingMoreItems}
             />
@@ -502,10 +576,11 @@ export default function App() {
 
       <ReportModal
         isOpen={isReportModalOpen}
-        onClose={() => setIsReportModalOpen(false)}
+        onClose={() => { setIsReportModalOpen(false); setReportPrefill(null); }}
         onSubmitItem={handleAddItem}
         onDraftSaved={() => setSavedDraftCount(1)}
         currentUser={currentUser}
+        initialPrefill={reportPrefill}
         onOpenLogin={() => { setIsReportModalOpen(false); setActiveTab('login'); }}
       />
 

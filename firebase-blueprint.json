@@ -2,7 +2,7 @@
   "entities": {
     "Item": {
       "title": "Item",
-      "description": "A lost or found campus item reported by a Nile University student or staff member.",
+      "description": "Public campus lost or found notice without reporter PII.",
       "type": "object",
       "properties": {
         "title": { "type": "string", "minLength": 2, "maxLength": 100 },
@@ -10,49 +10,73 @@
         "category": { "type": "string", "enum": ["student_id", "phone_tech", "power_bank", "calculator", "flash_drive", "keys", "bag_backpack", "lab_coat_clothing", "books_notes", "other"] },
         "description": { "type": "string", "maxLength": 1000 },
         "location": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "locationDetails": { "type": "string", "maxLength": 160 },
         "dateLostOrFound": { "type": "string", "maxLength": 40 },
         "status": { "type": "string", "enum": ["open", "claim_requested", "verified", "returned", "expired"] },
         "holdingLocation": { "type": "string", "enum": ["finder_holding", "security_main_gate", "student_affairs_office", "faculty_officer", "library_desk"] },
         "authorId": { "type": "string", "maxLength": 128 },
-        "authorName": { "type": "string", "maxLength": 100 },
-        "authorEmail": { "type": "string", "maxLength": 100 },
         "verificationQuestion": { "type": "string", "maxLength": 300 },
-        "imageUrl": { "type": "string", "maxLength": 50000 },
+        "imageUrl": { "type": "string", "maxLength": 140000 },
         "isSensitiveId": { "type": "boolean" },
-        "createdAt": { "type": "string" },
-        "updatedAt": { "type": "string" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["title", "type", "category", "description", "location", "status", "holdingLocation", "authorId", "createdAt"]
+      "required": ["title", "type", "category", "description", "location", "status", "holdingLocation", "authorId", "createdAt", "updatedAt"]
+    },
+    "ItemPrivateDetails": {
+      "title": "ItemPrivateDetails",
+      "description": "Reporter identity and email kept off the public feed, accessible to the author, staff/admin, or an approved claimant.",
+      "type": "object",
+      "properties": {
+        "itemId": { "type": "string", "maxLength": 128 },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "authorEmail": { "type": "string", "minLength": 3, "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["itemId", "authorId", "authorName", "authorEmail", "createdAt"]
     },
     "ItemSecret": {
       "title": "ItemSecret",
-      "description": "Private verification answer set by the finder, only accessible to the author and campus admins.",
+      "description": "Private verification answer set by the finder, accessible only to the author and campus staff/admins.",
       "type": "object",
       "properties": {
         "itemId": { "type": "string", "maxLength": 128 },
         "authorId": { "type": "string", "maxLength": 128 },
         "expectedAnswer": { "type": "string", "minLength": 1, "maxLength": 500 },
-        "createdAt": { "type": "string" }
+        "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["itemId", "authorId", "expectedAnswer", "createdAt"]
     },
     "Claim": {
       "title": "Claim",
-      "description": "An ownership claim submitted for a found item.",
+      "description": "Ownership claim metadata keyed deterministically as {itemId}_{claimantUid}.",
       "type": "object",
       "properties": {
         "itemId": { "type": "string", "maxLength": 128 },
         "itemTitle": { "type": "string", "maxLength": 100 },
         "claimantId": { "type": "string", "maxLength": 128 },
-        "claimantName": { "type": "string", "maxLength": 100 },
-        "claimantEmail": { "type": "string", "maxLength": 100 },
-        "submittedAnswer": { "type": "string", "minLength": 1, "maxLength": 500 },
-        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
         "finderId": { "type": "string", "maxLength": 128 },
-        "createdAt": { "type": "string" },
-        "updatedAt": { "type": "string" }
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["itemId", "claimantId", "claimantName", "claimantEmail", "submittedAnswer", "status", "createdAt"]
+      "required": ["itemId", "itemTitle", "claimantId", "finderId", "status", "createdAt", "updatedAt"]
+    },
+    "PrivateClaim": {
+      "title": "PrivateClaim",
+      "description": "Claimant contact info and verification answer restricted to the claimant, item finder, and campus staff/admins.",
+      "type": "object",
+      "properties": {
+        "itemId": { "type": "string", "maxLength": 128 },
+        "claimId": { "type": "string", "maxLength": 128 },
+        "claimantId": { "type": "string", "maxLength": 128 },
+        "claimantName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "claimantEmail": { "type": "string", "minLength": 3, "maxLength": 100 },
+        "submittedAnswer": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["itemId", "claimId", "claimantId", "claimantName", "claimantEmail", "submittedAnswer", "createdAt"]
     },
     "Role": {
       "title": "Role",
@@ -62,7 +86,8 @@
         "role": { "type": "string", "enum": ["admin", "security", "student"] },
         "email": { "type": "string", "maxLength": 100 },
         "assignedBy": { "type": "string", "maxLength": 128 },
-        "assignedAt": { "type": "string" }
+        "assignedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["role", "email", "assignedAt"]
     },
@@ -76,46 +101,74 @@
         "role": { "type": "string", "enum": ["student", "security", "admin"] },
         "matricNumber": { "type": "string", "maxLength": 20 },
         "department": { "type": "string", "maxLength": 100 },
-        "createdAt": { "type": "string" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "email", "role", "createdAt"]
     },
     "AdminConfig": {
       "title": "AdminConfig",
-      "description": "Authorized master administrator marker document.",
+      "description": "Delegated administrator configuration flags in /admins/{adminUid}.",
       "type": "object",
       "properties": {
         "enabled": { "type": "boolean" },
         "email": { "type": "string", "maxLength": 100 },
-        "updatedAt": { "type": "string" }
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["enabled", "email", "updatedAt"]
     },
     "StaffInvite": {
       "title": "StaffInvite",
-      "description": "Email-keyed staff role assignment before or upon first sign-in.",
+      "description": "Email-keyed staff role assignment before first sign-in.",
       "type": "object",
       "properties": {
         "email": { "type": "string", "maxLength": 100 },
         "role": { "type": "string", "enum": ["admin", "security", "student"] },
         "assignedBy": { "type": "string", "maxLength": 128 },
-        "assignedAt": { "type": "string" }
+        "assignedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["email", "role", "assignedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Template-enforced, relationship-scoped campus notifications.",
+      "type": "object",
+      "properties": {
+        "recipientUid": { "type": "string", "maxLength": 128 },
+        "fromUid": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["claim_received", "claim_approved", "claim_rejected", "match_alert", "item_returned", "admin_review"] },
+        "title": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "message": { "type": "string", "minLength": 2, "maxLength": 500 },
+        "read": { "type": "boolean" },
+        "itemId": { "type": "string", "maxLength": 128 },
+        "sourceItemId": { "type": "string", "maxLength": 128 },
+        "itemTitle": { "type": "string", "maxLength": 100 },
+        "claimId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["recipientUid", "fromUid", "type", "title", "message", "read", "createdAt"]
     }
   },
   "firestore": {
     "/items/{itemId}": {
       "schema": "Item",
-      "description": "Protected records of lost and found items on Nile campus, readable only by verified Nile members."
+      "description": "Public campus lost and found records readable only by verified Nile members."
+    },
+    "/items/{itemId}/private/{docId}": {
+      "schema": "ItemPrivateDetails",
+      "description": "Private reporter details accessible to the item author, campus staff/admin, or an approved claimant."
     },
     "/items/{itemId}/secrets/{secretId}": {
       "schema": "ItemSecret",
-      "description": "Private expected verification answer for a found item, readable only by the finder and admins."
+      "description": "Private expected verification answer for a found item, readable only by the finder and campus staff/admins."
+    },
+    "/items/{itemId}/privateClaims/{claimId}": {
+      "schema": "PrivateClaim",
+      "description": "Private claimant contact details and submitted answer readable by the claimant, item author, and campus staff/admins."
     },
     "/claims/{claimId}": {
       "schema": "Claim",
-      "description": "Ownership claims readable only by the claimant, item finder, or campus admin."
+      "description": "Ownership claims readable only by the claimant, item finder, or campus staff/admins."
     },
     "/roles/{userId}": {
       "schema": "Role",
@@ -127,11 +180,15 @@
     },
     "/admins/{adminUid}": {
       "schema": "AdminConfig",
-      "description": "Configured administrator access flags."
+      "description": "Delegated administrator access flags."
     },
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User profile records."
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Recipient-scoped notifications."
     }
   }
 }

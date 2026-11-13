@@ -193,13 +193,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         }
       }
 
-      if (mode === 'sign-up' && !isMasterAdminEmail(normalizedEmail)) {
-        await updateProfile(result.user, { displayName: fullName.trim() });
+      if (mode === 'sign-up') {
+        await updateProfile(result.user, {
+          displayName: fullName.trim() || (isMasterAdminEmail(normalizedEmail) ? 'Ayomide' : 'Campus User'),
+        });
         await sendEmailVerification(result.user);
         setShowInbox(true);
         setSuccessMessage('Verification email sent. Check your inbox before continuing.');
-      } else if (!result.user.emailVerified && !isMasterAdminEmail(normalizedEmail)) {
+      } else if (!result.user.emailVerified) {
+        await sendEmailVerification(result.user).catch(() => {});
         setShowInbox(true);
+        setSuccessMessage('Verify your email first, or sign in with Google if this is a Gmail account.');
       } else {
         const loggedUser = await userFromFirebase(result.user);
         onLogin(loggedUser);
