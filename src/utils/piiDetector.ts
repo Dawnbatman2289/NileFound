@@ -37,7 +37,7 @@ export function detectPii(text: string): PiiCheckResult {
       hasPii: true,
       type: 'matric',
       matchedText: matricMatch[0],
-      errorMessage: 'Remove the phone number/matric number. Contact only happens after your claim is approved.'
+      errorMessage: 'Remove the matric number. Identity details must stay private.'
     };
   }
 
@@ -48,7 +48,7 @@ export function detectPii(text: string): PiiCheckResult {
       hasPii: true,
       type: 'phone',
       matchedText: phoneMatch[0],
-      errorMessage: 'Remove the phone number/matric number. Contact only happens after your claim is approved.'
+      errorMessage: 'Remove the phone number. Contact only happens after your claim is approved.'
     };
   }
 
@@ -59,7 +59,7 @@ export function detectPii(text: string): PiiCheckResult {
       hasPii: true,
       type: 'email',
       matchedText: emailMatch[0],
-      errorMessage: 'Remove the phone number/matric number. Contact only happens after your claim is approved.'
+      errorMessage: 'Remove the email address. Contact only happens after your claim is approved.'
     };
   }
 

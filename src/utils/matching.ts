@@ -19,7 +19,7 @@
  */
 
 import { CampusItem, MatchScoreResult } from '../types/index.ts';
-import { CAMPUS_CLUSTERS } from '../data/mockItems.ts';
+import { CAMPUS_CLUSTERS } from '../config/catalog.ts';
 
 /**
  * Tokenizes text into normalized lowercase words, stripping punctuation and stopwords.
@@ -84,7 +84,8 @@ export function calculateLocationProximity(locA: string, locB: string): number {
   const normA = locA.trim().toLowerCase();
   const normB = locB.trim().toLowerCase();
 
-  if (normA === normB && normA.length > 0) return 1.0;
+  if (!normA || !normB) return 0.0;
+  if (normA === normB) return 1.0;
 
   for (const clusterLocations of Object.values(CAMPUS_CLUSTERS)) {
     const normCluster = clusterLocations.map(l => l.toLowerCase());
@@ -145,7 +146,7 @@ export function calculateMatchScore(lostItem: CampusItem, foundItem: CampusItem)
   const isDuplicateCandidate = normalizedPercentage >= 85; // Edge case threshold: >= 0.85
 
   if (isDuplicateCandidate) {
-    reasons.push('⚠️ Duplicate Candidate: Very high correlation across location, category and timeframe');
+    reasons.push('Possible duplicate: high correlation across location, category and timeframe');
   }
 
   return {

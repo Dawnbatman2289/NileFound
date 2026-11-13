@@ -301,6 +301,75 @@ test('claim creation requires deterministic ID, blocks self-claims, lets finder 
 
   // Approved claimant can now read finder's handover contact details
   await assertSucceeds(getDoc(doc(claimantDb, 'items/foundPhone1/private/details')));
+
+  // Second student can still submit a competing claim while item is claim_requested
+  const intruderClaimId = `foundPhone1_${INTRUDER_UID}`;
+  const competingBatch = writeBatch(intruderDb);
+  competingBatch.set(doc(intruderDb, `claims/${intruderClaimId}`), {
+    itemId: 'foundPhone1',
+    itemTitle: 'Black Android Phone',
+    claimantId: INTRUDER_UID,
+    finderId: FINDER_UID,
+    status: 'pending',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  competingBatch.set(doc(intruderDb, `items/foundPhone1/privateClaims/${intruderClaimId}`), {
+    itemId: 'foundPhone1',
+    claimId: intruderClaimId,
+    claimantId: INTRUDER_UID,
+    claimantName: 'Bello',
+    claimantEmail: INTRUDER_EMAIL,
+    submittedAnswer: 'Dark grey case',
+    createdAt: serverTimestamp(),
+  });
+  competingBatch.update(doc(intruderDb, 'items/foundPhone1'), {
+    status: 'claim_requested',
+    updatedAt: serverTimestamp(),
+  });
+  await assertSucceeds(competingBatch.commit());
+
   // Cleanup by author
   await assertSucceeds(deleteDoc(doc(finderDb, 'items/foundPhone1')));
+});
+
+test('explicit /roles/{uid} student override blocks access even if a stale /staffInvites doc exists', async () => {
+  const STAFF_UID = 'staffUser04';
+  const STAFF_EMAIL = 'officer@nileuniversity.edu.ng';
+
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const adminDb = ctx.firestore();
+    await setDoc(doc(adminDb, `staffInvites/${STAFF_EMAIL}`), {
+      email: STAFF_EMAIL,
+      role: 'security',
+      assignedAt: new Date(),
+    });
+    await setDoc(doc(adminDb, `roles/${STAFF_UID}`), {
+      email: STAFF_EMAIL,
+      role: 'student',
+      assignedAt: new Date(),
+    });
+    await setDoc(doc(adminDb, 'items/lockedItem'), {
+      title: 'Keys',
+      type: 'found',
+      category: 'keys',
+      description: 'Bunch of 3 keys.',
+      location: 'Gate',
+      status: 'open',
+      holdingLocation: 'security_main_gate',
+      authorId: FINDER_UID,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await setDoc(doc(adminDb, 'items/lockedItem/private/details'), {
+      itemId: 'lockedItem',
+      authorId: FINDER_UID,
+      authorName: 'Chidera',
+      authorEmail: FINDER_EMAIL,
+      createdAt: new Date(),
+    });
+  });
+
+  const revokedDb = testEnv.authenticatedContext(STAFF_UID, verifiedToken(STAFF_EMAIL)).firestore();
+  await assertFails(getDoc(doc(revokedDb, 'items/lockedItem/private/details')));
 });

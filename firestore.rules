@@ -53,17 +53,16 @@ service cloud.firestore {
         );
     }
 
-    // Check roles document in /roles/{uid} or /staffInvites/{email}
+    // Check roles document in /roles/{uid} first; fall back to /staffInvites/{email} only when no explicit role doc exists
     function hasRole(roleName) {
       return isVerifiedUser() && (
-        (
-          exists(/databases/$(database)/documents/roles/$(request.auth.uid))
-          && get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == roleName
-        ) || (
-          request.auth.token.email is string
-          && exists(/databases/$(database)/documents/staffInvites/$(request.auth.token.email))
-          && get(/databases/$(database)/documents/staffInvites/$(request.auth.token.email)).data.role == roleName
-        )
+        exists(/databases/$(database)/documents/roles/$(request.auth.uid))
+          ? get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == roleName
+          : (
+            request.auth.token.email is string
+            && exists(/databases/$(database)/documents/staffInvites/$(request.auth.token.email))
+            && get(/databases/$(database)/documents/staffInvites/$(request.auth.token.email)).data.role == roleName
+          )
       );
     }
 
@@ -189,7 +188,7 @@ service cloud.firestore {
             && incoming().status in ['open', 'claim_requested', 'verified', 'returned', 'expired']
           )
           || (
-            existing().status == 'open'
+            existing().status in ['open', 'claim_requested']
             && existing().type == 'found'
             && existing().authorId != request.auth.uid
             && incoming().status == 'claim_requested'
@@ -298,7 +297,7 @@ service cloud.firestore {
         && incoming().updatedAt == request.time
         && exists(/databases/$(database)/documents/items/$(incoming().itemId))
         && get(/databases/$(database)/documents/items/$(incoming().itemId)).data.type == 'found'
-        && get(/databases/$(database)/documents/items/$(incoming().itemId)).data.status == 'open'
+        && get(/databases/$(database)/documents/items/$(incoming().itemId)).data.status in ['open', 'claim_requested']
         && get(/databases/$(database)/documents/items/$(incoming().itemId)).data.authorId != request.auth.uid
         && incoming().finderId == get(/databases/$(database)/documents/items/$(incoming().itemId)).data.authorId;
       allow update: if isValidId(claimId) && isVerifiedUser()

@@ -61,7 +61,11 @@ test('Admin configuration uses valid 2-segment /admins/{uid} document path witho
 });
 
 test('Staff invites support email-based role lookup gated by verified Nile email and master admin', () => {
+  const indexesJson = JSON.parse(readFileSync(resolve('firestore.indexes.json'), 'utf8'));
   assert.match(firestoreRules, /match \/staffInvites\/\{inviteEmail\}/);
   assert.match(firestoreRules, /allow create, update: if isMasterAdmin\(\)/);
   assert.match(firestoreRules, /request\.auth\.token\.email == inviteEmail/);
+  assert.match(firestoreRules, /exists\(\/databases\/\$\(database\)\/documents\/roles\/\$\(request\.auth\.uid\)\)\s*\?\s*get/);
+  assert.match(firestoreRules, /status in \['open', 'claim_requested'\]/);
+  assert.ok(Array.isArray(indexesJson.indexes) && indexesJson.indexes.length >= 3);
 });

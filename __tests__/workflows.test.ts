@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { NILE_CAMPUS_LOCATIONS } from '../src/config/locations.ts';
 import { filterCampusItems } from '../src/utils/feedFilters.ts';
 import { sanitizeCsvCell } from '../src/utils/csv.ts';
+import { getTodayWatIsoDate } from '../src/utils/dateFormatter.ts';
 import { isSupportedImageFile } from '../src/utils/imageCompressor.ts';
 import type { CampusItem } from '../src/types/index.ts';
 
@@ -65,4 +66,10 @@ test('CSV export neutralizes formula injection and quotes fields', () => {
   assert.equal(sanitizeCsvCell('\t=SUM(A1:A2)'), '"\'\t=SUM(A1:A2)"');
   assert.equal(sanitizeCsvCell('\r=SUM(A1:A2)'), '"\'\r=SUM(A1:A2)"');
   assert.equal(sanitizeCsvCell('Nile Main Library'), '"Nile Main Library"');
+});
+
+test('WAT calendar date helper uses Africa/Lagos timezone across UTC midnight', () => {
+  // 23:30 UTC on 2026-11-12 is 00:30 WAT on 2026-11-13
+  const watDate = getTodayWatIsoDate(new Date('2026-11-12T23:30:00.000Z'));
+  assert.equal(watDate, '2026-11-13');
 });

@@ -47,7 +47,7 @@ export interface CampusItem {
   isSensitiveId?: boolean; // If true, photos are blurred/partial
   // Hidden verification question set by finder
   verificationQuestion?: string;
-  verificationAnswerHash?: string; // or hidden hint
+  verificationAnswer?: string; // stored privately in secrets/verification subcollection
   // Contact & privacy
   anonymousContactChannel?: 'whatsapp_relay' | 'security_desk';
   reportedByEmailDomain?: string; // e.g. "nileuniversity.edu.ng"

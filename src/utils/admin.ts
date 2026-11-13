@@ -24,7 +24,9 @@ export function expireOldItems(items: CampusItem[], daysThreshold = 60, referenc
   const thresholdMs = daysThreshold * 24 * 60 * 60 * 1000;
 
   return items.map((item) => {
-    if (item.status === 'returned') return item;
+    if (item.status === 'returned' || item.status === 'verified' || item.status === 'claim_requested' || item.status === 'expired') {
+      return item;
+    }
     const itemTime = new Date(item.createdAt).getTime();
     if (!isNaN(itemTime) && (refTime - itemTime) > thresholdMs) {
       return { ...item, status: 'expired' };
@@ -40,10 +42,11 @@ export function generateCampusAuditReport(items: CampusItem[], claims: ClaimReco
   const totalFound = items.filter(i => i.type === 'found').length;
   const totalLost = items.filter(i => i.type === 'lost').length;
   const totalReturned = items.filter(i => i.status === 'returned').length;
+  const foundReturned = items.filter(i => i.type === 'found' && i.status === 'returned').length;
   const heldAtGate = items.filter(i => i.holdingLocation === 'security_main_gate' && i.status !== 'returned').length;
   const heldAtStudentAffairs = items.filter(i => i.holdingLocation === 'student_affairs_office' && i.status !== 'returned').length;
-  
-  const returnRate = totalFound > 0 ? Math.round((totalReturned / totalFound) * 100) : 0;
+
+  const returnRate = totalFound > 0 ? Math.min(100, Math.round((foundReturned / totalFound) * 100)) : 0;
   const pendingClaims = claims.filter(c => c.status === 'pending').length;
 
   return {

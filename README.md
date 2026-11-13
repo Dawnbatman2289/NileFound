@@ -47,7 +47,7 @@ npm install
 npm run dev
 ```
 
-Create your own Firebase project, enable Google and Email/Password authentication, configure the Firebase web client values in `firebase-applet-config.json`, update the admin UID/email/bucket in `firestore.rules` and `storage.rules`, and deploy the rules. Then run:
+Create your own Firebase project, enable Google and Email/Password authentication, configure the Firebase web client values in `firebase-applet-config.json`, update the admin UID/email/bucket in `firestore.rules`, `storage.rules`, and `scripts/bootstrap-admin.mjs`, and deploy rules plus composite indexes (`firestore.indexes.json`). On a fresh project, run `node scripts/bootstrap-admin.mjs <uid> <email>` with Firebase Admin credentials to provision the root `/admins/{uid}` and `/roles/{uid}` records. Then run:
 
 ```bash
 npm test
@@ -66,12 +66,14 @@ npm run test:emulator
 - `src/components/` UI and workflows
 - `src/services/` Firebase persistence
 - `src/utils/` validation, filtering, matching, and exports
-- `firestore.rules` and `storage.rules` security boundaries
+- `firestore.rules`, `firestore.indexes.json`, and `storage.rules` security boundaries and query indexes
+- `scripts/bootstrap-admin.mjs` one-off Admin SDK bootstrap helper for fresh deployments
+- `.github/workflows/ci.yml` CI pipeline running lint, unit tests, and build checks
 - `public/` PWA manifest, icons, service worker, and offline fallback
 
 ## Known limitations and roadmap
 
-This prototype has no Cloud Functions or server-side email service; 60-day expiry is applied at read time and via the Admin Desk, and the service worker only caches static assets and fonts rather than private Firebase data. Broader browser testing, App Check enforcement, and student usability research remain outstanding.
+This prototype uses client-triggered expiry and read-time 60-day checks alongside Admin/Security Desk actions, and the service worker only caches static assets and fonts rather than private Firebase data. Broader browser testing, App Check enforcement, and student usability research remain outstanding.
 
 ## Contributing
 

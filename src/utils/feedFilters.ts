@@ -28,7 +28,7 @@ export function filterCampusItems(items: CampusItem[], options: FeedFilterOption
     if (options.location && options.location !== 'all' && item.location !== options.location) return false;
     if ((!options.status || options.status === 'all') && !search && item.status === 'expired') return false;
     if (options.status === 'active' && item.status !== 'open') return false;
-    if (options.status === 'claimed' && item.status !== 'claim_requested') return false;
+    if (options.status === 'claimed' && item.status !== 'claim_requested' && item.status !== 'verified') return false;
     if (options.status === 'resolved' && item.status !== 'returned') return false;
     if (options.status === 'expired' && item.status !== 'expired') return false;
 

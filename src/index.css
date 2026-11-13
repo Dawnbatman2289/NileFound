@@ -29,10 +29,10 @@
     --color-surface: #FFFFFF;
     --color-surface-hover: #F5EFE4;
     --color-ink: #1F1B16;
-    --color-ink-muted: #544E45;
-    --color-ink-subtle: #7A7266;
-    --color-border: #E6DFD2;
-    --color-border-dark: #D1C7B7;
+    --color-ink-muted: #4A443C;
+    --color-ink-subtle: #5C554C;
+    --color-border: #C4BBAF;
+    --color-border-dark: #8E8579;
 
     /* Main Accent: Deep Teal */
     --color-accent: #0F6E6E;
@@ -57,10 +57,10 @@
     --color-surface: #1E1C18;
     --color-surface-hover: #28241F;
     --color-ink: #F5F1EA;
-    --color-ink-muted: #B8B0A2;
-    --color-ink-subtle: #857D71;
-    --color-border: #2E2A24;
-    --color-border-dark: #3F3A32;
+    --color-ink-muted: #CEC7BB;
+    --color-ink-subtle: #A8A095;
+    --color-border: #3E3931;
+    --color-border-dark: #5A5349;
 
     --color-accent: #199595;
     --color-accent-hover: #22A8A8;

@@ -118,3 +118,38 @@ test('generateCampusAuditReport computes metrics accurately', () => {
   assert.equal(report.returnRate, 50);
   assert.equal(report.pendingClaims, 1);
 });
+
+test('generateCampusAuditReport bounds returnRate to [0, 100] when lost items are also returned', () => {
+  const items: CampusItem[] = [
+    {
+      id: 'f1',
+      type: 'found',
+      title: 'ID Card',
+      category: 'student_id',
+      description: 'Found at gate',
+      location: 'Main Gate',
+      dateLostOrFound: '2026-10-20',
+      status: 'returned',
+      holdingLocation: 'security_main_gate',
+      createdAt: '2026-10-20T10:00:00Z'
+    },
+    {
+      id: 'l1',
+      type: 'lost',
+      title: 'Blue Bottle',
+      category: 'other',
+      description: 'Recovered by owner',
+      location: 'Library',
+      dateLostOrFound: '2026-10-21',
+      status: 'returned',
+      holdingLocation: 'finder_holding',
+      createdAt: '2026-10-21T10:00:00Z'
+    }
+  ];
+
+  const report = generateCampusAuditReport(items, []);
+  assert.equal(report.totalFound, 1);
+  assert.equal(report.totalLost, 1);
+  assert.equal(report.totalReturned, 2);
+  assert.equal(report.returnRate, 100);
+});

@@ -7,7 +7,7 @@
 
 import {
   collection, doc, addDoc, setDoc, getDoc, updateDoc,
-  onSnapshot, query, orderBy, where, limit, startAfter, getDocs,
+  onSnapshot, query, orderBy, where, limit, startAfter, getDocs, getCountFromServer,
   writeBatch, serverTimestamp, Timestamp,
   QueryDocumentSnapshot, DocumentData, Unsubscribe,
 } from 'firebase/firestore';
@@ -43,6 +43,15 @@ export interface ItemPage {
   nextCursor?: QueryDocumentSnapshot<DocumentData>;
 }
 
+export interface CampusAuditCounts {
+  totalItems: number;
+  totalFound: number;
+  foundReturned: number;
+  totalReturned: number;
+  custodyCount: number;
+  pendingClaimsCount: number;
+}
+
 const NOTIF_TEMPLATES: Record<CampusNotification['type'], { title: string; message: string }> = {
   claim_received: { title: 'New claim on your item', message: 'A new ownership claim was filed for your item.' },
   claim_approved: { title: 'Claim approved', message: 'Your ownership claim was approved.' },
@@ -70,29 +79,43 @@ function applyReadTimeExpiry(item: CampusItem): CampusItem {
   return item;
 }
 
+function mapDocToCampusItem(docSnap: QueryDocumentSnapshot<DocumentData>): CampusItem {
+  const d = docSnap.data();
+  const createdAt = toIsoString(d.createdAt);
+  const raw: CampusItem = {
+    id: docSnap.id,
+    type: d.type || 'lost',
+    title: d.title || '',
+    category: d.category || 'other',
+    description: d.description || '',
+    location: d.location || '',
+    locationDetails: d.locationDetails || undefined,
+    dateLostOrFound: d.dateLostOrFound || createdAt,
+    status: d.status || 'open',
+    holdingLocation: d.holdingLocation || 'finder_holding',
+    imageUrl: d.category === 'student_id' ? undefined : (d.imageUrl || undefined),
+    isSensitiveId: d.isSensitiveId || d.category === 'student_id',
+    verificationQuestion: d.verificationQuestion || undefined,
+    reportedByEmailDomain: 'nileuniversity.edu.ng',
+    authorId: d.authorId || undefined,
+    createdAt,
+  };
+  return applyReadTimeExpiry(raw);
+}
+
 export async function fetchUserRole(uid: string, email?: string | null): Promise<'admin' | 'security' | 'student'> {
   const normalizedEmail = (email || auth.currentUser?.email || '').trim().toLowerCase();
   if (isMasterAdminEmail(normalizedEmail)) {
-    if (uid) {
-      setDoc(
-        doc(db, ROLES, uid),
-        { role: 'admin', email: BOOTSTRAPPED_ADMIN_EMAIL, assignedAt: serverTimestamp(), updatedAt: serverTimestamp(), assignedBy: 'System Bootstrap' },
-        { merge: true }
-      ).catch(() => {});
-      setDoc(
-        doc(db, 'admins', uid),
-        { enabled: true, email: BOOTSTRAPPED_ADMIN_EMAIL, updatedAt: serverTimestamp() },
-        { merge: true }
-      ).catch(() => {});
-    }
     return 'admin';
   }
 
   if (uid) {
     try {
       const snap = await getDoc(doc(db, ROLES, uid));
-      const role = snap.exists() ? snap.data().role : undefined;
-      if (role === 'admin' || role === 'security') return role;
+      if (snap.exists()) {
+        const role = snap.data().role;
+        return role === 'admin' || role === 'security' ? role : 'student';
+      }
     } catch { /* fall through to email invite */ }
   }
 
@@ -112,8 +135,8 @@ export async function assignUserRoleByEmail(
   newRole: 'admin' | 'security' | 'student',
   assignedByEmail = 'owner@example.com'
 ): Promise<'assigned' | 'pending'> {
-  if (!auth.currentUser || (await fetchUserRole(auth.currentUser.uid)) !== 'admin') {
-    throw new Error('Unauthorized: only an administrator can provision campus roles.');
+  if (!auth.currentUser || !isMasterAdminEmail(auth.currentUser.email)) {
+    throw new Error('Unauthorized: only the project owner can provision campus roles.');
   }
 
   const email = targetEmail.trim().toLowerCase();
@@ -130,18 +153,31 @@ export async function assignUserRoleByEmail(
 
   try {
     const userSnap = await getDocs(query(collection(db, USERS), where('email', '==', email), limit(1)));
+    const batch = writeBatch(db);
+
+    if (newRole === 'student') {
+      batch.delete(doc(db, STAFF_INVITES, email));
+      if (!userSnap.empty) {
+        const targetUid = userSnap.docs[0].id;
+        batch.set(doc(db, ROLES, targetUid), { ...payload, updatedAt: serverTimestamp() }, { merge: true });
+      }
+      await batch.commit();
+      return userSnap.empty ? 'pending' : 'assigned';
+    }
+
+    // Always anchor staff invites by verified token email so unverified profile changes cannot escalate privileges.
+    batch.set(doc(db, STAFF_INVITES, email), payload, { merge: true });
     if (!userSnap.empty) {
       const targetUid = userSnap.docs[0].id;
-      const batch = writeBatch(db);
       batch.set(doc(db, ROLES, targetUid), { ...payload, updatedAt: serverTimestamp() }, { merge: true });
-      batch.delete(doc(db, STAFF_INVITES, email));
       await batch.commit();
       return 'assigned';
     }
-    await setDoc(doc(db, STAFF_INVITES, email), payload, { merge: true });
+
+    await batch.commit();
     return 'pending';
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `${ROLES}/${email}`);
+    handleFirestoreError(error, OperationType.WRITE, `${STAFF_INVITES}/${email}`);
   }
 }
 
@@ -149,40 +185,43 @@ export async function fetchAllRoles(): Promise<UserRoleRecord[]> {
   try {
     const [rolesSnap, invitesSnap] = await Promise.all([
       getDocs(query(collection(db, ROLES), orderBy('__name__'), limit(50))),
-      getDocs(query(collection(db, STAFF_INVITES), orderBy('__name__'), limit(50))).catch(() => null),
+      getDocs(query(collection(db, STAFF_INVITES), orderBy('__name__'), limit(50))),
     ]);
 
     const seenEmails = new Set<string>();
-    const activeRoles: UserRoleRecord[] = rolesSnap.docs.map((d) => {
-      const data = d.data();
-      const email = String(data.email || '').toLowerCase();
-      if (email) seenEmails.add(email);
-      return {
-        uid: d.id,
-        email,
-        role: data.role || 'student',
-        assignedAt: data.assignedAt ? toIsoString(data.assignedAt) : data.updatedAt ? toIsoString(data.updatedAt) : undefined,
-        assignedBy: data.assignedBy,
-      };
-    });
+    const activeRoles: UserRoleRecord[] = rolesSnap.docs
+      .map((d) => {
+        const data = d.data();
+        const email = String(data.email || '').toLowerCase();
+        if (email) seenEmails.add(email);
+        return {
+          uid: d.id,
+          email,
+          role: (data.role || 'student') as UserRoleRecord['role'],
+          assignedAt: data.assignedAt ? toIsoString(data.assignedAt) : data.updatedAt ? toIsoString(data.updatedAt) : undefined,
+          assignedBy: data.assignedBy,
+        };
+      })
+      .filter((r) => r.role !== 'student');
 
-    const pendingRoles: UserRoleRecord[] = (invitesSnap?.docs ?? [])
+    const pendingRoles: UserRoleRecord[] = invitesSnap.docs
       .filter((d) => !seenEmails.has(String(d.data().email || d.id).toLowerCase()))
       .map((d) => {
         const data = d.data();
         return {
           uid: d.id,
           email: String(data.email || d.id),
-          role: data.role || 'student',
+          role: (data.role || 'student') as UserRoleRecord['role'],
           assignedAt: data.assignedAt ? toIsoString(data.assignedAt) : undefined,
           assignedBy: data.assignedBy,
           pending: true,
         };
-      });
+      })
+      .filter((r) => r.role !== 'student');
 
     return [...activeRoles, ...pendingRoles];
-  } catch {
-    return [];
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, ROLES);
   }
 }
 
@@ -192,8 +231,8 @@ export async function fetchUsersDirectory(): Promise<Array<{ uid: string; email:
     return snap.docs
       .map((d) => ({ uid: d.id, email: String(d.data().email || ''), name: String(d.data().name || '') }))
       .filter((u) => Boolean(u.email));
-  } catch {
-    return [];
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, USERS);
   }
 }
 
@@ -209,33 +248,30 @@ export async function isConfiguredAdmin(uid?: string, email?: string | null): Pr
   }
 }
 
+export function subscribeToRealtimeItems(
+  pageLimit: number,
+  onSuccess: (items: CampusItem[], hasMore: boolean) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  const q = query(collection(db, ITEMS), orderBy('createdAt', 'desc'), limit(pageLimit + 1));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const hasMore = snapshot.docs.length > pageLimit;
+      const items = snapshot.docs.slice(0, pageLimit).map(mapDocToCampusItem);
+      onSuccess(items, hasMore);
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+}
+
 export async function fetchItemsPage(cursor?: QueryDocumentSnapshot<DocumentData>): Promise<ItemPage> {
   const q = query(collection(db, ITEMS), orderBy('createdAt', 'desc'), limit(20), ...(cursor ? [startAfter(cursor)] : []));
   try {
     const snapshot = await getDocs(q);
-    const items = snapshot.docs.map((docSnap) => {
-      const d = docSnap.data();
-      const createdAt = toIsoString(d.createdAt);
-      const raw: CampusItem = {
-        id: docSnap.id,
-        type: d.type || 'lost',
-        title: d.title || '',
-        category: d.category || 'other',
-        description: d.description || '',
-        location: d.location || '',
-        locationDetails: d.locationDetails || undefined,
-        dateLostOrFound: d.dateLostOrFound || createdAt,
-        status: d.status || 'open',
-        holdingLocation: d.holdingLocation || 'finder_holding',
-        imageUrl: d.category === 'student_id' ? undefined : (d.imageUrl || undefined),
-        isSensitiveId: d.isSensitiveId || d.category === 'student_id',
-        verificationQuestion: d.verificationQuestion || undefined,
-        reportedByEmailDomain: 'nileuniversity.edu.ng',
-        authorId: d.authorId || undefined,
-        createdAt,
-      };
-      return applyReadTimeExpiry(raw);
-    });
+    const items = snapshot.docs.map(mapDocToCampusItem);
     return { items, nextCursor: snapshot.docs.at(-1) };
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, ITEMS);
@@ -280,11 +316,11 @@ export async function saveItemToFirestore(item: CampusItem, _user?: User | null)
       authorEmail: email.slice(0, 100),
       createdAt: serverTimestamp(),
     });
-    if (item.verificationAnswerHash && item.type === 'found') {
+    if (item.verificationAnswer && item.type === 'found') {
       batch.set(doc(db, ITEMS, itemRef.id, 'secrets', 'verification'), {
         itemId: itemRef.id,
         authorId: uid,
-        expectedAnswer: item.verificationAnswerHash.slice(0, 500),
+        expectedAnswer: item.verificationAnswer.slice(0, 500),
         createdAt: serverTimestamp(),
       });
     }
@@ -297,13 +333,13 @@ export async function saveItemToFirestore(item: CampusItem, _user?: User | null)
 
 export async function fetchItemPrivateDetails(itemId: string): Promise<ItemPrivateDetails> {
   const [privateSnap, secretSnap] = await Promise.all([
-    getDoc(doc(db, ITEMS, itemId, 'private', 'details')).catch(() => null),
-    getDoc(doc(db, ITEMS, itemId, 'secrets', 'verification')).catch(() => null),
+    getDoc(doc(db, ITEMS, itemId, 'private', 'details')),
+    getDoc(doc(db, ITEMS, itemId, 'secrets', 'verification')),
   ]);
   return {
-    authorName: privateSnap?.exists() ? privateSnap.data().authorName : undefined,
-    authorEmail: privateSnap?.exists() ? privateSnap.data().authorEmail : undefined,
-    expectedAnswer: secretSnap?.exists() ? secretSnap.data().expectedAnswer : undefined,
+    authorName: privateSnap.exists() ? privateSnap.data().authorName : undefined,
+    authorEmail: privateSnap.exists() ? privateSnap.data().authorEmail : undefined,
+    expectedAnswer: secretSnap.exists() ? secretSnap.data().expectedAnswer : undefined,
   };
 }
 
@@ -315,8 +351,8 @@ export async function fetchApprovedHandoverContact(itemId: string): Promise<{ au
       authorName: snap.data().authorName,
       authorEmail: snap.data().authorEmail,
     };
-  } catch {
-    return null;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `${ITEMS}/${itemId}/private/details`);
   }
 }
 
@@ -328,18 +364,58 @@ export async function updateItemStatusInFirestore(itemId: string, status: Campus
   }
 }
 
+export async function expireItemsBatchInFirestore(itemIds: string[]): Promise<void> {
+  if (itemIds.length === 0) return;
+  try {
+    const chunkSize = 400;
+    for (let i = 0; i < itemIds.length; i += chunkSize) {
+      const batch = writeBatch(db);
+      itemIds.slice(i, i + chunkSize).forEach((itemId) => {
+        batch.update(doc(db, ITEMS, itemId), { status: 'expired', updatedAt: serverTimestamp() });
+      });
+      await batch.commit();
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, ITEMS);
+  }
+}
+
+export async function fetchCampusAuditCounts(): Promise<CampusAuditCounts> {
+  const [totalSnap, foundSnap, foundRetSnap, totalRetSnap, custodySnap, pendingSnap] = await Promise.all([
+    getCountFromServer(collection(db, ITEMS)),
+    getCountFromServer(query(collection(db, ITEMS), where('type', '==', 'found'))),
+    getCountFromServer(query(collection(db, ITEMS), where('type', '==', 'found'), where('status', '==', 'returned'))),
+    getCountFromServer(query(collection(db, ITEMS), where('status', '==', 'returned'))),
+    getCountFromServer(
+      query(
+        collection(db, ITEMS),
+        where('holdingLocation', 'in', ['security_main_gate', 'student_affairs_office', 'library_desk', 'faculty_officer'])
+      )
+    ),
+    getCountFromServer(query(collection(db, CLAIMS), where('status', '==', 'pending'))),
+  ]);
+  return {
+    totalItems: totalSnap.data().count,
+    totalFound: foundSnap.data().count,
+    foundReturned: foundRetSnap.data().count,
+    totalReturned: totalRetSnap.data().count,
+    custodyCount: custodySnap.data().count,
+    pendingClaimsCount: pendingSnap.data().count,
+  };
+}
+
 export async function deleteItemFromFirestore(itemId: string): Promise<void> {
   try {
     const [privateClaimsSnap, claimsSnap] = await Promise.all([
-      getDocs(collection(db, ITEMS, itemId, 'privateClaims')).catch(() => null),
-      getDocs(query(collection(db, CLAIMS), where('itemId', '==', itemId))).catch(() => null),
+      getDocs(collection(db, ITEMS, itemId, 'privateClaims')),
+      getDocs(query(collection(db, CLAIMS), where('itemId', '==', itemId))),
     ]);
 
     const batch = writeBatch(db);
     batch.delete(doc(db, ITEMS, itemId, 'private', 'details'));
     batch.delete(doc(db, ITEMS, itemId, 'secrets', 'verification'));
-    privateClaimsSnap?.docs.forEach((d) => batch.delete(d.ref));
-    claimsSnap?.docs.forEach((d) => batch.delete(d.ref));
+    privateClaimsSnap.docs.forEach((d) => batch.delete(d.ref));
+    claimsSnap.docs.forEach((d) => batch.delete(d.ref));
     batch.delete(doc(db, ITEMS, itemId));
     await batch.commit();
   } catch (error) {
@@ -383,13 +459,18 @@ export function subscribeToRealtimeClaims(
   };
 
   if (isPrivileged) {
-    const q = query(collection(db, CLAIMS), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, CLAIMS), orderBy('createdAt', 'desc'), limit(50));
     return onSnapshot(
       q,
-      async (snapshot) => onSuccess(await hydrateSnapshot(snapshot.docs)),
+      async (snapshot) => {
+        try {
+          onSuccess(await hydrateSnapshot(snapshot.docs));
+        } catch (err) {
+          onError?.(err instanceof Error ? err : new Error('Could not load claims.'));
+        }
+      },
       (error) => {
         onError?.(error);
-        handleFirestoreError(error, OperationType.LIST, CLAIMS);
       }
     );
   }
@@ -406,13 +487,13 @@ export function subscribeToRealtimeClaims(
   };
 
   const unsubClaimant = onSnapshot(
-    query(collection(db, CLAIMS), where('claimantId', '==', uid)),
-    (snap) => { claimantDocs = snap.docs; emitMerged().catch(() => {}); },
+    query(collection(db, CLAIMS), where('claimantId', '==', uid), orderBy('createdAt', 'desc'), limit(30)),
+    (snap) => { claimantDocs = snap.docs; emitMerged().catch((err) => onError?.(err)); },
     (error) => onError?.(error)
   );
   const unsubFinder = onSnapshot(
-    query(collection(db, CLAIMS), where('finderId', '==', uid)),
-    (snap) => { finderDocs = snap.docs; emitMerged().catch(() => {}); },
+    query(collection(db, CLAIMS), where('finderId', '==', uid), orderBy('createdAt', 'desc'), limit(30)),
+    (snap) => { finderDocs = snap.docs; emitMerged().catch((err) => onError?.(err)); },
     (error) => onError?.(error)
   );
 
@@ -430,16 +511,20 @@ export async function saveClaimToFirestore(claim: ClaimRecord, _user?: User | nu
   const rawName = auth.currentUser.displayName || claim.claimantName || 'Claimant';
   const name = rawName.trim().length >= 2 ? rawName.trim() : 'Claimant';
 
-  const resolvedFinderId = finderId || (await getDoc(doc(db, ITEMS, claim.itemId))).data()?.authorId;
+  const itemSnap = await getDoc(doc(db, ITEMS, claim.itemId));
+  const itemData = itemSnap.exists() ? itemSnap.data() : undefined;
+  const resolvedFinderId = finderId || itemData?.authorId;
   if (!resolvedFinderId) throw new Error('The item you tried to claim could not be found.');
 
+  const isFoundStudentId = itemData?.type === 'found' && itemData?.category === 'student_id';
+  const safeItemTitle = isFoundStudentId ? 'A student ID card was found' : claim.itemTitle;
   const claimId = `${claim.itemId}_${uid}`;
 
   try {
     const batch = writeBatch(db);
     batch.set(doc(db, CLAIMS, claimId), {
       itemId: claim.itemId,
-      itemTitle: claim.itemTitle.slice(0, 100),
+      itemTitle: safeItemTitle.slice(0, 100),
       claimantId: uid,
       finderId: resolvedFinderId,
       status: 'pending',
@@ -469,15 +554,25 @@ export async function saveClaimToFirestore(claim: ClaimRecord, _user?: User | nu
 export async function updateClaimStatusInFirestore(
   claimId: string,
   itemId: string,
-  status: 'approved' | 'rejected'
-): Promise<void> {
+  status: 'approved' | 'rejected',
+  otherPendingClaimCount = 0
+): Promise<'verified' | 'open' | 'claim_requested'> {
   try {
     const batch = writeBatch(db);
     batch.update(doc(db, CLAIMS, claimId), { status, updatedAt: serverTimestamp() });
+
+    let nextItemStatus: 'verified' | 'open' | 'claim_requested' = 'claim_requested';
     if (status === 'approved') {
-      batch.update(doc(db, ITEMS, itemId), { status: 'returned', updatedAt: serverTimestamp() });
+      // Mark verified for handover; physical handover confirmation marks it 'returned'.
+      nextItemStatus = 'verified';
+      batch.update(doc(db, ITEMS, itemId), { status: 'verified', updatedAt: serverTimestamp() });
+    } else if (otherPendingClaimCount === 0) {
+      nextItemStatus = 'open';
+      batch.update(doc(db, ITEMS, itemId), { status: 'open', updatedAt: serverTimestamp() });
     }
+
     await batch.commit();
+    return nextItemStatus;
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${CLAIMS}/${claimId}`);
   }
@@ -490,8 +585,8 @@ export async function syncUserProfile(user: User): Promise<void> {
   const displayName = user.name.trim().length >= 2 ? user.name.trim().slice(0, 100) : 'Campus User';
 
   try {
-    const existingSnap = await getDoc(userRef).catch(() => null);
-    if (!existingSnap?.exists()) {
+    const existingSnap = await getDoc(userRef);
+    if (!existingSnap.exists()) {
       await setDoc(userRef, {
         name: displayName,
         email: authEmail,
@@ -502,11 +597,14 @@ export async function syncUserProfile(user: User): Promise<void> {
         updatedAt: serverTimestamp(),
       });
     } else {
+      const existingData = existingSnap.data();
+      const preservedDept = user.department?.trim() || existingData.department || '';
+      const preservedMatric = user.matricNumber?.trim() || existingData.matricNumber || '';
       await updateDoc(userRef, {
         name: displayName,
         email: authEmail,
-        department: user.department?.slice(0, 100) || '',
-        matricNumber: user.matricNumber?.slice(0, 20) || '',
+        department: preservedDept.slice(0, 100),
+        matricNumber: preservedMatric.slice(0, 20),
         updatedAt: serverTimestamp(),
         ...(isMasterAdminEmail(authEmail) ? { role: user.role } : {}),
       });
@@ -527,29 +625,27 @@ export function subscribeToRealtimeNotifications(
   }
   const isStaff = currentUser.role === 'admin' || currentUser.role === 'security' || currentUser.isAdmin;
   const q = isStaff
-    ? query(collection(db, NOTIFICATIONS), where('recipientUid', 'in', [currentUser.id, 'admin']), limit(20))
-    : query(collection(db, NOTIFICATIONS), where('recipientUid', '==', currentUser.id), limit(20));
+    ? query(collection(db, NOTIFICATIONS), where('recipientUid', 'in', [currentUser.id, 'admin']), orderBy('createdAt', 'desc'), limit(25))
+    : query(collection(db, NOTIFICATIONS), where('recipientUid', '==', currentUser.id), orderBy('createdAt', 'desc'), limit(25));
 
   return onSnapshot(
     q,
     (snapshot) => {
-      const notifications = snapshot.docs
-        .map((docSnap) => {
-          const d = docSnap.data();
-          return {
-            id: docSnap.id,
-            recipientUid: d.recipientUid || '',
-            fromUid: d.fromUid || '',
-            type: d.type || 'admin_review',
-            title: d.title || 'Campus Notification',
-            message: d.message || '',
-            read: Boolean(d.read),
-            createdAt: toIsoString(d.createdAt),
-            itemId: d.itemId || undefined,
-            claimId: d.claimId || undefined,
-          };
-        })
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const notifications = snapshot.docs.map((docSnap) => {
+        const d = docSnap.data();
+        return {
+          id: docSnap.id,
+          recipientUid: d.recipientUid || '',
+          fromUid: d.fromUid || '',
+          type: d.type || 'admin_review',
+          title: d.title || 'Campus Notification',
+          message: d.message || '',
+          read: Boolean(d.read),
+          createdAt: toIsoString(d.createdAt),
+          itemId: d.itemId || undefined,
+          claimId: d.claimId || undefined,
+        };
+      });
       onSuccess(notifications);
     },
     (error) => onError?.(error)
@@ -590,5 +686,5 @@ export async function saveNotificationToFirestore(notification: {
 
 export async function markNotificationAsReadInFirestore(notificationId: string): Promise<void> {
   if (!notificationId || notificationId.startsWith('local-') || notificationId.startsWith('notif-')) return;
-  await updateDoc(doc(db, NOTIFICATIONS, notificationId), { read: true }).catch(() => {});
+  await updateDoc(doc(db, NOTIFICATIONS, notificationId), { read: true });
 }

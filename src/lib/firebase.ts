@@ -7,7 +7,16 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signOut } from 'firebase/auth';
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  terminate,
+  clearIndexedDbPersistence,
+  doc,
+  getDocFromServer,
+} from 'firebase/firestore';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -67,15 +76,14 @@ export interface FirestoreErrorInfo {
 
 export function handleFirestoreError(
   error: unknown,
-  operationType: OperationType,
-  path: string | null
+  _operationType: OperationType,
+  _path: string | null
 ): never {
   const errMsg = error instanceof Error ? error.message : String(error);
   if (errMsg.includes('token-service-api-has-not-been-used') || errMsg.includes('securetoken.googleapis.com')) {
     signOut(auth).catch(() => {});
   }
 
-  // Sanitize message: do not expose internal paths, user identifiers, or stack traces
   let userFacingMessage = 'Action could not be completed. Please check your connection and try again.';
   if (errMsg.toLowerCase().includes('missing or insufficient permissions') || errMsg.toLowerCase().includes('permission-denied')) {
     userFacingMessage = 'Access denied. You do not have permission for this campus record.';
@@ -86,42 +94,54 @@ export function handleFirestoreError(
   throw new Error(userFacingMessage);
 }
 
+export async function clearOfflinePersistence(): Promise<void> {
+  try {
+    await terminate(db);
+    await clearIndexedDbPersistence(db);
+  } catch {
+    // Persistence cannot be cleared while another tab holds locks; ignore safely.
+  }
+}
+
 export async function testConnection(): Promise<boolean> {
   try {
-    // Wait for initial auth state from IndexedDB to be ready
     if (typeof auth.authStateReady === 'function') {
       await auth.authStateReady();
     }
 
-    if (auth.currentUser) {
-      try {
-        await auth.currentUser.getIdToken(false);
-      } catch (tokenError: any) {
-        if (
-          tokenError?.message?.includes('token-service-api-has-not-been-used') ||
-          tokenError?.code === 'auth/token-service-api-has-not-been-used'
-        ) {
-          await signOut(auth);
-          return false;
-        }
+    if (!auth.currentUser) {
+      return navigator.onLine;
+    }
+
+    try {
+      await auth.currentUser.getIdToken(false);
+    } catch (tokenError: unknown) {
+      const errObj = tokenError as { code?: string; message?: string };
+      if (
+        errObj?.message?.includes('token-service-api-has-not-been-used') ||
+        errObj?.code === 'auth/token-service-api-has-not-been-used'
+      ) {
+        await signOut(auth);
+        return false;
       }
     }
-    await getDocFromServer(doc(db, 'test', 'connection'));
+
+    await getDocFromServer(doc(db, 'users', auth.currentUser.uid));
     return true;
-  } catch (error: any) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (errMsg.includes('the client is offline')) {
       return false;
     }
     if (
-      error?.message?.includes('token-service-api-has-not-been-used') ||
-      error?.message?.includes('securetoken.googleapis.com')
+      errMsg.includes('token-service-api-has-not-been-used') ||
+      errMsg.includes('securetoken.googleapis.com')
     ) {
       if (auth.currentUser) {
         await signOut(auth);
       }
       return false;
     }
-    // A permission-denied or not-found error from server actually proves we reached Firestore server
     return true;
   }
 }

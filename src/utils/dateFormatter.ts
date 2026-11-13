@@ -10,19 +10,25 @@ export function formatDateDDMMYYYY(dateInput: string | number | Date | null | un
   if (!dateInput) return '';
 
   try {
+    if (typeof dateInput === 'string') {
+      const dateOnly = dateInput.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (dateOnly) {
+        return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+      }
+    }
+
     const d = new Date(dateInput);
     if (isNaN(d.getTime())) {
-      // In case dateInput is already a 'YYYY-MM-DD' string
-      if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
-        const [year, month, day] = dateInput.split('-');
-        return `${day}/${month}/${year}`;
-      }
       return String(dateInput);
     }
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    return `${day}/${month}/${year}`;
+
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Africa/Lagos',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(d);
+    return parts;
   } catch {
     return String(dateInput);
   }
@@ -39,6 +45,7 @@ export function formatRelativeTime(dateInput: string | number | Date | null | un
     const now = Date.now();
     const diffSec = Math.floor((now - time) / 1000);
 
+    if (diffSec < -60) return formatDateDDMMYYYY(dateInput);
     if (diffSec < 45) return 'Just now';
     if (diffSec < 90) return '1 min ago';
 
@@ -59,3 +66,18 @@ export function formatRelativeTime(dateInput: string | number | Date | null | un
   }
 }
 
+/**
+ * Returns today's calendar date (YYYY-MM-DD) in West Africa Time (Africa/Lagos).
+ */
+export function getTodayWatIsoDate(reference = new Date()): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Lagos',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(reference);
+  } catch {
+    return reference.toISOString().split('T')[0];
+  }
+}
