@@ -61,6 +61,9 @@ test('calculateLocationProximity recognizes exact and cluster proximity', () => 
     'Male Hostel Block A (Undergraduate)'
   );
   assert.equal(distant, 0.0);
+
+  assert.equal(calculateLocationProximity('', 'Congo House (Engineering & Computing)'), 0.0);
+  assert.equal(calculateLocationProximity('Congo House (Engineering & Computing)', '   '), 0.0);
 });
 
 test('calculateMatchScore meets the >= 0.60 specification threshold for Casio in Ubangi', () => {

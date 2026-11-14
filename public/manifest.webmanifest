@@ -1,9 +1,15 @@
 {
+  "id": "/",
   "name": "NileFound",
   "short_name": "NileFound",
+  "description": "A lightweight, privacy-conscious campus Lost and Found notice board for Nile University of Nigeria, Abuja.",
+  "lang": "en",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "theme_color": "#0F6E6E",
+  "orientation": "portrait-primary",
+  "categories": ["education", "utilities"],
+  "theme_color": "#FAF6EF",
   "background_color": "#FAF6EF",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

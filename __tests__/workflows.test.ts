@@ -55,10 +55,25 @@ test('empty filter results are deterministic', () => {
   assert.equal(filterCampusItems([item()], { searchTerm: 'does-not-exist', now }).length, 0);
 });
 
-test('image guard rejects unsafe or oversized uploads', () => {
+test('image guard accepts jpg/jpeg and rejects unsafe or oversized uploads', () => {
   assert.equal(isSupportedImageFile({ type: 'image/jpeg', size: 1024 }), true);
+  assert.equal(isSupportedImageFile({ type: 'image/jpg', size: 1024 }), true);
   assert.equal(isSupportedImageFile({ type: 'application/pdf', size: 1024 }), false);
   assert.equal(isSupportedImageFile({ type: 'image/jpeg', size: 5 * 1024 * 1024 + 1 }), false);
+});
+
+test('claimed status filter includes both claim_requested and verified items', () => {
+  const openItem = item({ id: 'open-1', status: 'open' });
+  const requestedItem = item({ id: 'req-1', status: 'claim_requested' });
+  const verifiedItem = item({ id: 'ver-1', status: 'verified' });
+  const returnedItem = item({ id: 'ret-1', status: 'returned' });
+  assert.deepEqual(
+    filterCampusItems([openItem, requestedItem, verifiedItem, returnedItem], {
+      status: 'claimed',
+      now,
+    }).map((entry) => entry.id),
+    ['req-1', 'ver-1'],
+  );
 });
 
 test('CSV export neutralizes formula injection and quotes fields', () => {

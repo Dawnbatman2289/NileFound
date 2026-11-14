@@ -6,7 +6,7 @@ import { test } from 'node:test';
 const repoRoot = process.cwd();
 const ignoredDirectories = new Set(['.git', 'node_modules', 'dist', 'build', 'coverage', '.playwright-cli']);
 const ignoredFiles = new Set(['firebase-applet-config.json']);
-const allowedEmail = /^(?:ayomide2289@gmail\.com|[^@\s]+@(?:nileuniversity\.edu\.ng|(?:[A-Z0-9.-]+\.)?example\.com|(?:[A-Z0-9.-]+\.)?test\.invalid))$/i;
+const allowedEmail = /^[^@\s]+@(?:nileuniversity\.edu\.ng|(?:[A-Z0-9.-]+\.)?example\.com|(?:[A-Z0-9.-]+\.)?test\.invalid)$/i;
 const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const apiKeyPattern = /AIza[0-9A-Za-z_-]{35}/g;
 
@@ -25,6 +25,11 @@ function collectTextFiles(directory: string): string[] {
   return files;
 }
 
+const forbiddenOwnerEmail = new RegExp(
+  `${['ayomide2289', 'gmail\\.com'].join('@')}|${['owner', 'example\\.com'].join('@')}`,
+  'i',
+);
+
 test('repository privacy scan blocks personal emails and embedded API keys', () => {
   const findings: string[] = [];
 
@@ -36,13 +41,18 @@ test('repository privacy scan blocks personal emails and embedded API keys', () 
       continue;
     }
 
+    const rel = relative(repoRoot, file).replace(/\\/g, '/');
+    if (rel !== 'src/utils/repoPrivacy.test.ts' && forbiddenOwnerEmail.test(content)) {
+      findings.push(`${rel} must not contain personal owner emails or owner example placeholders`);
+    }
+
     for (const email of content.match(emailPattern) ?? []) {
       if (!allowedEmail.test(email)) {
-        findings.push(`${relative(repoRoot, file)} contains disallowed email ${email}`);
+        findings.push(`${rel} contains disallowed email ${email}`);
       }
     }
     if (apiKeyPattern.test(content)) {
-      findings.push(`${relative(repoRoot, file)} contains an embedded Firebase/API key`);
+      findings.push(`${rel} contains an embedded Firebase/API key`);
     }
     apiKeyPattern.lastIndex = 0;
   }

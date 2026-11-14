@@ -69,6 +69,32 @@ test('expireOldItems marks posts older than threshold as expired', () => {
   assert.equal(updated.find(i => i.id === 'old-item')?.status, 'expired');
 });
 
+test('expireOldItems preserves claim_requested, verified, and returned items older than 60 days', () => {
+  const now = new Date('2026-10-24T12:00:00Z');
+  const base: Omit<CampusItem, 'id' | 'status'> = {
+    type: 'found',
+    title: 'Lab Coat',
+    category: 'other',
+    description: 'Found 90 days ago',
+    location: 'Ubangi House',
+    dateLostOrFound: '2026-07-01',
+    holdingLocation: 'security_main_gate',
+    createdAt: '2026-07-01T10:00:00Z',
+  };
+  const items: CampusItem[] = [
+    { ...base, id: 'open-old', status: 'open' },
+    { ...base, id: 'requested-old', status: 'claim_requested' },
+    { ...base, id: 'verified-old', status: 'verified' },
+    { ...base, id: 'returned-old', status: 'returned' },
+  ];
+
+  const updated = expireOldItems(items, 60, now);
+  assert.equal(updated.find(i => i.id === 'open-old')?.status, 'expired');
+  assert.equal(updated.find(i => i.id === 'requested-old')?.status, 'claim_requested');
+  assert.equal(updated.find(i => i.id === 'verified-old')?.status, 'verified');
+  assert.equal(updated.find(i => i.id === 'returned-old')?.status, 'returned');
+});
+
 test('generateCampusAuditReport computes metrics accurately', () => {
   const items: CampusItem[] = [
     {

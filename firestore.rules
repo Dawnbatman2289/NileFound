@@ -20,14 +20,13 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // Root project owner identity (update UID and email if self-hosting a different Firebase project)
+    // Root project owner identity by Firebase Auth UID (update UID if self-hosting a different Firebase project)
     function isMasterAdmin() {
       return request.auth != null
         && request.auth.uid == 'nFdIhTjOOqMqMG4y1KIT550Qf5m1'
         && request.auth.token.keys().hasAll(['email_verified'])
         && request.auth.token.email_verified == true
-        && request.auth.token.email is string
-        && request.auth.token.email == 'ayomide2289@gmail.com';
+        && request.auth.token.email is string;
     }
 
     // Delegated admin flag in /admins/{uid} (does NOT grant master admin privileges)
@@ -78,10 +77,10 @@ service cloud.firestore {
       return isAdmin() || isSecurity();
     }
 
-    // Item schema and field validation (no PII or imageUrl for student_id)
+    // Item schema and field validation (no PII or photos for student_id)
     function isValidItem(data) {
       return data.keys().hasAll(['title', 'type', 'category', 'description', 'location', 'status', 'holdingLocation', 'authorId', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['title', 'type', 'category', 'description', 'location', 'locationDetails', 'dateLostOrFound', 'status', 'holdingLocation', 'authorId', 'imageUrl', 'isSensitiveId', 'verificationQuestion', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['title', 'type', 'category', 'description', 'location', 'locationDetails', 'dateLostOrFound', 'status', 'holdingLocation', 'authorId', 'thumbUrl', 'imageUrl', 'isSensitiveId', 'verificationQuestion', 'createdAt', 'updatedAt'])
         && data.title is string && data.title.size() >= 2 && data.title.size() <= 100
         && data.type in ['lost', 'found']
         && data.category in ['student_id', 'phone_tech', 'power_bank', 'calculator', 'flash_drive', 'keys', 'bag_backpack', 'lab_coat_clothing', 'books_notes', 'other']
@@ -94,18 +93,31 @@ service cloud.firestore {
         && data.authorId is string && data.authorId.size() <= 128
         && data.createdAt is timestamp
         && data.updatedAt is timestamp
-        && !(data.category == 'student_id' && 'imageUrl' in data)
+        && !(data.category == 'student_id' && ('imageUrl' in data || 'thumbUrl' in data))
         && (data.category != 'student_id' || data.isSensitiveId == true)
+        && (!('thumbUrl' in data) || (
+          data.thumbUrl is string
+          && data.thumbUrl.size() <= 4200
+          && data.thumbUrl.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')
+        ))
         && (!('imageUrl' in data) || (
           data.imageUrl is string
           && data.imageUrl.size() <= 140000
-          && (
-            data.imageUrl.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')
-            || data.imageUrl.matches('^https://firebasestorage\\.googleapis\\.com/v0/b/kempt-coyote-nc70r\\.firebasestorage\\.app/o/items%2F' + data.authorId + '%2F[^?]+\\?alt=media(&token=[a-zA-Z0-9-]+)?$')
-          )
+          && data.imageUrl.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')
         ))
         && (!('verificationQuestion' in data) || (data.verificationQuestion is string && data.verificationQuestion.size() <= 300))
         && (!('isSensitiveId' in data) || (data.isSensitiveId is bool));
+    }
+
+    function isValidItemMedia(data, itemId) {
+      return data.keys().hasAll(['itemId', 'authorId', 'dataUrl', 'createdAt'])
+        && data.keys().hasOnly(['itemId', 'authorId', 'dataUrl', 'createdAt'])
+        && data.itemId is string && data.itemId == itemId
+        && data.authorId is string && data.authorId == request.auth.uid
+        && data.dataUrl is string
+        && data.dataUrl.size() <= 140000
+        && data.dataUrl.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')
+        && data.createdAt is timestamp;
     }
 
     function isValidItemSecret(data, itemId) {
@@ -167,7 +179,7 @@ service cloud.firestore {
     // Items collection (verified campus members only)
     match /items/{itemId} {
       allow get: if isVerifiedUser() && isValidId(itemId);
-      allow list: if isVerifiedUser();
+      allow list: if isVerifiedUser() && request.query.limit <= 50;
       allow create: if isValidId(itemId) && isVerifiedUser()
         && isValidItem(incoming())
         && incoming().authorId == request.auth.uid
@@ -180,7 +192,11 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
-          isStaffOrAdmin()
+          isAdmin()
+          || (
+            isSecurity()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
           || (
             existing().authorId == request.auth.uid
             && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
@@ -197,17 +213,27 @@ service cloud.firestore {
           )
         );
       allow delete: if isValidId(itemId) && (
-        isStaffOrAdmin() ||
+        isAdmin() ||
         (isVerifiedUser() && existing().authorId == request.auth.uid)
       );
 
       // Private secret verification answer subcollection
       match /secrets/{secretId} {
         allow get: if isValidId(secretId) && isVerifiedUser() && (
-          isStaffOrAdmin() ||
-          resource.data.authorId == request.auth.uid
+          isAdmin()
+          || resource.data.authorId == request.auth.uid
+          || (
+            isSecurity()
+            && get(/databases/$(database)/documents/items/$(itemId)).data.holdingLocation != 'finder_holding'
+          )
         );
-        allow list: if isStaffOrAdmin();
+        allow list: if request.query.limit <= 50 && (
+          isAdmin()
+          || (
+            isSecurity()
+            && get(/databases/$(database)/documents/items/$(itemId)).data.holdingLocation != 'finder_holding'
+          )
+        );
         allow create: if isValidId(secretId) && isVerifiedUser()
           && isValidItemSecret(incoming(), itemId)
           && incoming().createdAt == request.time
@@ -216,9 +242,9 @@ service cloud.firestore {
         allow update: if isValidId(secretId) && isVerifiedUser()
           && isValidItemSecret(incoming(), itemId)
           && incoming().createdAt == existing().createdAt
-          && (isStaffOrAdmin() || resource.data.authorId == request.auth.uid);
+          && (isAdmin() || resource.data.authorId == request.auth.uid);
         allow delete: if isValidId(secretId) && (
-          isStaffOrAdmin() ||
+          isAdmin() ||
           (isVerifiedUser() && resource.data.authorId == request.auth.uid)
         );
       }
@@ -233,7 +259,7 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/claims/$(itemId + '_' + request.auth.uid)).data.status == 'approved'
           )
         );
-        allow list: if isStaffOrAdmin();
+        allow list: if isStaffOrAdmin() && request.query.limit <= 50;
         allow create: if isValidId(docId) && isVerifiedUser()
           && isValidPrivateDetails(incoming(), itemId)
           && incoming().createdAt == request.time
@@ -242,9 +268,9 @@ service cloud.firestore {
         allow update: if isValidId(docId) && isVerifiedUser()
           && isValidPrivateDetails(incoming(), itemId)
           && incoming().createdAt == existing().createdAt
-          && (isStaffOrAdmin() || resource.data.authorId == request.auth.uid);
+          && (isAdmin() || resource.data.authorId == request.auth.uid);
         allow delete: if isValidId(docId) && (
-          isStaffOrAdmin() ||
+          isAdmin() ||
           (isVerifiedUser() && resource.data.authorId == request.auth.uid)
         );
       }
@@ -256,7 +282,7 @@ service cloud.firestore {
           || resource.data.claimantId == request.auth.uid
           || get(/databases/$(database)/documents/items/$(itemId)).data.authorId == request.auth.uid
         );
-        allow list: if isVerifiedUser() && (
+        allow list: if isVerifiedUser() && request.query.limit <= 50 && (
           isStaffOrAdmin()
           || get(/databases/$(database)/documents/items/$(itemId)).data.authorId == request.auth.uid
         );
@@ -266,11 +292,30 @@ service cloud.firestore {
           && existsAfter(/databases/$(database)/documents/claims/$(claimId))
           && getAfter(/databases/$(database)/documents/claims/$(claimId)).data.claimantId == request.auth.uid
           && getAfter(/databases/$(database)/documents/claims/$(claimId)).data.itemId == itemId;
-        allow update: if isValidId(claimId) && isStaffOrAdmin();
+        allow update: if isValidId(claimId) && isAdmin();
         allow delete: if isValidId(claimId) && (
-          isStaffOrAdmin()
+          isAdmin()
           || (isVerifiedUser() && resource.data.claimantId == request.auth.uid)
           || (isVerifiedUser() && get(/databases/$(database)/documents/items/$(itemId)).data.authorId == request.auth.uid)
+        );
+      }
+
+      // Full-resolution photo stored outside feed list docs (never for student_id)
+      match /media/{mediaId} {
+        allow get: if isValidId(itemId) && mediaId == 'full' && isVerifiedUser()
+          && exists(/databases/$(database)/documents/items/$(itemId))
+          && get(/databases/$(database)/documents/items/$(itemId)).data.category != 'student_id';
+        allow list: if false;
+        allow create: if isValidId(itemId) && mediaId == 'full' && isVerifiedUser()
+          && isValidItemMedia(incoming(), itemId)
+          && incoming().createdAt == request.time
+          && existsAfter(/databases/$(database)/documents/items/$(itemId))
+          && getAfter(/databases/$(database)/documents/items/$(itemId)).data.authorId == request.auth.uid
+          && getAfter(/databases/$(database)/documents/items/$(itemId)).data.category != 'student_id';
+        allow update: if false;
+        allow delete: if isValidId(itemId) && mediaId == 'full' && (
+          isAdmin()
+          || (isVerifiedUser() && resource.data.authorId == request.auth.uid)
         );
       }
     }
@@ -282,7 +327,7 @@ service cloud.firestore {
         || resource.data.claimantId == request.auth.uid
         || resource.data.finderId == request.auth.uid
       );
-      allow list: if isVerifiedUser() && (
+      allow list: if isVerifiedUser() && request.query.limit <= 50 && (
         isStaffOrAdmin()
         || resource.data.claimantId == request.auth.uid
         || resource.data.finderId == request.auth.uid
@@ -307,24 +352,36 @@ service cloud.firestore {
         && incoming().itemId == existing().itemId
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && existing().status == 'pending'
+        && incoming().status in ['approved', 'rejected']
+        && exists(/databases/$(database)/documents/items/$(existing().itemId))
+        && get(/databases/$(database)/documents/items/$(existing().itemId)).data.status != 'returned'
         && (
-          isStaffOrAdmin() ||
-          (
-            resource.data.finderId == request.auth.uid
-            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
-            && incoming().status in ['pending', 'approved', 'rejected']
+          incoming().status != 'approved'
+          || (
+            get(/databases/$(database)/documents/items/$(existing().itemId)).data.status in ['open', 'claim_requested']
+            && getAfter(/databases/$(database)/documents/items/$(existing().itemId)).data.status == 'verified'
+          )
+        )
+        && (
+          isAdmin()
+          || resource.data.finderId == request.auth.uid
+          || (
+            isSecurity()
+            && get(/databases/$(database)/documents/items/$(existing().itemId)).data.holdingLocation != 'finder_holding'
           )
         );
       allow delete: if isValidId(claimId) && (
-        isStaffOrAdmin() ||
+        isAdmin() ||
         (isVerifiedUser() && resource.data.finderId == request.auth.uid)
       );
     }
 
     // Role assignment collection (/roles/{userId}) - only Master Admin writes
     match /roles/{userId} {
-      allow get: if isValidId(userId) && isVerifiedUser() && (request.auth.uid == userId || isStaffOrAdmin());
-      allow list: if isStaffOrAdmin();
+      allow get: if isValidId(userId) && isVerifiedUser() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin() && request.query.limit <= 50;
       allow create, update: if isValidId(userId) && isMasterAdmin()
         && incoming().keys().hasAll(['role', 'email', 'assignedAt'])
         && incoming().keys().hasOnly(['role', 'email', 'assignedAt', 'assignedBy', 'updatedAt'])
@@ -338,8 +395,8 @@ service cloud.firestore {
 
     // Email-keyed pending staff role assignments (/staffInvites/{inviteEmail})
     match /staffInvites/{inviteEmail} {
-      allow get: if isVerifiedUser() && (isStaffOrAdmin() || request.auth.token.email == inviteEmail);
-      allow list: if isStaffOrAdmin();
+      allow get: if isVerifiedUser() && (isAdmin() || request.auth.token.email == inviteEmail);
+      allow list: if isAdmin() && request.query.limit <= 50;
       allow create, update: if isMasterAdmin()
         && inviteEmail.size() <= 128
         && inviteEmail.matches('^[^/]+@nileuniversity\\.edu\\.ng$')
@@ -359,7 +416,7 @@ service cloud.firestore {
         && request.auth.token.keys().hasAll(['email_verified'])
         && request.auth.token.email_verified == true
         && (request.auth.uid == adminUid || isMasterAdmin());
-      allow list: if isMasterAdmin();
+      allow list: if isMasterAdmin() && request.query.limit <= 50;
       allow create, update: if isValidId(adminUid) && isMasterAdmin()
         && incoming().keys().hasAll(['enabled', 'email', 'updatedAt'])
         && incoming().keys().hasOnly(['enabled', 'email', 'updatedAt'])
@@ -372,8 +429,8 @@ service cloud.firestore {
 
     // Users directory
     match /users/{userId} {
-      allow get: if isValidId(userId) && isVerifiedUser() && (request.auth.uid == userId || isStaffOrAdmin());
-      allow list: if isStaffOrAdmin();
+      allow get: if isValidId(userId) && isVerifiedUser() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin() && request.query.limit <= 50;
       allow create: if isValidId(userId) && isVerifiedUser()
         && request.auth.uid == userId
         && isValidUser(incoming())
@@ -482,7 +539,11 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow get, list: if isVerifiedUser() && (
+      allow get: if isVerifiedUser() && (
+        resource.data.recipientUid == request.auth.uid ||
+        (isStaffOrAdmin() && resource.data.recipientUid == 'admin')
+      );
+      allow list: if isVerifiedUser() && request.query.limit <= 50 && (
         resource.data.recipientUid == request.auth.uid ||
         (isStaffOrAdmin() && resource.data.recipientUid == 'admin')
       );
@@ -494,7 +555,7 @@ service cloud.firestore {
         && incoming().diff(existing()).affectedKeys().hasOnly(['read'])
         && incoming().read is bool;
       allow delete: if isValidId(notificationId) && (
-        isStaffOrAdmin() ||
+        isAdmin() ||
         (isVerifiedUser() && resource.data.recipientUid == request.auth.uid)
       );
     }

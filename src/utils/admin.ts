@@ -7,6 +7,7 @@
  */
 
 import { User, CampusItem, ClaimRecord } from '../types/index.ts';
+import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
 
 /**
  * Checks whether a user has administrative or security officer moderation rights.
@@ -19,7 +20,7 @@ export function canUserModerate(user: User | null): boolean {
 /**
  * Flags items that have been inactive or past the expiry window (e.g., 60 days).
  */
-export function expireOldItems(items: CampusItem[], daysThreshold = 60, referenceDate = new Date()): CampusItem[] {
+export function expireOldItems(items: CampusItem[], daysThreshold = ITEM_EXPIRY_DAYS, referenceDate = new Date()): CampusItem[] {
   const refTime = referenceDate.getTime();
   const thresholdMs = daysThreshold * 24 * 60 * 60 * 1000;
 

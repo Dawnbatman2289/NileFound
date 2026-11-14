@@ -38,7 +38,8 @@ try {
   firestore = firebaseConfig.firestoreDatabaseId
     ? initializeFirestore(app, { localCache, experimentalAutoDetectLongPolling: true }, firebaseConfig.firestoreDatabaseId)
     : initializeFirestore(app, { localCache, experimentalAutoDetectLongPolling: true });
-} catch {
+} catch (initError: unknown) {
+  console.warn('[NileFound] Persistent Firestore cache unavailable, falling back:', initError);
   firestore = firebaseConfig.firestoreDatabaseId
     ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
     : getFirestore(app);
@@ -76,12 +77,15 @@ export interface FirestoreErrorInfo {
 
 export function handleFirestoreError(
   error: unknown,
-  _operationType: OperationType,
-  _path: string | null
+  operationType: OperationType,
+  path: string | null
 ): never {
   const errMsg = error instanceof Error ? error.message : String(error);
+  console.warn(`[NileFound] Firestore ${operationType} failed at ${path || 'unknown'}:`, error);
   if (errMsg.includes('token-service-api-has-not-been-used') || errMsg.includes('securetoken.googleapis.com')) {
-    signOut(auth).catch(() => {});
+    signOut(auth).catch((signOutErr) => {
+      console.warn('[NileFound] Sign out after token error failed:', signOutErr);
+    });
   }
 
   let userFacingMessage = 'Action could not be completed. Please check your connection and try again.';
@@ -98,8 +102,8 @@ export async function clearOfflinePersistence(): Promise<void> {
   try {
     await terminate(db);
     await clearIndexedDbPersistence(db);
-  } catch {
-    // Persistence cannot be cleared while another tab holds locks; ignore safely.
+  } catch (persistenceErr: unknown) {
+    console.warn('[NileFound] Could not clear offline persistence:', persistenceErr);
   }
 }
 

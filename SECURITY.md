@@ -2,7 +2,7 @@
 
 Please report vulnerabilities privately through GitHub Security Advisories (enable Private Vulnerability Reporting in the repository Settings under Code Security if not yet active). Do not publish exploitable details in a public issue.
 
-If GitHub Security Advisories are unavailable, contact the project maintainer directly at `ayomide2289@gmail.com` with the subject `[NileFound Security]`.
+If GitHub Security Advisories are unavailable, contact the repository maintainer via a private advisory request or Student Affairs / Campus Security (`studentaffairs@nileuniversity.edu.ng`) with the subject `[NileFound Security]`.
 
 Include the affected file or feature, reproduction steps, impact, and a suggested mitigation when safe to share.
 

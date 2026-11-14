@@ -13,6 +13,12 @@ interface ErrorBoundaryState {
   isChunkError: boolean;
 }
 
+export function reportError(context: string, error: unknown): void {
+  if (import.meta.env.DEV) {
+    console.warn(`[NileFound] ${context}:`, error);
+  }
+}
+
 export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, isChunkError: false };
 
@@ -25,8 +31,8 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
     return { hasError: true, isChunkError };
   }
 
-  componentDidCatch(_error: Error) {
-    // Error captured by UI boundary without exposing stack details.
+  componentDidCatch(error: Error) {
+    reportError('Unhandled UI boundary error', error);
   }
 
   render() {

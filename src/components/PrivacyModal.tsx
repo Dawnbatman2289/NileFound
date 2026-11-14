@@ -8,6 +8,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { X, ShieldCheck, Clock, Trash2, Database } from 'lucide-react';
+import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
 
 interface PrivacyModalProps {
   isOpen: boolean;
@@ -87,10 +88,10 @@ export const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onClose }) =
           <div className="border border-[#C4BBAF] dark:border-[#3E3931] rounded-[10px] p-4 bg-[#FAF6EF] dark:bg-[#141311] space-y-1.5">
             <div className="flex items-center gap-2 font-semibold text-[#0F6E6E] dark:text-[#199595] text-sm">
               <Clock className="w-4 h-4 shrink-0" />
-              <span>Retention and 60-day expiry</span>
+              <span>Retention and {ITEM_EXPIRY_DAYS}-day expiry</span>
             </div>
             <p className="text-[#4A443C] dark:text-[#CEC7BB]">
-              Unclaimed notices older than <strong className="text-[#1F1B16] dark:text-[#F5F1EA]">60 days</strong> are automatically marked as expired in the feed. Campus administrators review and delete resolved or expired records manually from the Operations Desk.
+              Unclaimed notices older than <strong className="text-[#1F1B16] dark:text-[#F5F1EA]">{ITEM_EXPIRY_DAYS} days</strong> are automatically marked as expired in the feed. Campus administrators review and delete resolved or expired records manually from the Operations Desk.
             </p>
           </div>
 

@@ -19,7 +19,7 @@ interface ClaimModalProps {
 }
 
 const INPUT_CLASS =
-  'w-full text-base sm:text-sm px-3.5 py-2.5 rounded-[10px] border border-[#A39A8C] dark:border-[#5A5349] bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] placeholder:text-[#5C554C] dark:placeholder:text-[#A8A095] focus:border-[#0F6E6E] min-h-[44px]';
+  'w-full text-base sm:text-sm px-3.5 py-2.5 rounded-[10px] border border-[#857C70] dark:border-[#787065] bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] placeholder:text-[#5C554C] dark:placeholder:text-[#A8A095] focus:border-[#0F6E6E] min-h-[44px]';
 
 export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccessClaim }) => {
   const [claimantName, setClaimantName] = useState('');
@@ -217,7 +217,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
                 <button
                   type="button"
                   onClick={onClose}
-                  className="w-1/2 py-2.5 text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] bg-white dark:bg-[#28241F] rounded-[10px] border border-[#A39A8C] dark:border-[#5A5349] transition-colors min-h-[44px] cursor-pointer btn-campus"
+                  className="w-1/2 py-2.5 text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] bg-white dark:bg-[#28241F] rounded-[10px] border border-[#857C70] dark:border-[#787065] transition-colors min-h-[44px] cursor-pointer btn-campus"
                 >
                   Cancel
                 </button>

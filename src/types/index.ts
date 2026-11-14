@@ -43,7 +43,8 @@ export interface CampusItem {
   status: ItemStatus;
   holdingLocation: HoldingLocation;
   authorId?: string;
-  imageUrl?: string;
+  thumbUrl?: string; // <= 3 KB inline feed thumbnail
+  imageUrl?: string; // legacy inline image or preview fetched from items/{id}/media/full
   isSensitiveId?: boolean; // If true, photos are blurred/partial
   // Hidden verification question set by finder
   verificationQuestion?: string;
@@ -87,7 +88,9 @@ export interface ClaimRecord {
   claimantName: string;
   claimantEmail: string;
   claimantId?: string;
+  finderId?: string;
   submittedAnswer: string;
+  privateLoaded?: boolean;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
 }

@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {
   normalizeNileEmail,
   validateNileEmail,
+  validateEmailFormat,
   validatePassword,
   validateFullName,
-  isMasterAdminEmail,
 } from '../src/utils/authValidation.ts';
 
 test('accepts and normalizes verified Nile addresses', () => {
@@ -13,14 +13,13 @@ test('accepts and normalizes verified Nile addresses', () => {
   assert.equal(validateNileEmail('user@nileuniversity.edu.ng'), true);
 });
 
-test('identifies master admin email case-insensitively', () => {
-  assert.equal(isMasterAdminEmail('ayomide2289@gmail.com'), true);
-  assert.equal(isMasterAdminEmail(' AYOMIDE2289@GMAIL.COM '), true);
-  assert.equal(isMasterAdminEmail('student@nileuniversity.edu.ng'), false);
-  assert.equal(isMasterAdminEmail(null), false);
+test('validates general email syntax without embedding personal emails', () => {
+  assert.equal(validateEmailFormat('student@nileuniversity.edu.ng'), true);
+  assert.equal(validateEmailFormat('not-an-email'), false);
+  assert.equal(validateEmailFormat(''), false);
 });
 
-test('rejects lookalike or external domains', () => {
+test('rejects lookalike or external domains for campus accounts', () => {
   for (const email of [
     'user@gmail.example.com',
     'user@nile.edu.test.invalid',

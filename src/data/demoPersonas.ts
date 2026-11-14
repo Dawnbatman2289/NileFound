@@ -20,7 +20,7 @@ export const DEV_TEST_PERSONAS: DemoPersonaOption[] = [
   {
     badge: 'Student',
     initial: 'U',
-    badgeClass: 'bg-white dark:bg-[#1E1C18] text-[#4A443C] dark:text-[#CEC7BB] border-[#A39A8C] dark:border-[#5A5349]',
+    badgeClass: 'bg-white dark:bg-[#1E1C18] text-[#4A443C] dark:text-[#CEC7BB] border-[#857C70] dark:border-[#787065]',
     buttonLabel: 'Switch to Student Persona',
     description: 'Test reporting items with challenge questions, filtering the campus feed, and submitting claim answers.',
     user: { id: 'demo-student-chidera', name: 'Chidera Eze (Student)', email: 'chidera@nileuniversity.edu.ng', role: 'student', matricNumber: '23/ENG/0481', department: 'Computer Engineering', isAdmin: false },

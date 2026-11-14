@@ -6,6 +6,8 @@
  * Kept separate from dev-only demo items so production builds never bundle demo records.
  */
 
+export const ITEM_EXPIRY_DAYS = 60;
+
 export const CAMPUS_CLUSTERS: Record<string, string[]> = {
   stem_cluster: [
     'Ubangi House (STEM Labs)',

@@ -7,7 +7,7 @@
 
 import { CampusNotification } from '../types/index.ts';
 
-export const PROJECT_OWNER_CONTACT = 'owner@example.com';
+export const CAMPUS_OPERATIONS_CONTACT = 'studentaffairs@nileuniversity.edu.ng';
 
 const EMAIL_LOG_KEY = 'nilefound_email_dispatch_log';
 const APP_ICON = '/icons/icon-192.png';
@@ -40,7 +40,9 @@ export function playNotificationChime() {
     const ctx = getAudioContext();
     if (!ctx) return;
     if (ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
+      ctx.resume().catch((err) => {
+        if (import.meta.env?.DEV) console.warn('[NileFound] AudioContext resume blocked:', err);
+      });
     }
 
     const now = ctx.currentTime;
@@ -111,10 +113,13 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   }
 }
 
-export function createAdminEmailDispatch(notification: CampusNotification): EmailDispatchRecord {
+export function createAdminEmailDispatch(
+  notification: CampusNotification,
+  recipientEmail = CAMPUS_OPERATIONS_CONTACT
+): EmailDispatchRecord {
   const subject = `[NileFound Alert] ${notification.title}`;
   const bodyLines = [
-    `Hello Ayomide (NileFound System Admin),`,
+    `Hello Campus Operations Team,`,
     '',
     `A new campus notification has been generated for Nile University:`,
     `Event: ${notification.title}`,
@@ -130,7 +135,7 @@ export function createAdminEmailDispatch(notification: CampusNotification): Emai
 
   const record: EmailDispatchRecord = {
     id: `email-${Date.now()}`,
-    recipient: PROJECT_OWNER_CONTACT,
+    recipient: recipientEmail,
     subject,
     bodyText,
     timestamp: new Date().toISOString(),
