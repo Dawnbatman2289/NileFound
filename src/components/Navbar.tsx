@@ -111,9 +111,15 @@ const NavbarAccountMenu: React.FC<{
           {currentUser.name.charAt(0)}
         </div>
         <span className="max-w-[100px] truncate hidden sm:inline">{currentUser.name}</span>
-        {(isAdmin || isSecurity) && (
-          <span className="bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] text-xs font-bold px-1.5 py-0.5 rounded-[10px] border border-[#0F6E6E]/30 hidden sm:inline">
-            {isAdmin ? 'Admin' : 'Security'}
+        {(isAdmin || isSecurity || currentUser.role === 'staff') && (
+          <span
+            className={`text-xs font-bold px-1.5 py-0.5 rounded-[10px] border hidden sm:inline ${
+              currentUser.role === 'staff'
+                ? 'bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C] border-[#E8A317]/35'
+                : 'bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border-[#0F6E6E]/30'
+            }`}
+          >
+            {isAdmin ? 'Admin' : isSecurity ? 'Security' : 'Staff'}
           </span>
         )}
       </button>

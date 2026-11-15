@@ -1000,3 +1000,81 @@ test('claim chat allows finder/claimant messages on active claims and blocks int
   await assertSucceeds(deleteDoc(doc(finderDb, `claims/${claimId}/messages/m2`)));
 });
 
+test('university staff role allows school-email signup and item reporting without granting moderation PII access', async () => {
+  const STAFF_UID = 'staffFaculty01';
+  const STAFF_EMAIL = 'n.okafor@nileuniversity.edu.ng';
+  const INVITED_STAFF_EMAIL = 'lecturer@nileuniversity.edu.ng';
+
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const adminDb = ctx.firestore();
+    await setDoc(doc(adminDb, 'items/custodyItem'), {
+      title: 'Black Wallet',
+      type: 'found',
+      category: 'other',
+      description: 'Found near Engineering Block.',
+      location: 'Congo House',
+      status: 'open',
+      holdingLocation: 'security_main_gate',
+      authorId: FINDER_UID,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await setDoc(doc(adminDb, 'items/custodyItem/private/details'), {
+      itemId: 'custodyItem',
+      authorId: FINDER_UID,
+      authorName: 'Finder',
+      authorEmail: FINDER_EMAIL,
+      createdAt: new Date(),
+    });
+  });
+
+  const staffDb = testEnv.authenticatedContext(STAFF_UID, verifiedToken(STAFF_EMAIL)).firestore();
+  const masterDb = testEnv.authenticatedContext(MASTER_UID, verifiedToken(MASTER_EMAIL)).firestore();
+
+  // Allowed: verified @nileuniversity.edu.ng member can register with role 'staff'
+  await assertSucceeds(
+    setDoc(doc(staffDb, `users/${STAFF_UID}`), {
+      name: 'Ngozi Okafor',
+      email: STAFF_EMAIL,
+      role: 'staff',
+      createdAt: serverTimestamp(),
+    })
+  );
+
+  // Allowed: staff can report lost/found items using their school account
+  await assertSucceeds(
+    setDoc(doc(staffDb, 'items/staffLostMic'), {
+      title: 'Missing Lecture Microphone',
+      type: 'lost',
+      category: 'phone_tech',
+      description: 'Left on podium after morning lecture.',
+      location: 'Congo House',
+      status: 'open',
+      holdingLocation: 'finder_holding',
+      authorId: STAFF_UID,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  // Denied: staff role cannot read other users' private reporter details
+  await assertFails(getDoc(doc(staffDb, 'items/custodyItem/private/details')));
+
+  // Denied: non-master user cannot write staffInvites; Allowed: master admin can provision 'staff'
+  await assertFails(
+    setDoc(doc(staffDb, `staffInvites/${INVITED_STAFF_EMAIL}`), {
+      email: INVITED_STAFF_EMAIL,
+      role: 'staff',
+      assignedAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(
+    setDoc(doc(masterDb, `staffInvites/${INVITED_STAFF_EMAIL}`), {
+      email: INVITED_STAFF_EMAIL,
+      role: 'staff',
+      assignedAt: serverTimestamp(),
+    })
+  );
+});
+
+

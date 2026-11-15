@@ -65,7 +65,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, currentUser, exist
     const sanitizedAnswer = verificationAnswer.trim().slice(0, 500);
 
     if (!sanitizedName || !sanitizedEmail) {
-      setErrorMsg('Please enter your full name and student email.');
+      setErrorMsg('Please enter your full name and Nile University email.');
       return;
     }
     if (!validateNileEmail(sanitizedEmail)) {

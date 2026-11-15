@@ -34,6 +34,14 @@ export const DEV_TEST_PERSONAS: DemoPersonaOption[] = [
     user: { id: 'demo-student-tunde', name: 'Tunde Bakare', email: 'tunde.b@nileuniversity.edu.ng', role: 'student', matricNumber: '22/LAW/0194', department: 'Law', isAdmin: false },
   },
   {
+    badge: 'University Staff',
+    initial: 'N',
+    badgeClass: 'bg-[#FAF6EF] dark:bg-[#1E1C18] text-[#7A5000] dark:text-[#F9CF7C] border-[#C4BBAF] dark:border-[#3E3931]',
+    buttonLabel: 'Switch to Staff (Dr. Ngozi)',
+    description: 'Test reporting missing campus items or logging found office items using a Nile University staff email.',
+    user: { id: 'demo-staff-ngozi', name: 'Dr. Ngozi Okafor', email: 'n.okafor@nileuniversity.edu.ng', role: 'staff', department: 'Faculty of Engineering', isAdmin: false },
+  },
+  {
     badge: 'Security Officer',
     initial: 'M',
     badgeClass: 'bg-[#EDF7F1] dark:bg-[#0E2417] text-[#1B5633] dark:text-[#75CE9A] border-[#2F7D4F]/30',

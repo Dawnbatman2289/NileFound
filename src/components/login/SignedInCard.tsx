@@ -20,11 +20,13 @@ export const SignedInCard: React.FC<SignedInCardProps> = ({
       <div className="flex items-center gap-2">
         <span className="font-bold text-sm">{currentUser.name}</span>
         <span
-          className={`text-xs font-sans font-medium px-2 py-0.5 rounded-[10px] border ${
+          className={`text-xs font-sans font-medium px-2 py-0.5 rounded-[10px] border capitalize ${
             currentUser.role === 'admin'
               ? 'bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border-[#0F6E6E]/30'
               : currentUser.role === 'security'
               ? 'bg-[#EDF7F1] dark:bg-[#0E2417] text-[#1B5633] dark:text-[#75CE9A] border-[#2F7D4F]/30'
+              : currentUser.role === 'staff'
+              ? 'bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C] border-[#E8A317]/35'
               : 'bg-[#FAF6EF] dark:bg-[#141311] text-[#4A443C] dark:text-[#CEC7BB] border-[#C4BBAF] dark:border-[#3E3931]'
           }`}
         >

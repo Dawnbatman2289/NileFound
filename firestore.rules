@@ -169,7 +169,7 @@ service cloud.firestore {
         && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
         && data.email is string && data.email.size() <= 100
         && request.auth.token.email is string && data.email == request.auth.token.email
-        && data.role in ['student', 'security', 'admin']
+        && data.role in ['student', 'staff', 'security', 'admin']
         && data.createdAt is timestamp
         && (!('updatedAt' in data) || (data.updatedAt is timestamp))
         && (!('department' in data) || (data.department is string && data.department.size() <= 100))
@@ -438,7 +438,7 @@ service cloud.firestore {
       allow create, update: if isValidId(userId) && isMasterAdmin()
         && incoming().keys().hasAll(['role', 'email', 'assignedAt'])
         && incoming().keys().hasOnly(['role', 'email', 'assignedAt', 'assignedBy', 'updatedAt'])
-        && incoming().role in ['admin', 'security', 'student']
+        && incoming().role in ['admin', 'security', 'staff', 'student']
         && incoming().email is string && incoming().email.size() <= 100
         && incoming().assignedAt is timestamp
         && (!('assignedBy' in incoming()) || (incoming().assignedBy is string && incoming().assignedBy.size() <= 128))
@@ -456,7 +456,7 @@ service cloud.firestore {
         && incoming().keys().hasAll(['email', 'role', 'assignedAt'])
         && incoming().keys().hasOnly(['email', 'role', 'assignedAt', 'assignedBy'])
         && incoming().email == inviteEmail
-        && incoming().role in ['admin', 'security', 'student']
+        && incoming().role in ['admin', 'security', 'staff', 'student']
         && incoming().assignedAt is timestamp
         && incoming().assignedAt == request.time
         && (!('assignedBy' in incoming()) || (incoming().assignedBy is string && incoming().assignedBy.size() <= 128));
@@ -488,7 +488,7 @@ service cloud.firestore {
         && request.auth.uid == userId
         && isValidUser(incoming())
         && incoming().createdAt == request.time
-        && (incoming().role == 'student' || isMasterAdmin());
+        && (incoming().role in ['student', 'staff'] || isMasterAdmin());
       allow update: if isValidId(userId) && isVerifiedUser()
         && request.auth.uid == userId
         && isValidUser(incoming())

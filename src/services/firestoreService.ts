@@ -12,7 +12,7 @@ import {
   QueryDocumentSnapshot, DocumentData, Unsubscribe,
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase.ts';
-import { CampusItem, ClaimRecord, User, CampusNotification, ClaimMessage, ChatSenderRole } from '../types/index.ts';
+import { CampusItem, ClaimRecord, User, UserRole, CampusNotification, ClaimMessage, ChatSenderRole } from '../types/index.ts';
 import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
 import { canUserModerate, isMasterAdminUser } from '../utils/admin.ts';
 import { validateNileEmail } from '../utils/authValidation.ts';
@@ -33,7 +33,7 @@ const ROLES_PAGE_SIZE = 25;
 export interface UserRoleRecord {
   uid: string;
   email: string;
-  role: 'admin' | 'security' | 'student';
+  role: UserRole;
   assignedAt?: string;
   assignedBy?: string;
   pending?: boolean;
@@ -158,7 +158,7 @@ function mapDocToClaimRecord(docSnap: QueryDocumentSnapshot<DocumentData>): Clai
   };
 }
 
-export async function fetchUserRole(uid: string, email?: string | null): Promise<'admin' | 'security' | 'student'> {
+export async function fetchUserRole(uid: string, email?: string | null): Promise<UserRole> {
   const normalizedEmail = (email || auth.currentUser?.email || '').trim().toLowerCase();
 
   try {
@@ -169,7 +169,7 @@ export async function fetchUserRole(uid: string, email?: string | null): Promise
       const snap = await getDoc(doc(db, ROLES, uid));
       if (snap.exists()) {
         const role = snap.data().role;
-        return role === 'admin' || role === 'security' ? role : 'student';
+        return role === 'admin' || role === 'security' || role === 'staff' ? role : 'student';
       }
     }
 
@@ -177,7 +177,14 @@ export async function fetchUserRole(uid: string, email?: string | null): Promise
       const inviteSnap = await getDoc(doc(db, STAFF_INVITES, normalizedEmail));
       if (inviteSnap.exists()) {
         const role = inviteSnap.data().role;
-        if (role === 'admin' || role === 'security') return role;
+        if (role === 'admin' || role === 'security' || role === 'staff') return role;
+      }
+    }
+
+    if (uid) {
+      const userSnap = await getDoc(doc(db, USERS, uid));
+      if (userSnap.exists() && userSnap.data().role === 'staff') {
+        return 'staff';
       }
     }
 
@@ -190,7 +197,7 @@ export async function fetchUserRole(uid: string, email?: string | null): Promise
 
 export async function assignUserRoleByEmail(
   targetEmail: string,
-  newRole: 'admin' | 'security' | 'student',
+  newRole: UserRole,
   assignedByEmail?: string
 ): Promise<'assigned' | 'pending'> {
   if (!auth.currentUser || !isMasterAdminUser(auth.currentUser.uid)) {
@@ -843,7 +850,7 @@ export async function syncUserProfile(user: User): Promise<void> {
       await setDoc(userRef, {
         name: displayName,
         email: authEmail,
-        role: 'student',
+        role: user.role === 'staff' ? 'staff' : 'student',
         department: user.department?.slice(0, 100) || '',
         matricNumber: user.matricNumber?.slice(0, 20) || '',
         createdAt: serverTimestamp(),

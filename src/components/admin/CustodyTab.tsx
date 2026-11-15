@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin } from 'lucide-react';
+import { MapPin, Plus } from 'lucide-react';
 import { CampusItem } from '../../types/index.ts';
 import { formatDateDDMMYYYY } from '../../utils/dateFormatter.ts';
 import { ADMIN_CARD } from './adminStyles.ts';
@@ -7,6 +7,7 @@ import { ADMIN_CARD } from './adminStyles.ts';
 interface CustodyTabProps {
   physicalCustodyItems: CampusItem[];
   onUpdateItemStatus: (itemId: string, status: CampusItem['status']) => Promise<boolean> | void;
+  onOpenAddFoundItem?: () => void;
   onSuccessNotice: (msg: string) => void;
   onErrorNotice: (msg: string) => void;
   onRefreshAudit: () => void;
@@ -15,30 +16,53 @@ interface CustodyTabProps {
 export const CustodyTab: React.FC<CustodyTabProps> = ({
   physicalCustodyItems,
   onUpdateItemStatus,
+  onOpenAddFoundItem,
   onSuccessNotice,
   onErrorNotice,
   onRefreshAudit,
 }) => (
   <div className="space-y-4">
-    <div className={`${ADMIN_CARD} p-5 flex items-center justify-between gap-3`}>
+    <div className={`${ADMIN_CARD} p-5 flex flex-wrap items-center justify-between gap-3`}>
       <div>
         <h3 className="font-serif font-bold text-base">Gate &amp; Office Custody Ledger</h3>
         <p className="text-sm text-[#4A443C] dark:text-[#CEC7BB] mt-0.5">
           Physical inventory logged at security checkpoints and administration desks.
         </p>
       </div>
-      <span className="text-xs bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border border-[#0F6E6E]/30 font-mono font-bold px-3 py-1 rounded-full shrink-0">
-        {physicalCustodyItems.length} Held Items
-      </span>
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <span className="text-xs bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border border-[#0F6E6E]/30 font-mono font-bold px-3 py-1 rounded-full shrink-0">
+          {physicalCustodyItems.length} Held Items
+        </span>
+        {onOpenAddFoundItem && (
+          <button
+            type="button"
+            onClick={onOpenAddFoundItem}
+            className="min-h-[44px] px-4 py-2 rounded-[10px] bg-[#0F6E6E] hover:bg-[#0C5656] text-white text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer btn-campus shadow-xs"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Log Found Item</span>
+          </button>
+        )}
+      </div>
     </div>
 
     {physicalCustodyItems.length === 0 ? (
-      <div className={`${ADMIN_CARD} p-10 text-center space-y-2`}>
+      <div className={`${ADMIN_CARD} p-10 text-center space-y-3`}>
         <MapPin className="w-9 h-9 text-[#0F6E6E] dark:text-[#199595] mx-auto" />
         <h4 className="font-serif font-bold text-base">No items held at campus desks</h4>
         <p className="text-sm text-[#5C554C] dark:text-[#A8A095]">
           Found items handed to Security Gate, Library, or Student Affairs appear here.
         </p>
+        {onOpenAddFoundItem && (
+          <button
+            type="button"
+            onClick={onOpenAddFoundItem}
+            className="min-h-[44px] px-4 py-2 rounded-[10px] bg-[#0F6E6E] hover:bg-[#0C5656] text-white text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer btn-campus shadow-xs"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Log Found Item at Gate</span>
+          </button>
+        )}
       </div>
     ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

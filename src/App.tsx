@@ -10,7 +10,7 @@ import { Navbar, AppTab } from './components/Navbar.tsx';
 import { FeedView } from './components/FeedView.tsx';
 import { NotificationToast } from './components/NotificationToast.tsx';
 import { ErrorBoundary, reportError } from './components/ErrorBoundary.tsx';
-import { CampusItem, ClaimRecord } from './types/index.ts';
+import { CampusItem, ClaimRecord, ReportPrefill } from './types/index.ts';
 import { useAuthSession } from './hooks/useAuthSession.ts';
 import { useNotifications } from './hooks/useNotifications.ts';
 import { useItemsFeed } from './hooks/useItemsFeed.ts';
@@ -48,7 +48,7 @@ export default function App() {
     try { return localStorage.getItem('nilefound_theme') === 'dark'; } catch { return false; }
   });
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [reportPrefill, setReportPrefill] = useState<Partial<Pick<CampusItem, 'type' | 'title' | 'category' | 'location'>> | null>(null);
+  const [reportPrefill, setReportPrefill] = useState<ReportPrefill | null>(null);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [selectedItemForClaim, setSelectedItemForClaim] = useState<CampusItem | null>(null);
   const [activeChatTarget, setActiveChatTarget] = useState<{ claim: ClaimRecord; item?: CampusItem } | null>(null);
@@ -223,7 +223,7 @@ export default function App() {
                             : 'bg-white dark:bg-[#28241F] text-[#1F1B16] dark:text-[#F5F1EA] border-[#C4BBAF] dark:border-[#3E3931] hover:border-[#0F6E6E]'
                         }`}
                       >
-                        {persona.user.name.split(' ')[0]} · {persona.badge}
+                        {persona.user.name.replace(/^Dr\.\s+/i, '').split(' ')[0]} · {persona.badge}
                       </button>
                     );
                   })}
@@ -277,6 +277,10 @@ export default function App() {
                     onApproveClaim={claimsState.handleApproveClaim} onRejectClaim={claimsState.handleRejectClaim}
                     onExpireOldItems={itemsFeed.handleExpireOldItems}
                     onOpenClaimChat={(claim, item) => setActiveChatTarget({ claim, item })}
+                    onOpenAddFoundItem={() => {
+                      setReportPrefill({ type: 'found', holdingLocation: 'security_main_gate', location: 'Main Campus Gate' });
+                      setIsReportModalOpen(true);
+                    }}
                     unreadChatClaimIds={unreadChatClaimIds}
                     onNavigateToLogin={() => setActiveTab('login')}
                     onSwitchPersona={authSession.canUsePersonaSimulation ? authSession.handleSwitchPersona : undefined}

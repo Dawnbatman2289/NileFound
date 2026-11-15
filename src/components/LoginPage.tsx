@@ -58,7 +58,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 Sign in to your campus account
               </h2>
               <p className="text-sm text-[#4A443C] dark:text-[#CEC7BB] leading-relaxed">
-                Use your verified Nile University email and password to browse lost and found items, report misplaced belongings, and submit ownership claims.
+                Students and university staff can sign in with their verified Nile University email to report, search, and claim lost or found items.
               </p>
             </div>
 
@@ -87,9 +87,43 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <>
                 <form onSubmit={authState.handleEmailAuth} className="space-y-3.5">
                   {authState.mode === 'sign-up' && (
-                    <div>
-                      <label htmlFor="login-full-name" className="block text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] mb-1">Full name</label>
-                      <input id="login-full-name" type="text" autoComplete="name" required minLength={2} maxLength={100} value={authState.fullName} onChange={(e) => authState.setFullName(e.target.value)} placeholder="e.g. Chidera Eze" className={INPUT_CLASS} />
+                    <div className="space-y-3.5">
+                      <div>
+                        <span className="block text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] mb-1.5">Campus affiliation</span>
+                        <div className="grid grid-cols-2 gap-2 bg-[#FAF6EF] dark:bg-[#141311] p-1 rounded-[10px] border border-[#C4BBAF] dark:border-[#3E3931]">
+                          <button
+                            type="button"
+                            onClick={() => authState.setAccountRole('student')}
+                            aria-pressed={authState.accountRole === 'student'}
+                            className={`min-h-[44px] px-3 py-1.5 rounded-[8px] text-sm font-semibold transition-colors cursor-pointer ${
+                              authState.accountRole === 'student'
+                                ? 'bg-[#0F6E6E] text-white shadow-xs'
+                                : 'text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
+                            }`}
+                          >
+                            Student
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => authState.setAccountRole('staff')}
+                            aria-pressed={authState.accountRole === 'staff'}
+                            className={`min-h-[44px] px-3 py-1.5 rounded-[8px] text-sm font-semibold transition-colors cursor-pointer ${
+                              authState.accountRole === 'staff'
+                                ? 'bg-[#0F6E6E] text-white shadow-xs'
+                                : 'text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
+                            }`}
+                          >
+                            University Staff
+                          </button>
+                        </div>
+                        <p className="text-xs text-[#5C554C] dark:text-[#A8A095] mt-1">
+                          Both students and staff must verify an @nileuniversity.edu.ng email.
+                        </p>
+                      </div>
+                      <div>
+                        <label htmlFor="login-full-name" className="block text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] mb-1">Full name</label>
+                        <input id="login-full-name" type="text" autoComplete="name" required minLength={2} maxLength={100} value={authState.fullName} onChange={(e) => authState.setFullName(e.target.value)} placeholder={authState.accountRole === 'staff' ? 'e.g. Dr. Ngozi Okafor' : 'e.g. Chidera Eze'} className={INPUT_CLASS} />
+                      </div>
                     </div>
                   )}
 

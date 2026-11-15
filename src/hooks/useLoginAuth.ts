@@ -13,8 +13,8 @@ import {
 } from 'firebase/auth';
 import { auth } from '../lib/firebase.ts';
 import { User, UserRole } from '../types/index.ts';
-import { fetchUserRole, isConfiguredAdmin } from '../services/firestoreService.ts';
-import { canUserModerate, isMasterAdminUser } from '../utils/admin.ts';
+import { fetchUserRole, isConfiguredAdmin, syncUserProfile } from '../services/firestoreService.ts';
+import { canUserModerate, getDefaultDepartmentForRole, isMasterAdminUser } from '../utils/admin.ts';
 import { validateEmailFormat, validateFullName, validateNileEmail, validatePassword } from '../utils/authValidation.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
 
@@ -42,17 +42,38 @@ async function isAllowedCampusAccount(uid: string, email: string): Promise<boole
   return validateNileEmail(email) || isMasterAdminUser(uid) || (await isConfiguredAdmin(uid));
 }
 
-async function buildUserFromFirebase(fbUser: import('firebase/auth').User): Promise<User> {
+const PENDING_ROLE_KEY = 'nilefound_pending_signup_role';
+
+async function buildUserFromFirebase(
+  fbUser: import('firebase/auth').User,
+  preferredSignupRole?: 'student' | 'staff'
+): Promise<User> {
   const userEmail = (fbUser.email || '').trim().toLowerCase();
-  const role: UserRole = await fetchUserRole(fbUser.uid, userEmail);
-  return {
+  let role: UserRole = await fetchUserRole(fbUser.uid, userEmail);
+  let shouldSyncStaff = false;
+  if (role === 'student') {
+    let pending: string | null = preferredSignupRole ?? null;
+    if (!pending) {
+      try { pending = sessionStorage.getItem(PENDING_ROLE_KEY); } catch { pending = null; }
+    }
+    if (pending === 'staff') {
+      role = 'staff';
+      shouldSyncStaff = true;
+    }
+  }
+  try { sessionStorage.removeItem(PENDING_ROLE_KEY); } catch { /* ignore */ }
+  const user: User = {
     id: fbUser.uid,
     name: (fbUser.displayName || userEmail.split('@')[0] || 'Campus User').split(' ')[0],
     email: userEmail,
     role,
     isAdmin: role === 'admin',
-    department: role === 'admin' ? 'University Administration' : role === 'security' ? 'Campus Security Unit' : 'Nile University Member',
+    department: getDefaultDepartmentForRole(role),
   };
+  if (shouldSyncStaff) {
+    syncUserProfile(user).catch((err) => reportError('Sync verified staff profile failed', err));
+  }
+  return user;
 }
 
 interface UseLoginAuthOptions {
@@ -66,6 +87,7 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
+  const [accountRole, setAccountRole] = useState<'student' | 'staff'>('student');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -156,6 +178,11 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
       if (validationErr) return setErrorMessage(validationErr);
 
       if (mode === 'sign-up') {
+        try {
+          sessionStorage.setItem(PENDING_ROLE_KEY, accountRole);
+        } catch {
+          // Ignore storage quota restrictions
+        }
         const result = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
         await updateProfile(result.user, { displayName: fullName.trim() || 'Campus User' });
         await sendEmailVerification(result.user);
@@ -270,6 +297,7 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
 
   return {
     isSigningIn, errorMessage, successMessage, mode, setMode,
+    accountRole, setAccountRole,
     email, setEmail, password, setPassword, confirmPassword, setConfirmPassword,
     fullName, setFullName, showPassword, setShowPassword, showInbox, cooldown,
     clearFeedback, handleEmailAuth, resendVerification, handleGoogleSignIn, confirmVerified,

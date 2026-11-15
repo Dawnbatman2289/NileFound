@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { CampusItem, HoldingLocation, ItemCategory, ItemType } from '../types/index.ts';
+import { HoldingLocation, ItemCategory, ItemType, ReportPrefill, UserRole } from '../types/index.ts';
 import { detectPii } from '../utils/piiDetector.ts';
 import { compressImageFile, CompressionResult, isSupportedImageFile } from '../utils/imageCompressor.ts';
 import { getTodayWatIsoDate } from '../utils/dateFormatter.ts';
+import { buildInitialReportFields, OfficerIntakePreset, resolveDefaultHoldingLocation } from '../utils/reportPresets.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
 
 const DRAFT_STORAGE_KEY = 'nilefound_report_draft_v1';
 
 interface UseReportDraftOptions {
   isOpen: boolean;
-  initialPrefill?: Partial<Pick<CampusItem, 'type' | 'title' | 'category' | 'location'>> | null;
+  initialPrefill?: ReportPrefill | null;
+  userRole?: UserRole | null;
   onDraftSaved: () => void;
   onDraftCleared?: () => void;
 }
@@ -49,7 +51,7 @@ export function validateReportInputs(fields: {
   return null;
 }
 
-export function useReportDraft({ isOpen, initialPrefill, onDraftSaved, onDraftCleared }: UseReportDraftOptions) {
+export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved, onDraftCleared }: UseReportDraftOptions) {
   const [reportType, setReportType] = useState<ItemType>('lost');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<ItemCategory | ''>('');
@@ -67,19 +69,20 @@ export function useReportDraft({ isOpen, initialPrefill, onDraftSaved, onDraftCl
 
   const isFoundStudentId = reportType === 'found' && category === 'student_id';
 
-  const resetEmptyFields = useCallback((type: ItemType = 'lost', cat: ItemCategory | '' = '', loc = '', itemTitle = '') => {
-    setReportType(type);
-    setCategory(cat);
-    setLocation(loc);
-    setTitle(itemTitle);
+  const resetEmptyFields = useCallback((prefill?: ReportPrefill | null) => {
+    const defaults = buildInitialReportFields(prefill, userRole);
+    setReportType(defaults.type);
+    setCategory(defaults.category);
+    setLocation(defaults.location);
+    setTitle(defaults.title);
     setLocationDetails('');
     setDescription('');
     setDateLostOrFound(getTodayWatIsoDate());
-    setHoldingLocation(type === 'found' && cat === 'student_id' ? 'security_main_gate' : 'finder_holding');
+    setHoldingLocation(defaults.holdingLocation);
     setVerificationQuestion('');
     setVerificationAnswer('');
     setCompressionResult(null);
-  }, []);
+  }, [userRole]);
 
   useEffect(() => {
     if (isFoundStudentId) {
@@ -92,36 +95,36 @@ export function useReportDraft({ isOpen, initialPrefill, onDraftSaved, onDraftCl
     if (!isOpen) return;
     setFormError(null);
     if (initialPrefill) {
-      resetEmptyFields(
-        initialPrefill.type || 'found',
-        initialPrefill.category || '',
-        initialPrefill.location || '',
-        initialPrefill.title || ''
-      );
+      resetEmptyFields(initialPrefill);
       setHasRestoredDraft(false);
       return;
     }
     try {
       const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
-      if (!saved) return;
-      const parsed = JSON.parse(saved);
-      if (!parsed.title && !parsed.description) return;
-      setReportType(parsed.reportType || 'lost');
-      setTitle(parsed.title || '');
-      setCategory(parsed.category || '');
-      setLocation(parsed.location || '');
-      setLocationDetails(parsed.locationDetails || '');
-      setDescription(parsed.description || '');
-      setDateLostOrFound(parsed.dateLostOrFound || getTodayWatIsoDate());
-      setHoldingLocation(parsed.holdingLocation || 'finder_holding');
-      setVerificationQuestion(parsed.verificationQuestion || '');
-      // Security rule: never persist or restore secret verification answers from localStorage.
-      setVerificationAnswer('');
-      setHasRestoredDraft(true);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.title || parsed.description) {
+          setReportType(parsed.reportType || (userRole === 'security' ? 'found' : 'lost'));
+          setTitle(parsed.title || '');
+          setCategory(parsed.category || '');
+          setLocation(parsed.location || '');
+          setLocationDetails(parsed.locationDetails || '');
+          setDescription(parsed.description || '');
+          setDateLostOrFound(parsed.dateLostOrFound || getTodayWatIsoDate());
+          setHoldingLocation(parsed.holdingLocation || resolveDefaultHoldingLocation(parsed.reportType || 'lost', parsed.category || '', userRole));
+          setVerificationQuestion(parsed.verificationQuestion || '');
+          // Security rule: never persist or restore secret verification answers from localStorage.
+          setVerificationAnswer('');
+          setHasRestoredDraft(true);
+          return;
+        }
+      }
     } catch {
       // Ignore corrupt draft storage
     }
-  }, [isOpen, initialPrefill, resetEmptyFields]);
+    resetEmptyFields(null);
+    setHasRestoredDraft(false);
+  }, [isOpen, initialPrefill, userRole, resetEmptyFields]);
 
   const saveDraftLocally = useCallback(
     (overrides?: Partial<{
@@ -192,6 +195,23 @@ export function useReportDraft({ isOpen, initialPrefill, onDraftSaved, onDraftCl
     [isFoundStudentId]
   );
 
+  const applyOfficerPreset = useCallback((preset: OfficerIntakePreset) => {
+    const defaultLoc = preset.holdingLocation === 'student_affairs_office' ? 'Nile House (Admin)' : 'Main Campus Gate';
+    setReportType(preset.type);
+    setCategory(preset.category);
+    setTitle(preset.title);
+    setLocation((prev) => prev || defaultLoc);
+    setDescription((prev) => prev.trim() || preset.descriptionHint);
+    setHoldingLocation(preset.holdingLocation);
+    if (preset.verificationQuestion) {
+      setVerificationQuestion(preset.verificationQuestion);
+    }
+    if (preset.category === 'student_id') {
+      setCompressionResult(null);
+    }
+    setFormError(null);
+  }, []);
+
   return {
     reportType, setReportType,
     title, setTitle,
@@ -211,5 +231,6 @@ export function useReportDraft({ isOpen, initialPrefill, onDraftSaved, onDraftCl
     saveDraftLocally,
     clearDraft,
     handleImageChange,
+    applyOfficerPreset,
   };
 }

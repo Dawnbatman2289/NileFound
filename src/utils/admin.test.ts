@@ -5,16 +5,29 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canUserModerate, expireOldItems, generateCampusAuditReport, isMasterAdminUser } from './admin.ts';
+import {
+  canUserModerate,
+  expireOldItems,
+  generateCampusAuditReport,
+  getDefaultDepartmentForRole,
+  getRoleDisplayLabel,
+  isMasterAdminUser,
+} from './admin.ts';
 import { MASTER_ADMIN_UID } from '../config/catalog.ts';
 import { User, CampusItem, ClaimRecord } from '../types/index.ts';
 
-test('canUserModerate allows admin and security and recognizes master UID', () => {
+test('canUserModerate allows admin and security, denies student and staff, and recognizes master UID', () => {
   const studentUser: User = {
     id: 'u1',
     name: 'Chidera Eze',
     email: 'chidera@nileuniversity.edu.ng',
     role: 'student'
+  };
+  const staffUser: User = {
+    id: 'u4',
+    name: 'Dr. Ngozi Okafor',
+    email: 'n.okafor@nileuniversity.edu.ng',
+    role: 'staff'
   };
   const adminUser: User = {
     id: 'u2',
@@ -31,9 +44,13 @@ test('canUserModerate allows admin and security and recognizes master UID', () =
   };
 
   assert.equal(canUserModerate(studentUser), false);
+  assert.equal(canUserModerate(staffUser), false);
   assert.equal(canUserModerate(adminUser), true);
   assert.equal(canUserModerate(securityUser), true);
   assert.equal(canUserModerate(null), false);
+  assert.equal(getRoleDisplayLabel('staff'), 'Staff');
+  assert.equal(getRoleDisplayLabel('security'), 'Security');
+  assert.equal(getDefaultDepartmentForRole('staff'), 'Academic & Administrative Staff');
   assert.equal(isMasterAdminUser(MASTER_ADMIN_UID), true);
   assert.equal(isMasterAdminUser('u2'), false);
   assert.equal(isMasterAdminUser(null), false);

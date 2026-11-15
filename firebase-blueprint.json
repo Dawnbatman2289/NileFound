@@ -83,7 +83,7 @@
       "description": "RBAC role document for campus administrators and security personnel.",
       "type": "object",
       "properties": {
-        "role": { "type": "string", "enum": ["admin", "security", "student"] },
+        "role": { "type": "string", "enum": ["admin", "security", "staff", "student"] },
         "email": { "type": "string", "maxLength": 100 },
         "assignedBy": { "type": "string", "maxLength": 128 },
         "assignedAt": { "type": "string", "format": "date-time" },
@@ -98,7 +98,7 @@
       "properties": {
         "name": { "type": "string", "minLength": 2, "maxLength": 100 },
         "email": { "type": "string", "maxLength": 100 },
-        "role": { "type": "string", "enum": ["student", "security", "admin"] },
+        "role": { "type": "string", "enum": ["student", "staff", "security", "admin"] },
         "matricNumber": { "type": "string", "maxLength": 20 },
         "department": { "type": "string", "maxLength": 100 },
         "createdAt": { "type": "string", "format": "date-time" },
@@ -123,7 +123,7 @@
       "type": "object",
       "properties": {
         "email": { "type": "string", "maxLength": 100 },
-        "role": { "type": "string", "enum": ["admin", "security", "student"] },
+        "role": { "type": "string", "enum": ["admin", "security", "staff", "student"] },
         "assignedBy": { "type": "string", "maxLength": 128 },
         "assignedAt": { "type": "string", "format": "date-time" }
       },

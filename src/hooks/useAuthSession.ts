@@ -7,7 +7,7 @@ import { reportError } from '../components/ErrorBoundary.tsx';
 import { auth, testConnection, clearOfflinePersistence } from '../lib/firebase.ts';
 import { syncUserProfile, fetchUserRole } from '../services/firestoreService.ts';
 import { clearNotificationStorage } from '../services/notificationService.ts';
-import { canUserModerate } from '../utils/admin.ts';
+import { canUserModerate, getDefaultDepartmentForRole } from '../utils/admin.ts';
 import { readJson, safeSetStorage, safeRemoveStorage } from '../utils/storage.ts';
 
 interface UseAuthSessionOptions {
@@ -133,6 +133,17 @@ export function useAuthSession({
         let role: UserRole = lastConfirmedRoleRef.current[fbUser.uid] || 'student';
         try {
           role = await fetchUserRole(fbUser.uid, email);
+          if (role === 'student') {
+            try {
+              const pendingRole = sessionStorage.getItem('nilefound_pending_signup_role');
+              if (pendingRole === 'staff') {
+                role = 'staff';
+                sessionStorage.removeItem('nilefound_pending_signup_role');
+              }
+            } catch {
+              // Ignore storage restrictions
+            }
+          }
           lastConfirmedRoleRef.current[fbUser.uid] = role;
           setRoleError(null);
         } catch (roleErr) {
@@ -145,12 +156,7 @@ export function useAuthSession({
           email,
           role,
           isAdmin: role === 'admin',
-          department:
-            role === 'admin'
-              ? 'University Administration'
-              : role === 'security'
-                ? 'Campus Security & Safety'
-                : 'Nile University Member',
+          department: getDefaultDepartmentForRole(role),
         };
         setRealUser(user);
         if (!isSimulatingRef.current) {

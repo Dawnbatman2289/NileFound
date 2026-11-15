@@ -69,7 +69,15 @@ export interface FieldInterviewQuestion {
   sampleResponses?: string[];
 }
 
-export type UserRole = 'student' | 'security' | 'admin';
+export interface ReportPrefill {
+  type?: ItemType;
+  title?: string;
+  category?: ItemCategory;
+  location?: string;
+  holdingLocation?: HoldingLocation;
+}
+
+export type UserRole = 'student' | 'staff' | 'security' | 'admin';
 
 export interface User {
   id: string;

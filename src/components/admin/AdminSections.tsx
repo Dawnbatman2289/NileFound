@@ -36,6 +36,7 @@ export interface AdminTabHandlers {
   onApproveClaim: (claimId: string, itemId: string) => Promise<boolean> | void;
   onRejectClaim: (claimId: string) => Promise<boolean> | void;
   onOpenClaimChat?: (claim: ClaimRecord, item?: CampusItem) => void;
+  onOpenAddFoundItem?: () => void;
   unreadChatClaimIds?: Set<string>;
   onSwitchPersona?: (user: User) => void;
   devPersonas?: DemoPersonaOption[];
@@ -167,6 +168,7 @@ export const AdminTabContent: React.FC<{
         <CustodyTab
           physicalCustodyItems={physicalCustodyItems}
           onUpdateItemStatus={handlers.onUpdateItemStatus}
+          onOpenAddFoundItem={handlers.onOpenAddFoundItem}
           onSuccessNotice={desk.showNotification}
           onErrorNotice={desk.showError}
           onRefreshAudit={desk.refreshAuditCounts}

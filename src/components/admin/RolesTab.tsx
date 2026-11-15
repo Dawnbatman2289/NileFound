@@ -46,7 +46,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [rolesError, setRolesError] = useState<string | null>(null);
   const [newTargetEmail, setNewTargetEmail] = useState('');
-  const [newTargetRole, setNewTargetRole] = useState<'admin' | 'security'>('security');
+  const [newTargetRole, setNewTargetRole] = useState<'admin' | 'security' | 'staff'>('security');
   const [isSavingRole, setIsSavingRole] = useState(false);
   const [confirmRemoveKey, setConfirmRemoveKey] = useState<string | null>(null);
 
@@ -133,13 +133,13 @@ export const RolesTab: React.FC<RolesTabProps> = ({
       {isMasterOwner ? (
         <div className={`${ADMIN_CARD} p-6 space-y-4`}>
           <div>
-            <h3 className="font-serif font-bold text-base">Add Admin or Security Staff</h3>
+            <h3 className="font-serif font-bold text-base">Add Staff, Security, or Admin Access</h3>
             <p className="text-sm text-[#4A443C] dark:text-[#CEC7BB] mt-1 leading-relaxed">
               Enter their @nileuniversity.edu.ng email. Access binds to their verified login automatically.
             </p>
           </div>
 
-          <form onSubmit={handleAssignRole} className="grid grid-cols-1 md:grid-cols-[1fr_220px_auto] gap-3.5 items-end">
+          <form onSubmit={handleAssignRole} className="grid grid-cols-1 md:grid-cols-[1fr_240px_auto] gap-3.5 items-end">
             <div>
               <label htmlFor="staff-email-input" className="block text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] mb-1.5">
                 Email Address
@@ -148,7 +148,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                 id="staff-email-input"
                 type="email"
                 required
-                placeholder="officer@nileuniversity.edu.ng"
+                placeholder="staff@nileuniversity.edu.ng"
                 value={newTargetEmail}
                 onChange={(e) => setNewTargetEmail(e.target.value)}
                 className={ADMIN_INPUT}
@@ -162,10 +162,11 @@ export const RolesTab: React.FC<RolesTabProps> = ({
               <select
                 id="staff-role-select"
                 value={newTargetRole}
-                onChange={(e) => setNewTargetRole(e.target.value as 'admin' | 'security')}
+                onChange={(e) => setNewTargetRole(e.target.value as 'admin' | 'security' | 'staff')}
                 className={`${ADMIN_INPUT} cursor-pointer`}
               >
                 <option value="security">Campus Security Officer</option>
+                <option value="staff">University Staff (Report &amp; Find)</option>
                 <option value="admin">Administrator</option>
               </select>
             </div>
@@ -228,7 +229,7 @@ export const RolesTab: React.FC<RolesTabProps> = ({
           </div>
 
           {roleRecords.length === 0 ? (
-            <div className="p-6 text-center text-[#5C554C] dark:text-[#A8A095]">No additional admins or security staff added yet.</div>
+            <div className="p-6 text-center text-[#5C554C] dark:text-[#A8A095]">No additional admins, security officers, or staff added yet.</div>
           ) : (
             roleRecords.map((r) => {
               const rowKey = `${r.pending ? 'p' : r.source || 'a'}-${r.uid}`;

@@ -8,10 +8,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, AlertTriangle, Lock, CheckCircle } from 'lucide-react';
-import { CampusItem, HoldingLocation, ItemCategory, User } from '../types/index.ts';
+import { CampusItem, HoldingLocation, ItemCategory, ReportPrefill, User } from '../types/index.ts';
 import { CATEGORIES } from '../config/catalog.ts';
 import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
 import { getTodayWatIsoDate } from '../utils/dateFormatter.ts';
+import { getRoleDisplayLabel } from '../utils/admin.ts';
+import { OFFICER_INTAKE_PRESETS, resolveDefaultHoldingLocation } from '../utils/reportPresets.ts';
 import { useReportDraft, validateReportInputs } from '../hooks/useReportDraft.ts';
 import { FoundVerificationSection } from './report/FoundVerificationSection.tsx';
 import { PhotoUploadSection } from './report/PhotoUploadSection.tsx';
@@ -24,7 +26,7 @@ interface ReportModalProps {
   onDraftCleared?: () => void;
   currentUser?: User | null;
   onOpenLogin?: () => void;
-  initialPrefill?: Partial<Pick<CampusItem, 'type' | 'title' | 'category' | 'location'>> | null;
+  initialPrefill?: ReportPrefill | null;
 }
 
 const FIELD_INPUT =
@@ -50,7 +52,8 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<number | null>(null);
 
-  const draft = useReportDraft({ isOpen, initialPrefill, onDraftSaved, onDraftCleared });
+  const draft = useReportDraft({ isOpen, initialPrefill, userRole: currentUser?.role, onDraftSaved, onDraftCleared });
+  const isOfficer = currentUser?.role === 'security' || currentUser?.role === 'admin' || Boolean(currentUser?.isAdmin);
 
   useEffect(() => {
     if (isOpen) setSaveNotice(null);
@@ -166,11 +169,14 @@ export const ReportModal: React.FC<ReportModalProps> = ({
 
         <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 min-h-0 flex-1 overflow-y-auto">
           {currentUser ? (
-            <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#C4BBAF] dark:border-[#3E3931] px-3.5 py-2.5 rounded-[10px] text-sm flex items-center justify-between">
+            <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#C4BBAF] dark:border-[#3E3931] px-3.5 py-2.5 rounded-[10px] text-sm flex items-center justify-between gap-2">
               <span className="text-[#4A443C] dark:text-[#CEC7BB]">Reporting as:</span>
               <span className="font-medium text-[#0F6E6E] dark:text-[#199595] flex items-center gap-1.5 truncate">
                 <CheckCircle className="w-4 h-4 shrink-0" />
                 <span className="truncate">{currentUser.name}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-white dark:bg-[#1E1C18] border border-[#C4BBAF] dark:border-[#3E3931] text-[#4A443C] dark:text-[#CEC7BB]">
+                  {getRoleDisplayLabel(currentUser.role, currentUser.isAdmin)}
+                </span>
               </span>
             </div>
           ) : (
@@ -210,13 +216,52 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           )}
 
           <div className="grid grid-cols-2 gap-2 bg-[#FAF6EF] dark:bg-[#141311] p-1.5 rounded-[10px] border border-[#C4BBAF] dark:border-[#3E3931]">
-            <button type="button" onClick={() => { draft.setReportType('lost'); draft.saveDraftLocally({ reportType: 'lost' }); }} className={`py-2 text-sm font-semibold rounded-[10px] transition-colors min-h-[44px] cursor-pointer btn-campus ${draft.reportType === 'lost' ? 'bg-[#E8A317] text-[#1F1B16] shadow-xs' : 'text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'}`}>
+            <button
+              type="button"
+              onClick={() => {
+                draft.setReportType('lost');
+                draft.saveDraftLocally({ reportType: 'lost' });
+              }}
+              className={`py-2 text-sm font-semibold rounded-[10px] transition-colors min-h-[44px] cursor-pointer btn-campus ${draft.reportType === 'lost' ? 'bg-[#E8A317] text-[#1F1B16] shadow-xs' : 'text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'}`}
+            >
               I Lost Something
             </button>
-            <button type="button" onClick={() => { draft.setReportType('found'); draft.saveDraftLocally({ reportType: 'found' }); }} className={`py-2 text-sm font-semibold rounded-[10px] transition-colors min-h-[44px] cursor-pointer btn-campus ${draft.reportType === 'found' ? 'bg-[#2F7D4F] text-white shadow-xs' : 'text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'}`}>
+            <button
+              type="button"
+              onClick={() => {
+                const nextHolding = resolveDefaultHoldingLocation('found', draft.category, currentUser?.role, draft.holdingLocation === 'finder_holding' ? undefined : draft.holdingLocation);
+                draft.setReportType('found');
+                draft.setHoldingLocation(nextHolding);
+                draft.saveDraftLocally({ reportType: 'found', holdingLocation: nextHolding });
+              }}
+              className={`py-2 text-sm font-semibold rounded-[10px] transition-colors min-h-[44px] cursor-pointer btn-campus ${draft.reportType === 'found' ? 'bg-[#2F7D4F] text-white shadow-xs' : 'text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'}`}
+            >
               I Found Something
             </button>
           </div>
+
+          {isOfficer && (
+            <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#C4BBAF] dark:border-[#3E3931] rounded-[10px] p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-[#0F6E6E] dark:text-[#199595]">
+                  Quick Officer Intake
+                </span>
+                <span className="text-xs text-[#5C554C] dark:text-[#A8A095]">1-tap gate custody fill</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {OFFICER_INTAKE_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => draft.applyOfficerPreset(preset)}
+                    className="min-h-[44px] px-3 py-1.5 rounded-[10px] border border-[#857C70] dark:border-[#787065] bg-white dark:bg-[#1E1C18] hover:border-[#0F6E6E] text-xs font-medium text-[#1F1B16] dark:text-[#F5F1EA] cursor-pointer transition-colors btn-campus"
+                  >
+                    + {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <label htmlFor="report-category" className="block text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] mb-1.5">

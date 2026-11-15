@@ -6,7 +6,7 @@
  * Pure functions for role-based moderation, status lifecycles, and audit reporting.
  */
 
-import { User, CampusItem, ClaimRecord } from '../types/index.ts';
+import { User, CampusItem, ClaimRecord, UserRole } from '../types/index.ts';
 import { ITEM_EXPIRY_DAYS, MASTER_ADMIN_UID } from '../config/catalog.ts';
 
 export function isMasterAdminUser(uid?: string | null): boolean {
@@ -19,6 +19,20 @@ export function isMasterAdminUser(uid?: string | null): boolean {
 export function canUserModerate(user?: User | null): boolean {
   if (!user) return false;
   return user.role === 'admin' || user.role === 'security' || user.isAdmin === true;
+}
+
+export function getRoleDisplayLabel(role?: UserRole | null, isAdmin?: boolean): string {
+  if (role === 'admin' || isAdmin) return 'Admin';
+  if (role === 'security') return 'Security';
+  if (role === 'staff') return 'Staff';
+  return 'Student';
+}
+
+export function getDefaultDepartmentForRole(role?: UserRole | null): string {
+  if (role === 'admin') return 'University Administration';
+  if (role === 'security') return 'Campus Security & Safety';
+  if (role === 'staff') return 'Academic & Administrative Staff';
+  return 'Nile University Member';
 }
 
 /**
