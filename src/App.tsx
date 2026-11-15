@@ -6,7 +6,6 @@
  */
 
 import { lazy, Suspense, useState, useEffect, useRef, useCallback } from 'react';
-import { motion, MotionConfig } from 'motion/react';
 import { Navbar, AppTab } from './components/Navbar.tsx';
 import { FeedView } from './components/FeedView.tsx';
 import { NotificationToast } from './components/NotificationToast.tsx';
@@ -120,8 +119,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <MotionConfig reducedMotion="user">
-        <div className="min-h-screen bg-[var(--color-paper)] text-[var(--color-ink)] flex flex-col font-sans selection:bg-[#0F6E6E] selection:text-white transition-colors duration-150">
+      <div className="min-h-screen bg-[var(--color-paper)] text-[var(--color-ink)] flex flex-col font-sans selection:bg-[#0F6E6E] selection:text-white transition-colors duration-150">
           <Navbar
             activeTab={activeTab} setActiveTab={setActiveTab} isOnline={isOnline}
             lowDataMode={lowDataMode} setLowDataMode={setLowDataMode}
@@ -166,8 +164,8 @@ export default function App() {
             </div>
           )}
 
-          <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto p-4 sm:p-6 lg:p-8 pb-24 sm:pb-6 transition-opacity duration-200">
-            <motion.div key={activeTab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18, ease: 'easeOut' }}>
+          <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto p-4 sm:p-6 lg:p-8 pb-24 sm:pb-6">
+            <div key={activeTab} className="tab-fade-in">
               {activeTab === 'feed' && (
                 <FeedView
                   items={itemsFeed.mergedItems} claims={claimsState.claims} lowDataMode={lowDataMode}
@@ -216,21 +214,26 @@ export default function App() {
                       setActiveTab(user.role === 'admin' || user.role === 'security' ? 'admin' : 'feed');
                     }}
                     onLogout={authSession.handleLogout} onNavigateToFeed={() => setActiveTab('feed')}
-                    isDemoMode={authSession.isDemoMode}
                   />
                 </Suspense>
               )}
-            </motion.div>
+            </div>
           </main>
 
           {isReportModalOpen && (
             <Suspense fallback={null}>
-              <ReportModal isOpen={isReportModalOpen} onClose={() => { setIsReportModalOpen(false); setReportPrefill(null); }} onSubmitItem={itemsFeed.handleAddItem} onDraftSaved={() => setSavedDraftCount(1)} currentUser={authSession.currentUser} initialPrefill={reportPrefill} onOpenLogin={() => { setIsReportModalOpen(false); setActiveTab('login'); }} />
+              <ReportModal isOpen={isReportModalOpen} onClose={() => { setIsReportModalOpen(false); setReportPrefill(null); }} onSubmitItem={itemsFeed.handleAddItem} onDraftSaved={() => setSavedDraftCount(1)} onDraftCleared={() => setSavedDraftCount(0)} currentUser={authSession.currentUser} initialPrefill={reportPrefill} onOpenLogin={() => { setIsReportModalOpen(false); setActiveTab('login'); }} />
             </Suspense>
           )}
           {selectedItemForClaim && (
             <Suspense fallback={null}>
-              <ClaimModal item={selectedItemForClaim} onClose={() => setSelectedItemForClaim(null)} onSuccessClaim={claimsState.handleClaimSuccess} />
+              <ClaimModal
+                item={selectedItemForClaim}
+                currentUser={authSession.currentUser}
+                existingClaim={claimsState.claims.find((c) => c.itemId === selectedItemForClaim.id && c.claimantId === authSession.currentUser?.id && (c.status === 'pending' || c.status === 'approved'))}
+                onClose={() => setSelectedItemForClaim(null)}
+                onSuccessClaim={claimsState.handleClaimSuccess}
+              />
             </Suspense>
           )}
           <NotificationToast notification={notifState.activeToast} onDismiss={notifState.dismissToast} onView={(notif) => (notif.linkTab === 'admin' && authSession.isPrivileged ? setActiveTab('admin') : handleSelectNotificationItem(notif.itemId, notif.type))} />
@@ -238,7 +241,7 @@ export default function App() {
             <Suspense fallback={null}><PrivacyModal isOpen={isPrivacyModalOpen} onClose={() => setIsPrivacyModalOpen(false)} /></Suspense>
           )}
           {activeTab === 'feed' && (
-            <button type="button" onClick={() => setIsReportModalOpen(true)} className="sm:hidden fixed right-4 bottom-4 z-40 min-h-12 px-5 bg-[#0F6E6E] hover:bg-[#0C5656] text-white rounded-[10px] shadow-lg font-semibold text-sm cursor-pointer btn-campus" aria-label="Report an item">
+            <button type="button" onClick={() => { setReportPrefill(null); setIsReportModalOpen(true); }} className="sm:hidden fixed right-4 bottom-4 z-40 min-h-12 px-5 bg-[#0F6E6E] hover:bg-[#0C5656] text-white rounded-[10px] shadow-lg font-semibold text-sm cursor-pointer btn-campus" aria-label="Report an item">
               + Report
             </button>
           )}
@@ -259,8 +262,7 @@ export default function App() {
               </div>
             </div>
           </footer>
-        </div>
-      </MotionConfig>
+      </div>
     </ErrorBoundary>
   );
 }

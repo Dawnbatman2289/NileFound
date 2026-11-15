@@ -7,11 +7,13 @@ import {
   subscribeToRealtimeNotifications,
   saveNotificationToFirestore,
   markNotificationAsReadInFirestore,
+  markNotificationsReadInFirestore,
 } from '../services/firestoreService.ts';
 import {
   playNotificationChime,
   sendBrowserPushNotification,
 } from '../services/notificationService.ts';
+import { canUserModerate } from '../utils/admin.ts';
 
 export type DispatchNotificationFn = (
   payload: Omit<CampusNotification, 'id' | 'read' | 'createdAt'>,
@@ -33,9 +35,13 @@ export function useNotifications({
   const [activeToast, setActiveToast] = useState<CampusNotification | null>(null);
   const hasLoadedInitialRef = useRef(false);
 
+  const userId = currentUser?.id;
+  const userRole = currentUser?.role;
+  const userIsAdmin = currentUser?.isAdmin;
+
   useEffect(() => {
     hasLoadedInitialRef.current = false;
-    if (isDemoMode || !currentUser || !auth.currentUser?.emailVerified) {
+    if (isDemoMode || !userId || !auth.currentUser?.emailVerified) {
       setNotifications([]);
       return;
     }
@@ -59,7 +65,7 @@ export function useNotifications({
       },
       (err) => reportError('subscribeToRealtimeNotifications failed', err)
     );
-  }, [isDemoMode, currentUser]);
+  }, [isDemoMode, userId, userRole, userIsAdmin]);
 
   const dispatchNotification = useCallback<DispatchNotificationFn>(
     (payload, { toast = false, push = false } = {}) => {
@@ -81,8 +87,7 @@ export function useNotifications({
       }
       const isForCurrentUser =
         record.recipientUid === currentUser?.id ||
-        (record.recipientUid === 'admin' &&
-          (currentUser?.isAdmin || currentUser?.role === 'security'));
+        (record.recipientUid === 'admin' && canUserModerate(currentUser));
       if (isForCurrentUser) {
         setNotifications((prev) => [record, ...prev]);
         if (toast) {
@@ -98,14 +103,12 @@ export function useNotifications({
   const dismissToast = useCallback(() => setActiveToast(null), []);
 
   const markAllAsRead = useCallback(() => {
+    const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id);
+    if (unreadIds.length === 0) return;
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    notifications.forEach((n) => {
-      if (!n.read) {
-        markNotificationAsReadInFirestore(n.id).catch((err) =>
-          reportError('Mark notification read failed', err)
-        );
-      }
-    });
+    markNotificationsReadInFirestore(unreadIds).catch((err) =>
+      reportError('Mark notifications read failed', err)
+    );
   }, [notifications]);
 
   const markAsRead = useCallback((id: string) => {

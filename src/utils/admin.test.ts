@@ -5,10 +5,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canUserModerate, expireOldItems, generateCampusAuditReport } from './admin.ts';
+import { canUserModerate, expireOldItems, generateCampusAuditReport, isMasterAdminUser } from './admin.ts';
+import { MASTER_ADMIN_UID } from '../config/catalog.ts';
 import { User, CampusItem, ClaimRecord } from '../types/index.ts';
 
-test('canUserModerate allows admin and security but blocks standard students', () => {
+test('canUserModerate allows admin and security and recognizes master UID', () => {
   const studentUser: User = {
     id: 'u1',
     name: 'Chidera Eze',
@@ -33,6 +34,9 @@ test('canUserModerate allows admin and security but blocks standard students', (
   assert.equal(canUserModerate(adminUser), true);
   assert.equal(canUserModerate(securityUser), true);
   assert.equal(canUserModerate(null), false);
+  assert.equal(isMasterAdminUser(MASTER_ADMIN_UID), true);
+  assert.equal(isMasterAdminUser('u2'), false);
+  assert.equal(isMasterAdminUser(null), false);
 });
 
 test('expireOldItems marks posts older than threshold as expired', () => {

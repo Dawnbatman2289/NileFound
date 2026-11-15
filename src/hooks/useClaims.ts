@@ -22,6 +22,19 @@ interface UseClaimsOptions {
   dispatchNotification: DispatchNotificationFn;
 }
 
+function hydrateClaimPrivate(
+  claim: ClaimRecord,
+  priv: { claimantName: string; claimantEmail: string; submittedAnswer: string }
+): ClaimRecord {
+  return {
+    ...claim,
+    claimantName: priv.claimantName,
+    claimantEmail: priv.claimantEmail,
+    submittedAnswer: priv.submittedAnswer,
+    privateLoaded: true,
+  };
+}
+
 export function useClaims({
   isDemoMode,
   currentUser,
@@ -37,13 +50,17 @@ export function useClaims({
   const [claimsError, setClaimsError] = useState<string | null>(null);
   const [claimsRetryNonce, setClaimsRetryNonce] = useState(0);
 
+  const userId = currentUser?.id;
+  const userRole = currentUser?.role;
+  const userIsAdmin = currentUser?.isAdmin;
+
   useEffect(() => {
     if (!import.meta.env.DEV || !isDemoMode) return;
     safeSetStorage('nilefound_demo_claims_v1', JSON.stringify(claims));
   }, [claims, isDemoMode]);
 
   useEffect(() => {
-    if (isDemoMode || !currentUser || !auth.currentUser?.emailVerified) return;
+    if (isDemoMode || !userId || !auth.currentUser?.emailVerified) return;
     setClaimsError(null);
     return subscribeToRealtimeClaims(
       currentUser,
@@ -52,15 +69,7 @@ export function useClaims({
           const prevPrivate = new Map(prev.filter((c) => c.privateLoaded).map((c) => [c.id, c]));
           return liveClaims.map((c) => {
             const hydrated = prevPrivate.get(c.id);
-            return hydrated
-              ? {
-                  ...c,
-                  claimantName: hydrated.claimantName,
-                  claimantEmail: hydrated.claimantEmail,
-                  submittedAnswer: hydrated.submittedAnswer,
-                  privateLoaded: true,
-                }
-              : c;
+            return hydrated ? hydrateClaimPrivate(c, hydrated) : c;
           });
         });
         setHasMoreClaims(moreClaims);
@@ -72,7 +81,7 @@ export function useClaims({
         setClaimsError('Could not load claims. Check your connection and try again.');
       }
     );
-  }, [isDemoMode, currentUser, claimsRetryNonce]);
+  }, [isDemoMode, userId, userRole, userIsAdmin, claimsRetryNonce]);
 
   const handleLoadMoreClaims = useCallback(async () => {
     if (isDemoMode || isLoadingMoreClaims || !hasMoreClaims || !claimsCursor) return;
@@ -96,19 +105,7 @@ export function useClaims({
 
   const handleFetchClaimPrivateDetails = useCallback(async (itemId: string, claimId: string) => {
     const priv = await fetchClaimPrivateDetails(itemId, claimId);
-    setClaims((prev) =>
-      prev.map((c) =>
-        c.id === claimId
-          ? {
-              ...c,
-              claimantName: priv.claimantName,
-              claimantEmail: priv.claimantEmail,
-              submittedAnswer: priv.submittedAnswer,
-              privateLoaded: true,
-            }
-          : c
-      )
-    );
+    setClaims((prev) => prev.map((c) => (c.id === claimId ? hydrateClaimPrivate(c, priv) : c)));
   }, []);
 
   const handleClaimSuccess = useCallback(

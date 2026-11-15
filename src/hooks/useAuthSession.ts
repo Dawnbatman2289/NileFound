@@ -7,6 +7,7 @@ import { reportError } from '../components/ErrorBoundary.tsx';
 import { auth, testConnection, clearOfflinePersistence } from '../lib/firebase.ts';
 import { syncUserProfile, fetchUserRole } from '../services/firestoreService.ts';
 import { clearNotificationStorage } from '../services/notificationService.ts';
+import { canUserModerate } from '../utils/admin.ts';
 import { readJson, safeSetStorage, safeRemoveStorage } from '../utils/storage.ts';
 
 interface UseAuthSessionOptions {
@@ -57,7 +58,7 @@ export function useAuthSession({
   }, [onSeedDemoData, onResetSessionData, setActiveTab]);
 
   const isRealUserAdmin = realUser?.role === 'admin' || realUser?.isAdmin;
-  const isPrivileged = currentUser?.role === 'admin' || currentUser?.isAdmin || currentUser?.role === 'security';
+  const isPrivileged = canUserModerate(currentUser);
   const canUsePersonaSimulation = Boolean(
     import.meta.env.DEV && (isRealUserAdmin || currentUser?.role === 'admin' || isSimulating)
   );

@@ -3,12 +3,12 @@ import { CampusItem, User } from '../types/index.ts';
 import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
 import { sanitizeCsvCell } from '../utils/csv.ts';
 import {
-  isConfiguredAdmin,
   fetchItemPrivateDetails,
   ItemPrivateDetails,
   fetchCampusAuditCounts,
   CampusAuditCounts,
 } from '../services/firestoreService.ts';
+import { isMasterAdminUser } from '../utils/admin.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
 
 interface UseAdminPanelOptions {
@@ -44,7 +44,7 @@ export function useAdminPanel({
   const [isLoadingPrivate, setIsLoadingPrivate] = useState(false);
   const [serverCounts, setServerCounts] = useState<CampusAuditCounts | null>(null);
   const [isExportingCsv, setIsExportingCsv] = useState(false);
-  const [isMasterOwner, setIsMasterOwner] = useState(false);
+  const isMasterOwner = !isDemoMode && isAdmin && isMasterAdminUser(currentUser?.id);
 
   const deleteDialogRef = useRef<HTMLDivElement>(null);
   const detailDialogRef = useRef<HTMLDivElement>(null);
@@ -71,18 +71,6 @@ export function useAdminPanel({
     setActionError(msg);
     noticeTimerRef.current = window.setTimeout(() => setActionError(null), 5000);
   }, []);
-
-  useEffect(() => {
-    if (isDemoMode || !currentUser?.id || !isAdmin) {
-      setIsMasterOwner(false);
-      return;
-    }
-    let active = true;
-    isConfiguredAdmin(currentUser.id).then((ok) => {
-      if (active) setIsMasterOwner(ok);
-    });
-    return () => { active = false; };
-  }, [isDemoMode, currentUser?.id, isAdmin]);
 
   const refreshAuditCounts = useCallback(() => {
     if (isDemoMode || !currentUser || !(isAdmin || isSecurity)) {
@@ -170,11 +158,11 @@ export function useAdminPanel({
       URL.revokeObjectURL(url);
       showNotification(`Exported ${items.length} records to CSV.`);
     } catch {
-      showNotification('Could not complete full audit export. Please try again.');
+      showError('Could not complete full audit export. Please try again.');
     } finally {
       setIsExportingCsv(false);
     }
-  }, [hasMoreItems, onLoadAll, items, showNotification]);
+  }, [hasMoreItems, onLoadAll, items, showNotification, showError]);
 
   return {
     actionNotice, actionError,

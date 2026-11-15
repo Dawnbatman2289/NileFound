@@ -9,11 +9,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ShieldCheck, Lock, AlertCircle, MessageCircle, X, CheckCircle2 } from 'lucide-react';
-import { CampusItem, ClaimRecord } from '../types/index.ts';
+import { CampusItem, ClaimRecord, User } from '../types/index.ts';
 import { validateNileEmail } from '../utils/authValidation.ts';
 
 interface ClaimModalProps {
   item: CampusItem | null;
+  currentUser?: User | null;
+  existingClaim?: ClaimRecord;
   onClose: () => void;
   onSuccessClaim: (claim: ClaimRecord) => Promise<void> | void;
 }
@@ -21,9 +23,9 @@ interface ClaimModalProps {
 const INPUT_CLASS =
   'w-full text-base sm:text-sm px-3.5 py-2.5 rounded-[10px] border border-[#857C70] dark:border-[#787065] bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] placeholder:text-[#5C554C] dark:placeholder:text-[#A8A095] focus:border-[#0F6E6E] min-h-[44px]';
 
-export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccessClaim }) => {
-  const [claimantName, setClaimantName] = useState('');
-  const [claimantEmail, setClaimantEmail] = useState('');
+export const ClaimModal: React.FC<ClaimModalProps> = ({ item, currentUser, existingClaim, onClose, onSuccessClaim }) => {
+  const [claimantName, setClaimantName] = useState(currentUser?.name || '');
+  const [claimantEmail, setClaimantEmail] = useState(currentUser?.email || '');
   const [verificationAnswer, setVerificationAnswer] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -36,6 +38,9 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
     if (!item) return;
     setIsSubmitted(false);
     setErrorMsg('');
+    setVerificationAnswer('');
+    if (currentUser?.name) setClaimantName((prev) => prev || currentUser.name);
+    if (currentUser?.email) setClaimantEmail((prev) => prev || currentUser.email);
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     const timer = window.setTimeout(() => dialogRef.current?.focus(), 0);
     const onKeyDown = (e: KeyboardEvent) => {
@@ -47,7 +52,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
       document.removeEventListener('keydown', onKeyDown);
       previousFocusRef.current?.focus?.();
     };
-  }, [item, onClose]);
+  }, [item, currentUser?.name, currentUser?.email, onClose]);
 
   if (!item) return null;
 
@@ -206,6 +211,12 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
                 </div>
               </div>
 
+              {existingClaim && (
+                <div role="status" className="text-sm text-[#7A5000] dark:text-[#F9CF7C] bg-[#FEF7E9] dark:bg-[#2B210A] p-3 rounded-[10px] border border-[#E8A317]/40">
+                  You already have a {existingClaim.status} claim on this item. Check your notices or feed card for updates.
+                </div>
+              )}
+
               {errorMsg && (
                 <div role="alert" className="flex items-center gap-2 text-sm text-[#9B1C1C] dark:text-[#F87171] bg-[#FDF2F2] dark:bg-[#2B0E0E] p-3 rounded-[10px] border border-[#F87171]/50">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -223,10 +234,10 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, onClose, onSuccess
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="w-1/2 py-2.5 text-sm font-semibold text-white bg-[#0F6E6E] hover:bg-[#0C5656] rounded-[10px] shadow-xs transition-colors flex items-center justify-center gap-1.5 min-h-[44px] cursor-pointer btn-campus active:scale-98"
+                  disabled={isSubmitting || Boolean(existingClaim)}
+                  className="w-1/2 py-2.5 text-sm font-semibold text-white bg-[#0F6E6E] hover:bg-[#0C5656] disabled:opacity-50 rounded-[10px] shadow-xs transition-colors flex items-center justify-center gap-1.5 min-h-[44px] cursor-pointer btn-campus active:scale-98"
                 >
-                  {isSubmitting ? 'Submitting...' : 'Submit Claim'}
+                  {isSubmitting ? 'Submitting...' : existingClaim ? 'Claim Already Filed' : 'Submit Claim'}
                 </button>
               </div>
             </form>

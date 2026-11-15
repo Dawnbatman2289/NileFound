@@ -174,6 +174,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
           selectedItem={desk.selectedItem}
           claims={claims}
           isAdmin={isAdmin}
+          isDemoMode={Boolean(props.isDemoMode)}
           lowDataMode={Boolean(props.lowDataMode)}
           selectedItemPhoto={desk.selectedItemPhoto}
           isLoadingItemPhoto={desk.isLoadingItemPhoto}
@@ -183,6 +184,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
           onClose={() => desk.setSelectedItem(null)}
           onUpdateSelectedItem={desk.setSelectedItem}
           onRequestDelete={desk.setPendingDelete}
+          onFetchClaimPrivateDetails={props.onFetchClaimPrivateDetails}
           onApproveClaim={onApproveClaim}
           onRejectClaim={onRejectClaim}
           onUpdateItemStatus={onUpdateItemStatus}

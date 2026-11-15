@@ -9,6 +9,7 @@ interface ItemDetailModalProps {
   selectedItem: CampusItem;
   claims: ClaimRecord[];
   isAdmin: boolean;
+  isDemoMode?: boolean;
   lowDataMode: boolean;
   selectedItemPhoto: string | null;
   isLoadingItemPhoto: boolean;
@@ -18,6 +19,7 @@ interface ItemDetailModalProps {
   onClose: () => void;
   onUpdateSelectedItem: (updated: CampusItem) => void;
   onRequestDelete: (item: CampusItem) => void;
+  onFetchClaimPrivateDetails?: (itemId: string, claimId: string) => Promise<void>;
   onApproveClaim: (claimId: string, itemId: string) => Promise<boolean> | void;
   onRejectClaim: (claimId: string) => Promise<boolean> | void;
   onUpdateItemStatus: (itemId: string, status: CampusItem['status']) => Promise<boolean> | void;
@@ -30,6 +32,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   selectedItem,
   claims,
   isAdmin,
+  isDemoMode = false,
   lowDataMode,
   selectedItemPhoto,
   isLoadingItemPhoto,
@@ -39,6 +42,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onClose,
   onUpdateSelectedItem,
   onRequestDelete,
+  onFetchClaimPrivateDetails,
   onApproveClaim,
   onRejectClaim,
   onUpdateItemStatus,
@@ -46,6 +50,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onErrorNotice,
   onRefreshAudit,
 }) => {
+  const [loadingClaimId, setLoadingClaimId] = React.useState<string | null>(null);
   const itemClaims = claims.filter((c) => c.itemId === selectedItem.id);
 
   return (
@@ -161,15 +166,35 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div>
                       <span className="font-semibold">{claim.claimantName}</span>
-                      <span className="text-[#5C554C] dark:text-[#A8A095] ml-2 font-mono text-xs">({claim.claimantEmail})</span>
+                      {claim.claimantEmail && <span className="text-[#5C554C] dark:text-[#A8A095] ml-2 font-mono text-xs">({claim.claimantEmail})</span>}
                     </div>
                     <span className="text-xs font-semibold uppercase px-2 py-0.5 rounded-[10px] bg-white dark:bg-[#1E1C18] border border-[#C4BBAF] dark:border-[#3E3931] text-[#0F6E6E] dark:text-[#199595]">
                       {claim.status}
                     </span>
                   </div>
-                  <p className="text-[#4A443C] dark:text-[#CEC7BB]">
-                    <strong className="text-[#1F1B16] dark:text-[#F5F1EA]">Submitted Answer:</strong> {claim.submittedAnswer}
-                  </p>
+                  {claim.privateLoaded || isDemoMode ? (
+                    <p className="text-[#4A443C] dark:text-[#CEC7BB]">
+                      <strong className="text-[#1F1B16] dark:text-[#F5F1EA]">Submitted Answer:</strong> {claim.submittedAnswer || 'None provided'}
+                    </p>
+                  ) : onFetchClaimPrivateDetails ? (
+                    <button
+                      type="button"
+                      disabled={loadingClaimId === claim.id}
+                      onClick={async () => {
+                        setLoadingClaimId(claim.id);
+                        try {
+                          await onFetchClaimPrivateDetails(selectedItem.id, claim.id);
+                        } catch {
+                          onErrorNotice('Could not load claimant contact details.');
+                        } finally {
+                          setLoadingClaimId(null);
+                        }
+                      }}
+                      className="min-h-[44px] px-3 rounded-[10px] border border-[#857C70] dark:border-[#787065] bg-white dark:bg-[#1E1C18] text-xs font-medium text-[#0F6E6E] dark:text-[#199595] cursor-pointer"
+                    >
+                      {loadingClaimId === claim.id ? 'Loading details…' : 'Inspect Claimant & Answer'}
+                    </button>
+                  ) : null}
                   {claim.status === 'pending' && (
                     <div className="flex items-center gap-2 pt-1">
                       <button

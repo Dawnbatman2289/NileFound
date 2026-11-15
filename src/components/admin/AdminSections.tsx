@@ -186,6 +186,7 @@ export const AdminTabContent: React.FC<{
         isAdmin={isAdmin}
         isMasterOwner={desk.isMasterOwner}
         onSuccessNotice={desk.showNotification}
+        onErrorNotice={desk.showError}
       />
     )}
     {activeTab === 'personas' && canUsePersonaSimulation && (

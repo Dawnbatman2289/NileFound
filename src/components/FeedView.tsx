@@ -98,10 +98,6 @@ export const FeedView: React.FC<FeedViewProps> = ({
   }, [searchTerm]);
 
   useEffect(() => {
-    if (debouncedSearch.trim() && hasMoreItems && onLoadAll && !isDemoMode) onLoadAll();
-  }, [debouncedSearch, hasMoreItems, onLoadAll, isDemoMode]);
-
-  useEffect(() => {
     try {
       const saved = sessionStorage.getItem('nilefound_feed_filters');
       if (!saved) return;
@@ -269,13 +265,12 @@ export const FeedView: React.FC<FeedViewProps> = ({
           <FeedEmptyState selectedType={selectedType} onResetFilters={resetFilters} onOpenReportModal={onOpenReportModal} />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredItems.map((item, idx) => {
+            {filteredItems.map((item) => {
               const claimCtx = getItemClaimContext(claims, item, currentUser?.id);
               return (
                 <ItemCard
                   key={item.id}
                   item={item}
-                  index={idx}
                   lowDataMode={lowDataMode}
                   currentUser={currentUser}
                   isDemoMode={isDemoMode}
@@ -300,10 +295,15 @@ export const FeedView: React.FC<FeedViewProps> = ({
         )}
 
         {onLoadMore && hasMoreItems && (
-          <div className="flex justify-center pt-5">
+          <div className="flex flex-wrap justify-center gap-3 pt-5">
             <button type="button" onClick={onLoadMore} disabled={isLoadingMoreItems} className="min-h-[44px] rounded-[10px] border border-[#857C70] dark:border-[#787065] bg-white dark:bg-[#1E1C18] hover:bg-[#FAF6EF] dark:hover:bg-[#28241F] px-5 text-sm font-medium text-[#1F1B16] dark:text-[#F5F1EA] disabled:opacity-60 cursor-pointer btn-campus">
               {isLoadingMoreItems ? 'Loading more…' : 'Load more notices'}
             </button>
+            {debouncedSearch.trim() && onLoadAll && !isDemoMode && (
+              <button type="button" onClick={onLoadAll} disabled={isLoadingMoreItems} className="min-h-[44px] rounded-[10px] border border-[#0F6E6E]/40 bg-[#E7F3F3] dark:bg-[#0D2D2D] px-5 text-sm font-medium text-[#0F6E6E] dark:text-[#199595] disabled:opacity-60 cursor-pointer btn-campus">
+                Load older notices to search all
+              </button>
+            )}
           </div>
         )}
       </div>

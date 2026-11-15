@@ -1,5 +1,4 @@
 import React, { memo, useState } from 'react';
-import { motion } from 'motion/react';
 import { MapPin, Calendar, Lock } from 'lucide-react';
 import { CampusItem, ClaimRecord, User } from '../types/index.ts';
 import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
@@ -14,7 +13,6 @@ import {
 
 interface ItemCardProps {
   item: CampusItem;
-  index: number;
   lowDataMode: boolean;
   currentUser?: User | null;
   isDemoMode?: boolean;
@@ -43,7 +41,7 @@ const holdingLocationLabel = (loc: CampusItem['holdingLocation'], isFoundIdCard:
 };
 
 export const ItemCard: React.FC<ItemCardProps> = memo(({
-  item, index, lowDataMode, currentUser, isDemoMode, myApprovedClaim, myPendingClaim,
+  item, lowDataMode, currentUser, isDemoMode, myApprovedClaim, myPendingClaim,
   pendingFinderClaims, handoverInfo, isLoadingHandover, onSelectDetail, onClaimItem,
   onOpenReportModal, onFoundMatch, onRequestHandoverContact, onFetchClaimPrivateDetails,
   onApproveClaim, onRejectClaim, onUpdateItemStatus,
@@ -73,14 +71,9 @@ export const ItemCard: React.FC<ItemCardProps> = memo(({
   };
 
   return (
-    <motion.article
+    <article
       id={`item-${item.id}`}
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -3 }}
-      whileTap={{ scale: 0.995 }}
-      transition={{ duration: 0.18, delay: Math.min(index * 0.03, 0.24) }}
-      className={`notice-card flex flex-col justify-between overflow-hidden ${isReturned ? 'opacity-70' : ''}`}
+      className={`notice-card flex flex-col justify-between overflow-hidden hover:-translate-y-0.5 ${isReturned ? 'opacity-70' : ''}`}
     >
       <div>
         <ItemCardMedia
@@ -168,7 +161,7 @@ export const ItemCard: React.FC<ItemCardProps> = memo(({
           onOpenReportModal={onOpenReportModal}
         />
       </div>
-    </motion.article>
+    </article>
   );
 });
 

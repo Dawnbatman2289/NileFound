@@ -21,8 +21,8 @@ interface ReportModalProps {
   onClose: () => void;
   onSubmitItem: (item: CampusItem) => Promise<boolean> | void;
   onDraftSaved: () => void;
+  onDraftCleared?: () => void;
   currentUser?: User | null;
-  onLogin?: (user: User) => void;
   onOpenLogin?: () => void;
   initialPrefill?: Partial<Pick<CampusItem, 'type' | 'title' | 'category' | 'location'>> | null;
 }
@@ -35,6 +35,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   onClose,
   onSubmitItem,
   onDraftSaved,
+  onDraftCleared,
   currentUser,
   onOpenLogin,
   initialPrefill,
@@ -47,11 +48,15 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const saveTimerRef = useRef<number | null>(null);
 
-  const draft = useReportDraft({ isOpen, initialPrefill, onDraftSaved });
+  const draft = useReportDraft({ isOpen, initialPrefill, onDraftSaved, onDraftCleared });
 
   useEffect(() => {
     if (isOpen) setSaveNotice(null);
+    return () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -297,7 +302,16 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           />
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#C4BBAF] dark:border-[#3E3931]">
-            <button type="button" onClick={() => { draft.saveDraftLocally(); setSaveNotice('Draft saved locally (without private verification answer).'); setTimeout(() => setSaveNotice(null), 3000); }} className="text-sm font-medium text-[#5C554C] dark:text-[#A8A095] hover:text-[#0F6E6E] dark:hover:text-[#199595] flex items-center gap-1.5 cursor-pointer min-h-[44px] py-2">
+            <button
+              type="button"
+              onClick={() => {
+                draft.saveDraftLocally();
+                setSaveNotice('Draft saved locally (without private verification answer).');
+                if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+                saveTimerRef.current = window.setTimeout(() => setSaveNotice(null), 3000);
+              }}
+              className="text-sm font-medium text-[#5C554C] dark:text-[#A8A095] hover:text-[#0F6E6E] dark:hover:text-[#199595] flex items-center gap-1.5 cursor-pointer min-h-[44px] py-2"
+            >
               <Save className="w-4 h-4" />
               <span>Save Offline Draft</span>
             </button>

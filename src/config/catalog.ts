@@ -7,6 +7,7 @@
  */
 
 export const ITEM_EXPIRY_DAYS = 60;
+export const MASTER_ADMIN_UID = 'nFdIhTjOOqMqMG4y1KIT550Qf5m1';
 
 export const CAMPUS_CLUSTERS: Record<string, string[]> = {
   stem_cluster: [

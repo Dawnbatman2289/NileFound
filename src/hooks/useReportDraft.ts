@@ -11,6 +11,7 @@ interface UseReportDraftOptions {
   isOpen: boolean;
   initialPrefill?: Partial<Pick<CampusItem, 'type' | 'title' | 'category' | 'location'>> | null;
   onDraftSaved: () => void;
+  onDraftCleared?: () => void;
 }
 
 export interface ReportFormError {
@@ -48,7 +49,7 @@ export function validateReportInputs(fields: {
   return null;
 }
 
-export function useReportDraft({ isOpen, initialPrefill, onDraftSaved }: UseReportDraftOptions) {
+export function useReportDraft({ isOpen, initialPrefill, onDraftSaved, onDraftCleared }: UseReportDraftOptions) {
   const [reportType, setReportType] = useState<ItemType>('lost');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<ItemCategory | ''>('');
@@ -66,6 +67,20 @@ export function useReportDraft({ isOpen, initialPrefill, onDraftSaved }: UseRepo
 
   const isFoundStudentId = reportType === 'found' && category === 'student_id';
 
+  const resetEmptyFields = useCallback((type: ItemType = 'lost', cat: ItemCategory | '' = '', loc = '', itemTitle = '') => {
+    setReportType(type);
+    setCategory(cat);
+    setLocation(loc);
+    setTitle(itemTitle);
+    setLocationDetails('');
+    setDescription('');
+    setDateLostOrFound(getTodayWatIsoDate());
+    setHoldingLocation(type === 'found' && cat === 'student_id' ? 'security_main_gate' : 'finder_holding');
+    setVerificationQuestion('');
+    setVerificationAnswer('');
+    setCompressionResult(null);
+  }, []);
+
   useEffect(() => {
     if (isFoundStudentId) {
       setHoldingLocation('security_main_gate');
@@ -77,10 +92,12 @@ export function useReportDraft({ isOpen, initialPrefill, onDraftSaved }: UseRepo
     if (!isOpen) return;
     setFormError(null);
     if (initialPrefill) {
-      setReportType(initialPrefill.type || 'found');
-      setCategory(initialPrefill.category || '');
-      setLocation(initialPrefill.location || '');
-      setTitle(initialPrefill.title || '');
+      resetEmptyFields(
+        initialPrefill.type || 'found',
+        initialPrefill.category || '',
+        initialPrefill.location || '',
+        initialPrefill.title || ''
+      );
       setHasRestoredDraft(false);
       return;
     }
@@ -104,7 +121,7 @@ export function useReportDraft({ isOpen, initialPrefill, onDraftSaved }: UseRepo
     } catch {
       // Ignore corrupt draft storage
     }
-  }, [isOpen, initialPrefill]);
+  }, [isOpen, initialPrefill, resetEmptyFields]);
 
   const saveDraftLocally = useCallback(
     (overrides?: Partial<{
@@ -146,13 +163,9 @@ export function useReportDraft({ isOpen, initialPrefill, onDraftSaved }: UseRepo
       reportError('Clear draft storage failed', err);
     }
     setHasRestoredDraft(false);
-    if (resetFields) {
-      setTitle('');
-      setDescription('');
-      setVerificationQuestion('');
-      setVerificationAnswer('');
-    }
-  }, []);
+    onDraftCleared?.();
+    if (resetFields) resetEmptyFields();
+  }, [onDraftCleared, resetEmptyFields]);
 
   const handleImageChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {

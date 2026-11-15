@@ -182,6 +182,21 @@
   transform: scale(0.98);
 }
 
+@keyframes tabFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tab-fade-in {
+  animation: tabFadeIn 160ms ease-out;
+}
+
 input, select, textarea {
   border-radius: 10px;
   transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
@@ -190,6 +205,11 @@ input, select, textarea {
 select, option {
   background-color: var(--color-surface);
   color: var(--color-ink);
+}
+
+.dark select, .dark select option {
+  background-color: #1E1C18;
+  color: #F5F1EA;
 }
 
 input:hover, select:hover, textarea:hover {

@@ -18,7 +18,6 @@ interface LoginPageProps {
   onLogin: (user: User) => void;
   onLogout: () => void;
   onNavigateToFeed: () => void;
-  isDemoMode: boolean;
 }
 
 const INPUT_CLASS =

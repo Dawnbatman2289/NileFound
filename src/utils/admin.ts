@@ -7,12 +7,16 @@
  */
 
 import { User, CampusItem, ClaimRecord } from '../types/index.ts';
-import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
+import { ITEM_EXPIRY_DAYS, MASTER_ADMIN_UID } from '../config/catalog.ts';
+
+export function isMasterAdminUser(uid?: string | null): boolean {
+  return uid === MASTER_ADMIN_UID;
+}
 
 /**
  * Checks whether a user has administrative or security officer moderation rights.
  */
-export function canUserModerate(user: User | null): boolean {
+export function canUserModerate(user?: User | null): boolean {
   if (!user) return false;
   return user.role === 'admin' || user.role === 'security' || user.isAdmin === true;
 }

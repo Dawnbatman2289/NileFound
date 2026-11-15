@@ -14,6 +14,7 @@ import {
 import { auth } from '../lib/firebase.ts';
 import { User, UserRole } from '../types/index.ts';
 import { fetchUserRole, isConfiguredAdmin } from '../services/firestoreService.ts';
+import { canUserModerate, isMasterAdminUser } from '../utils/admin.ts';
 import { validateEmailFormat, validateFullName, validateNileEmail, validatePassword } from '../utils/authValidation.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
 
@@ -36,6 +37,10 @@ const friendlyAuthError = (error: unknown): string => {
   const code = (error as { code?: string })?.code || '';
   return AUTH_ERROR_MESSAGES[code] || 'Could not complete sign-in. Check your details and connection, then try again.';
 };
+
+async function isAllowedCampusAccount(uid: string, email: string): Promise<boolean> {
+  return validateNileEmail(email) || isMasterAdminUser(uid) || (await isConfiguredAdmin(uid));
+}
 
 async function buildUserFromFirebase(fbUser: import('firebase/auth').User): Promise<User> {
   const userEmail = (fbUser.email || '').trim().toLowerCase();
@@ -88,7 +93,7 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
       .then(async (result) => {
         if (!active || !result?.user) return;
         const userEmail = result.user.email?.toLowerCase() || '';
-        if (!(await isConfiguredAdmin(result.user.uid)) && !validateNileEmail(userEmail)) {
+        if (!(await isAllowedCampusAccount(result.user.uid, userEmail))) {
           await signOut(auth);
           setErrorMessage('Please use your @nileuniversity.edu.ng email.');
           return;
@@ -100,7 +105,7 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
         }
         const loggedUser = await buildUserFromFirebase(result.user);
         onLoginRef.current(loggedUser);
-        if (!loggedUser.isAdmin && loggedUser.role !== 'admin' && loggedUser.role !== 'security') onNavigateRef.current();
+        if (!canUserModerate(loggedUser)) onNavigateRef.current();
       })
       .catch((err) => reportError('Google redirect sign-in check failed', err));
 
@@ -166,7 +171,7 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
         setSuccessMessage('Verify your email first, or sign in with Google if your institution uses Gmail.');
         return;
       }
-      if (!validateNileEmail(normalizedEmail) && !(await isConfiguredAdmin(result.user.uid))) {
+      if (!(await isAllowedCampusAccount(result.user.uid, normalizedEmail))) {
         await signOut(auth);
         setErrorMessage('Please use your @nileuniversity.edu.ng email.');
         return;
@@ -174,7 +179,7 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
 
       const loggedUser = await buildUserFromFirebase(result.user);
       onLogin(loggedUser);
-      if (!loggedUser.isAdmin && loggedUser.role !== 'admin' && loggedUser.role !== 'security') onNavigateToFeed();
+      if (!canUserModerate(loggedUser)) onNavigateToFeed();
     } catch (err: unknown) {
       setErrorMessage(friendlyAuthError(err));
     } finally {
@@ -207,7 +212,7 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
     try {
       const result = await signInWithPopup(auth, provider);
       const userEmail = result.user.email?.toLowerCase() || '';
-      if (!(await isConfiguredAdmin(result.user.uid)) && !validateNileEmail(userEmail)) {
+      if (!(await isAllowedCampusAccount(result.user.uid, userEmail))) {
         await signOut(auth);
         return setErrorMessage('Please use your @nileuniversity.edu.ng email.');
       }
@@ -217,7 +222,7 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
       }
       const loggedUser = await buildUserFromFirebase(result.user);
       onLogin(loggedUser);
-      if (!loggedUser.isAdmin && loggedUser.role !== 'admin' && loggedUser.role !== 'security') onNavigateToFeed();
+      if (!canUserModerate(loggedUser)) onNavigateToFeed();
     } catch (error: unknown) {
       const code = (error as { code?: string })?.code;
       if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
@@ -239,7 +244,7 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
       }
       const loggedUser = await buildUserFromFirebase(auth.currentUser);
       onLogin(loggedUser);
-      if (!loggedUser.isAdmin && loggedUser.role !== 'admin' && loggedUser.role !== 'security') onNavigateToFeed();
+      if (!canUserModerate(loggedUser)) onNavigateToFeed();
     } catch {
       setErrorMessage('Could not check verification status. Check your connection and try again.');
     }

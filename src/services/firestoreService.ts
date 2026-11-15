@@ -6,7 +6,7 @@
  */
 
 import {
-  collection, doc, addDoc, setDoc, getDoc, updateDoc,
+  collection, doc, addDoc, setDoc, getDoc, updateDoc, deleteDoc,
   onSnapshot, query, orderBy, where, limit, startAfter, getDocs, getCountFromServer,
   writeBatch, serverTimestamp, Timestamp,
   QueryDocumentSnapshot, DocumentData, Unsubscribe,
@@ -14,6 +14,7 @@ import {
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { CampusItem, ClaimRecord, User, CampusNotification } from '../types/index.ts';
 import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
+import { canUserModerate, isMasterAdminUser } from '../utils/admin.ts';
 import { validateNileEmail } from '../utils/authValidation.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
 
@@ -21,13 +22,13 @@ const ITEMS = 'items';
 const CLAIMS = 'claims';
 const USERS = 'users';
 const ROLES = 'roles';
+const ADMINS = 'admins';
 const STAFF_INVITES = 'staffInvites';
 const NOTIFICATIONS = 'notifications';
 const EXPIRY_MS = ITEM_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 const ITEMS_PAGE_SIZE = 20;
 const CLAIMS_PAGE_SIZE = 20;
 const ROLES_PAGE_SIZE = 25;
-const USERS_PAGE_SIZE = 25;
 
 export interface UserRoleRecord {
   uid: string;
@@ -36,6 +37,7 @@ export interface UserRoleRecord {
   assignedAt?: string;
   assignedBy?: string;
   pending?: boolean;
+  source?: 'admins' | 'roles' | 'invites';
 }
 
 export interface ItemPrivateDetails {
@@ -70,14 +72,9 @@ export interface ClaimsPage {
 
 export interface RolesPage {
   records: UserRoleRecord[];
+  nextAdminsCursor?: QueryDocumentSnapshot<DocumentData>;
   nextRolesCursor?: QueryDocumentSnapshot<DocumentData>;
   nextInvitesCursor?: QueryDocumentSnapshot<DocumentData>;
-  hasMore: boolean;
-}
-
-export interface UsersDirectoryPage {
-  users: Array<{ uid: string; email: string; name: string }>;
-  nextCursor?: QueryDocumentSnapshot<DocumentData>;
   hasMore: boolean;
 }
 
@@ -165,7 +162,7 @@ export async function fetchUserRole(uid: string, email?: string | null): Promise
 
   try {
     if (uid) {
-      if (await isConfiguredAdmin(uid)) {
+      if (isMasterAdminUser(uid) || (await isConfiguredAdmin(uid))) {
         return 'admin';
       }
       const snap = await getDoc(doc(db, ROLES, uid));
@@ -195,7 +192,7 @@ export async function assignUserRoleByEmail(
   newRole: 'admin' | 'security' | 'student',
   assignedByEmail?: string
 ): Promise<'assigned' | 'pending'> {
-  if (!auth.currentUser || !(await isConfiguredAdmin(auth.currentUser.uid))) {
+  if (!auth.currentUser || !isMasterAdminUser(auth.currentUser.uid)) {
     throw new Error('Unauthorized: only the project owner can provision campus roles.');
   }
 
@@ -220,13 +217,16 @@ export async function assignUserRoleByEmail(
       batch.delete(doc(db, STAFF_INVITES, email));
       if (!userSnap.empty) {
         const targetUid = userSnap.docs[0].id;
-        batch.set(doc(db, ROLES, targetUid), { ...payload, updatedAt: serverTimestamp() }, { merge: true });
+        if (!isMasterAdminUser(targetUid)) {
+          batch.delete(doc(db, ADMINS, targetUid));
+          batch.delete(doc(db, ROLES, targetUid));
+        }
       }
       await batch.commit();
       return userSnap.empty ? 'pending' : 'assigned';
     }
 
-    // Always anchor staff invites by verified token email so unverified profile changes cannot escalate privileges.
+    // Anchor staff invites by verified token email so unverified profile changes cannot escalate privileges.
     batch.set(doc(db, STAFF_INVITES, email), payload, { merge: true });
     if (!userSnap.empty) {
       const targetUid = userSnap.docs[0].id;
@@ -242,43 +242,105 @@ export async function assignUserRoleByEmail(
   }
 }
 
-export async function fetchRolesPage(
-  rolesCursor?: QueryDocumentSnapshot<DocumentData>,
-  invitesCursor?: QueryDocumentSnapshot<DocumentData>,
-  pageSize = ROLES_PAGE_SIZE,
-  fetchRoles = true,
-  fetchInvites = true,
-): Promise<RolesPage> {
+export async function revokeStaffRole(
+  record: Pick<UserRoleRecord, 'uid' | 'email' | 'pending'>
+): Promise<void> {
+  if (!auth.currentUser || !isMasterAdminUser(auth.currentUser.uid)) {
+    throw new Error('Unauthorized: only the project owner can remove staff or admin access.');
+  }
+  const normalizedEmail = record.email?.trim().toLowerCase();
+  if (!record.pending && (isMasterAdminUser(record.uid) || record.uid === auth.currentUser.uid)) {
+    throw new Error('The root owner account cannot be removed.');
+  }
+
   try {
-    const [rolesSnap, invitesSnap] = await Promise.all([
+    if (record.pending) {
+      const inviteKey = normalizedEmail || record.uid;
+      if (!inviteKey) return;
+      await deleteDoc(doc(db, STAFF_INVITES, inviteKey));
+      return;
+    }
+
+    const batch = writeBatch(db);
+    if (record.uid) {
+      batch.delete(doc(db, ADMINS, record.uid));
+      batch.delete(doc(db, ROLES, record.uid));
+    }
+    if (normalizedEmail) {
+      batch.delete(doc(db, STAFF_INVITES, normalizedEmail));
+    }
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `${ROLES}/${record.uid}`);
+  }
+}
+
+export async function fetchRolesPage(
+  cursors: {
+    admins?: QueryDocumentSnapshot<DocumentData>;
+    roles?: QueryDocumentSnapshot<DocumentData>;
+    invites?: QueryDocumentSnapshot<DocumentData>;
+  } = {},
+  pageSize = ROLES_PAGE_SIZE,
+  options: { fetchAdmins?: boolean; fetchRoles?: boolean; fetchInvites?: boolean } = {}
+): Promise<RolesPage> {
+  const { fetchAdmins = false, fetchRoles = true, fetchInvites = true } = options;
+  try {
+    const [adminsSnap, rolesSnap, invitesSnap] = await Promise.all([
+      fetchAdmins
+        ? getDocs(query(collection(db, ADMINS), orderBy('__name__'), limit(pageSize + 1), ...(cursors.admins ? [startAfter(cursors.admins)] : [])))
+        : Promise.resolve(null),
       fetchRoles
-        ? getDocs(query(collection(db, ROLES), orderBy('__name__'), limit(pageSize + 1), ...(rolesCursor ? [startAfter(rolesCursor)] : [])))
+        ? getDocs(query(collection(db, ROLES), orderBy('__name__'), limit(pageSize + 1), ...(cursors.roles ? [startAfter(cursors.roles)] : [])))
         : Promise.resolve(null),
       fetchInvites
-        ? getDocs(query(collection(db, STAFF_INVITES), orderBy('__name__'), limit(pageSize + 1), ...(invitesCursor ? [startAfter(invitesCursor)] : [])))
+        ? getDocs(query(collection(db, STAFF_INVITES), orderBy('__name__'), limit(pageSize + 1), ...(cursors.invites ? [startAfter(cursors.invites)] : [])))
         : Promise.resolve(null),
     ]);
 
+    const adminsDocs = adminsSnap ? adminsSnap.docs.slice(0, pageSize) : [];
     const rolesDocs = rolesSnap ? rolesSnap.docs.slice(0, pageSize) : [];
     const invitesDocs = invitesSnap ? invitesSnap.docs.slice(0, pageSize) : [];
+    const hasMoreAdmins = Boolean(adminsSnap && adminsSnap.docs.length > pageSize);
     const hasMoreRoles = Boolean(rolesSnap && rolesSnap.docs.length > pageSize);
     const hasMoreInvites = Boolean(invitesSnap && invitesSnap.docs.length > pageSize);
 
+    const byUid = new Map<string, UserRoleRecord>();
     const seenEmails = new Set<string>();
-    const activeRoles: UserRoleRecord[] = rolesDocs
-      .map((d) => {
-        const data = d.data();
-        const email = String(data.email || '').toLowerCase();
-        if (email) seenEmails.add(email);
-        return {
-          uid: d.id,
-          email,
-          role: (data.role || 'student') as UserRoleRecord['role'],
-          assignedAt: data.assignedAt ? toIsoString(data.assignedAt) : data.updatedAt ? toIsoString(data.updatedAt) : undefined,
-          assignedBy: data.assignedBy,
-        };
-      })
-      .filter((r) => r.role !== 'student');
+
+    for (const d of adminsDocs) {
+      if (isMasterAdminUser(d.id)) continue;
+      const data = d.data();
+      if (data.enabled !== true) continue;
+      const email = String(data.email || '').toLowerCase();
+      if (email) seenEmails.add(email);
+      byUid.set(d.id, {
+        uid: d.id,
+        email,
+        role: 'admin',
+        assignedAt: data.updatedAt ? toIsoString(data.updatedAt) : undefined,
+        assignedBy: 'Delegated Admin',
+        source: 'admins',
+      });
+    }
+
+    for (const d of rolesDocs) {
+      if (isMasterAdminUser(d.id)) continue;
+      const data = d.data();
+      const role = (data.role || 'student') as UserRoleRecord['role'];
+      if (role === 'student') continue;
+      const email = String(data.email || '').toLowerCase();
+      if (email) seenEmails.add(email);
+      const existing = byUid.get(d.id);
+      byUid.set(d.id, {
+        uid: d.id,
+        email: existing?.email || email,
+        role: existing?.role === 'admin' ? 'admin' : role,
+        assignedAt: data.assignedAt ? toIsoString(data.assignedAt) : data.updatedAt ? toIsoString(data.updatedAt) : existing?.assignedAt,
+        assignedBy: data.assignedBy || existing?.assignedBy,
+        source: existing ? 'admins' : 'roles',
+      });
+    }
 
     const pendingRoles: UserRoleRecord[] = invitesDocs
       .filter((d) => !seenEmails.has(String(d.data().email || d.id).toLowerCase()))
@@ -286,45 +348,25 @@ export async function fetchRolesPage(
         const data = d.data();
         return {
           uid: d.id,
-          email: String(data.email || d.id),
+          email: String(data.email || d.id).toLowerCase(),
           role: (data.role || 'student') as UserRoleRecord['role'],
           assignedAt: data.assignedAt ? toIsoString(data.assignedAt) : undefined,
           assignedBy: data.assignedBy,
           pending: true,
+          source: 'invites' as const,
         };
       })
       .filter((r) => r.role !== 'student');
 
     return {
-      records: [...activeRoles, ...pendingRoles],
+      records: [...byUid.values(), ...pendingRoles],
+      nextAdminsCursor: hasMoreAdmins ? adminsDocs.at(-1) : undefined,
       nextRolesCursor: hasMoreRoles ? rolesDocs.at(-1) : undefined,
       nextInvitesCursor: hasMoreInvites ? invitesDocs.at(-1) : undefined,
-      hasMore: hasMoreRoles || hasMoreInvites,
+      hasMore: hasMoreAdmins || hasMoreRoles || hasMoreInvites,
     };
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, ROLES);
-  }
-}
-
-export async function fetchUsersDirectoryPage(
-  cursor?: QueryDocumentSnapshot<DocumentData>,
-  pageSize = USERS_PAGE_SIZE
-): Promise<UsersDirectoryPage> {
-  try {
-    const snap = await getDocs(
-      query(collection(db, USERS), orderBy('__name__'), limit(pageSize + 1), ...(cursor ? [startAfter(cursor)] : []))
-    );
-    const hasMore = snap.docs.length > pageSize;
-    const pageDocs = snap.docs.slice(0, pageSize);
-    return {
-      users: pageDocs
-        .map((d) => ({ uid: d.id, email: String(d.data().email || ''), name: String(d.data().name || '') }))
-        .filter((u) => Boolean(u.email)),
-      nextCursor: hasMore ? pageDocs.at(-1) : undefined,
-      hasMore,
-    };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, USERS);
   }
 }
 
@@ -503,6 +545,21 @@ export async function updateItemStatusInFirestore(itemId: string, status: Campus
   }
 }
 
+export async function expireItemsInFirestore(itemIds: string[]): Promise<void> {
+  if (itemIds.length === 0) return;
+  try {
+    for (let i = 0; i < itemIds.length; i += 450) {
+      const batch = writeBatch(db);
+      itemIds.slice(i, i + 450).forEach((id) => {
+        batch.update(doc(db, ITEMS, id), { status: 'expired', updatedAt: serverTimestamp() });
+      });
+      await batch.commit();
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, ITEMS);
+  }
+}
+
 export async function fetchCampusAuditCounts(): Promise<CampusAuditCounts> {
   const [totalSnap, foundSnap, foundRetSnap, totalRetSnap, custodySnap, pendingSnap] = await Promise.all([
     getCountFromServer(collection(db, ITEMS)),
@@ -559,9 +616,7 @@ export function subscribeToRealtimeClaims(
     return () => {};
   }
 
-  const isPrivileged = user?.isAdmin || user?.role === 'admin' || user?.role === 'security';
-
-  if (isPrivileged) {
+  if (canUserModerate(user)) {
     const q = query(collection(db, CLAIMS), orderBy('createdAt', 'desc'), limit(pageSize + 1));
     return onSnapshot(
       q,
@@ -636,10 +691,9 @@ export async function fetchMoreClaimsPage(
 ): Promise<ClaimsPage> {
   const uid = auth.currentUser?.uid;
   if (!uid) return { claims: [], hasMore: false };
-  const isPrivileged = user?.isAdmin || user?.role === 'admin' || user?.role === 'security';
 
   try {
-    if (isPrivileged) {
+    if (canUserModerate(user)) {
       if (!cursor.main) return { claims: [], hasMore: false };
       const snap = await getDocs(
         query(collection(db, CLAIMS), orderBy('createdAt', 'desc'), startAfter(cursor.main), limit(pageSize + 1))
@@ -783,13 +837,21 @@ export async function syncUserProfile(user: User): Promise<void> {
       });
     } else {
       const existingData = existingSnap.data();
-      const preservedDept = user.department?.trim() || existingData.department || '';
-      const preservedMatric = user.matricNumber?.trim() || existingData.matricNumber || '';
+      const preservedDept = (user.department?.trim() || existingData.department || '').slice(0, 100);
+      const preservedMatric = (user.matricNumber?.trim() || existingData.matricNumber || '').slice(0, 20);
+      if (
+        existingData.name === displayName &&
+        existingData.email === authEmail &&
+        (existingData.department || '') === preservedDept &&
+        (existingData.matricNumber || '') === preservedMatric
+      ) {
+        return;
+      }
       await updateDoc(userRef, {
         name: displayName,
         email: authEmail,
-        department: preservedDept.slice(0, 100),
-        matricNumber: preservedMatric.slice(0, 20),
+        department: preservedDept,
+        matricNumber: preservedMatric,
         updatedAt: serverTimestamp(),
       });
     }
@@ -807,8 +869,7 @@ export function subscribeToRealtimeNotifications(
     onSuccess([]);
     return () => {};
   }
-  const isStaff = currentUser.role === 'admin' || currentUser.role === 'security' || currentUser.isAdmin;
-  const q = isStaff
+  const q = canUserModerate(currentUser)
     ? query(collection(db, NOTIFICATIONS), where('recipientUid', 'in', [currentUser.id, 'admin']), orderBy('createdAt', 'desc'), limit(25))
     : query(collection(db, NOTIFICATIONS), where('recipientUid', '==', currentUser.id), orderBy('createdAt', 'desc'), limit(25));
 
@@ -878,6 +939,21 @@ export async function markNotificationAsReadInFirestore(notificationId: string):
     await updateDoc(doc(db, NOTIFICATIONS, notificationId), { read: true });
   } catch (error) {
     reportError(`markNotificationAsReadInFirestore(${notificationId})`, error);
+    throw error;
+  }
+}
+
+export async function markNotificationsReadInFirestore(notificationIds: string[]): Promise<void> {
+  const persistedIds = notificationIds.filter((id) => id && !id.startsWith('local-') && !id.startsWith('notif-'));
+  if (persistedIds.length === 0) return;
+  try {
+    const batch = writeBatch(db);
+    persistedIds.slice(0, 450).forEach((id) => {
+      batch.update(doc(db, NOTIFICATIONS, id), { read: true });
+    });
+    await batch.commit();
+  } catch (error) {
+    reportError('markNotificationsReadInFirestore', error);
     throw error;
   }
 }

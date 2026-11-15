@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { CampusItem, User } from '../types/index.ts';
 import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
@@ -12,6 +12,7 @@ import {
   fetchItemsPage,
   saveItemToFirestore,
   updateItemStatusInFirestore,
+  expireItemsInFirestore,
   fetchItemFullPhoto,
   deleteItemFromFirestore,
 } from '../services/firestoreService.ts';
@@ -41,6 +42,7 @@ export function useItemsFeed({
   const [isLoadingMoreItems, setIsLoadingMoreItems] = useState(false);
   const [itemsError, setItemsError] = useState<string | null>(null);
   const [itemsRetryNonce, setItemsRetryNonce] = useState(0);
+  const hasPaginatedRef = useRef(false);
 
   const mergedItems = useMemo(() => {
     if (olderItems.length === 0) return items;
@@ -53,8 +55,11 @@ export function useItemsFeed({
     safeSetStorage('nilefound_demo_items_v1', JSON.stringify(items));
   }, [items, isDemoMode]);
 
+  const userId = currentUser?.id;
+
   useEffect(() => {
-    if (isDemoMode || !currentUser || !auth.currentUser?.emailVerified) return;
+    if (isDemoMode || !userId || !auth.currentUser?.emailVerified) return;
+    hasPaginatedRef.current = false;
     setItemsError(null);
     setOlderItems([]);
     setItemsCursor(undefined);
@@ -62,8 +67,10 @@ export function useItemsFeed({
       20,
       (liveItems, hasMore, lastDoc) => {
         setItems(liveItems);
-        setItemsCursor((prev) => prev || lastDoc);
-        setHasMoreItems((prevHasMore) => prevHasMore || hasMore);
+        if (!hasPaginatedRef.current) {
+          setItemsCursor(lastDoc);
+          setHasMoreItems(hasMore);
+        }
         setIsLoadingMoreItems(false);
         setItemsError(null);
       },
@@ -73,7 +80,7 @@ export function useItemsFeed({
         setItemsError('Could not load campus notices. Check your connection and try again.');
       }
     );
-  }, [isDemoMode, currentUser, itemsRetryNonce]);
+  }, [isDemoMode, userId, itemsRetryNonce]);
 
   const handleLoadMoreItems = useCallback(async () => {
     if (isDemoMode || isLoadingMoreItems || !hasMoreItems || !itemsCursor) return;
@@ -81,6 +88,7 @@ export function useItemsFeed({
     setItemsError(null);
     try {
       const page = await fetchItemsPage(itemsCursor);
+      hasPaginatedRef.current = true;
       setOlderItems((prev) => {
         const seen = new Set(prev.map((it) => it.id));
         return [...prev, ...page.items.filter((it) => !seen.has(it.id))];
@@ -111,6 +119,7 @@ export function useItemsFeed({
         more = page.hasMore;
         pages += 1;
       }
+      hasPaginatedRef.current = true;
       setOlderItems((prev) => {
         const seen = new Set(prev.map((it) => it.id));
         return [...prev, ...accumulated.filter((it) => !seen.has(it.id))];
@@ -247,10 +256,25 @@ export function useItemsFeed({
   );
 
   const handleExpireOldItems = useCallback(async (): Promise<boolean> => {
-    setItems((prev) => expireOldItems(prev, ITEM_EXPIRY_DAYS));
-    setOlderItems((prev) => expireOldItems(prev, ITEM_EXPIRY_DAYS));
-    return true;
-  }, []);
+    try {
+      const nextItems = expireOldItems(items, ITEM_EXPIRY_DAYS);
+      const nextOlder = expireOldItems(olderItems, ITEM_EXPIRY_DAYS);
+      const expiredIds = [
+        ...nextItems.filter((it, idx) => it.status === 'expired' && items[idx]?.status !== 'expired'),
+        ...nextOlder.filter((it, idx) => it.status === 'expired' && olderItems[idx]?.status !== 'expired'),
+      ].map((it) => it.id);
+
+      if (!isDemoMode && expiredIds.length > 0) {
+        await expireItemsInFirestore(expiredIds);
+      }
+      setItems(nextItems);
+      setOlderItems(nextOlder);
+      return true;
+    } catch (err) {
+      reportError('handleExpireOldItems failed', err);
+      return false;
+    }
+  }, [items, olderItems, isDemoMode]);
 
   const clearItems = useCallback(() => {
     setItems([]);
