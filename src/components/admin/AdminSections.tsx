@@ -35,6 +35,8 @@ export interface AdminTabHandlers {
   onUpdateItemStatus: (itemId: string, status: CampusItem['status']) => Promise<boolean> | void;
   onApproveClaim: (claimId: string, itemId: string) => Promise<boolean> | void;
   onRejectClaim: (claimId: string) => Promise<boolean> | void;
+  onOpenClaimChat?: (claim: ClaimRecord, item?: CampusItem) => void;
+  unreadChatClaimIds?: Set<string>;
   onSwitchPersona?: (user: User) => void;
   devPersonas?: DemoPersonaOption[];
 }
@@ -125,6 +127,7 @@ export const AdminTabBar: React.FC<{
 
 export const AdminTabContent: React.FC<{
   activeTab: DeskTab;
+  transitionClass?: string;
   handlers: AdminTabHandlers;
   currentUser: User;
   isAdmin: boolean;
@@ -134,67 +137,71 @@ export const AdminTabContent: React.FC<{
   pendingClaims: ClaimRecord[];
   desk: ReturnType<typeof useAdminPanel>;
 }> = ({
-  activeTab, handlers, currentUser, isAdmin, isSecurity, canUsePersonaSimulation,
+  activeTab, transitionClass = 'tab-fade-in', handlers, currentUser, isAdmin, isSecurity, canUsePersonaSimulation,
   physicalCustodyItems, pendingClaims, desk,
 }) => (
   <Suspense fallback={<div className="p-6 text-sm text-[#5C554C] dark:text-[#A8A095]">Loading desk section…</div>}>
-    {activeTab === 'claims' && (
-      <ClaimsTab
-        pendingClaims={pendingClaims}
-        items={handlers.items}
-        isAdmin={isAdmin}
-        isDemoMode={Boolean(handlers.isDemoMode)}
-        claimsError={handlers.claimsError ?? null}
-        onRetryClaims={handlers.onRetryClaims}
-        hasMoreClaims={Boolean(handlers.hasMoreClaims)}
-        isLoadingMoreClaims={Boolean(handlers.isLoadingMoreClaims)}
-        onLoadMoreClaims={handlers.onLoadMoreClaims}
-        onFetchClaimPrivateDetails={handlers.onFetchClaimPrivateDetails}
-        onApproveClaim={handlers.onApproveClaim}
-        onRejectClaim={handlers.onRejectClaim}
-        onSuccessNotice={desk.showNotification}
-        onErrorNotice={desk.showError}
-        onRefreshAudit={desk.refreshAuditCounts}
-      />
-    )}
-    {activeTab === 'custody' && (
-      <CustodyTab
-        physicalCustodyItems={physicalCustodyItems}
-        onUpdateItemStatus={handlers.onUpdateItemStatus}
-        onSuccessNotice={desk.showNotification}
-        onErrorNotice={desk.showError}
-        onRefreshAudit={desk.refreshAuditCounts}
-      />
-    )}
-    {activeTab === 'all_items' && (
-      <AllItemsTab
-        items={handlers.items}
-        isAdmin={isAdmin}
-        canInspect={isAdmin || isSecurity}
-        onSelectItem={desk.setSelectedItem}
-        onRequestDelete={desk.setPendingDelete}
-        onUpdateItemStatus={handlers.onUpdateItemStatus}
-        onSuccessNotice={desk.showNotification}
-        onErrorNotice={desk.showError}
-        onRefreshAudit={desk.refreshAuditCounts}
-      />
-    )}
-    {activeTab === 'roles' && isAdmin && (
-      <RolesTab
-        currentUserId={currentUser.id}
-        currentUserEmail={currentUser.email}
-        isAdmin={isAdmin}
-        isMasterOwner={desk.isMasterOwner}
-        onSuccessNotice={desk.showNotification}
-        onErrorNotice={desk.showError}
-      />
-    )}
-    {activeTab === 'personas' && canUsePersonaSimulation && (
-      <PersonasTab
-        devPersonas={handlers.devPersonas ?? []}
-        onSwitchPersona={handlers.onSwitchPersona}
-        onSuccessNotice={desk.showNotification}
-      />
-    )}
+    <div key={activeTab} className={transitionClass}>
+      {activeTab === 'claims' && (
+        <ClaimsTab
+          pendingClaims={pendingClaims}
+          items={handlers.items}
+          isAdmin={isAdmin}
+          isDemoMode={Boolean(handlers.isDemoMode)}
+          claimsError={handlers.claimsError ?? null}
+          onRetryClaims={handlers.onRetryClaims}
+          hasMoreClaims={Boolean(handlers.hasMoreClaims)}
+          isLoadingMoreClaims={Boolean(handlers.isLoadingMoreClaims)}
+          onLoadMoreClaims={handlers.onLoadMoreClaims}
+          onFetchClaimPrivateDetails={handlers.onFetchClaimPrivateDetails}
+          onApproveClaim={handlers.onApproveClaim}
+          onRejectClaim={handlers.onRejectClaim}
+          onOpenClaimChat={handlers.onOpenClaimChat}
+          unreadChatClaimIds={handlers.unreadChatClaimIds}
+          onSuccessNotice={desk.showNotification}
+          onErrorNotice={desk.showError}
+          onRefreshAudit={desk.refreshAuditCounts}
+        />
+      )}
+      {activeTab === 'custody' && (
+        <CustodyTab
+          physicalCustodyItems={physicalCustodyItems}
+          onUpdateItemStatus={handlers.onUpdateItemStatus}
+          onSuccessNotice={desk.showNotification}
+          onErrorNotice={desk.showError}
+          onRefreshAudit={desk.refreshAuditCounts}
+        />
+      )}
+      {activeTab === 'all_items' && (
+        <AllItemsTab
+          items={handlers.items}
+          isAdmin={isAdmin}
+          canInspect={isAdmin || isSecurity}
+          onSelectItem={desk.setSelectedItem}
+          onRequestDelete={desk.setPendingDelete}
+          onUpdateItemStatus={handlers.onUpdateItemStatus}
+          onSuccessNotice={desk.showNotification}
+          onErrorNotice={desk.showError}
+          onRefreshAudit={desk.refreshAuditCounts}
+        />
+      )}
+      {activeTab === 'roles' && isAdmin && (
+        <RolesTab
+          currentUserId={currentUser.id}
+          currentUserEmail={currentUser.email}
+          isAdmin={isAdmin}
+          isMasterOwner={desk.isMasterOwner}
+          onSuccessNotice={desk.showNotification}
+          onErrorNotice={desk.showError}
+        />
+      )}
+      {activeTab === 'personas' && canUsePersonaSimulation && (
+        <PersonasTab
+          devPersonas={handlers.devPersonas ?? []}
+          onSwitchPersona={handlers.onSwitchPersona}
+          onSuccessNotice={desk.showNotification}
+        />
+      )}
+    </div>
   </Suspense>
 );

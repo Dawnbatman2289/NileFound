@@ -99,6 +99,7 @@ export type NotificationType =
   | 'claim_received'
   | 'claim_approved'
   | 'claim_rejected'
+  | 'chat_message'
   | 'match_alert'
   | 'item_returned'
   | 'admin_review';
@@ -118,3 +119,15 @@ export interface CampusNotification {
   linkTab?: 'feed' | 'admin';
   itemTitle?: string;
 }
+
+export type ChatSenderRole = 'Finder' | 'Claimant' | 'Campus Security' | 'Admin';
+
+export interface ClaimMessage {
+  id: string;
+  claimId: string;
+  senderId: string;
+  senderRole: ChatSenderRole;
+  text: string;
+  createdAt: string;
+}
+

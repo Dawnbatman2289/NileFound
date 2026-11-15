@@ -107,7 +107,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, currentUser, exist
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/55 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/55 overflow-y-auto modal-backdrop-enter"
       onClick={onClose}
     >
       <div
@@ -117,7 +117,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, currentUser, exist
         aria-modal="true"
         aria-labelledby="claim-modal-title"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[480px] bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] shadow-xl max-h-[90dvh] overflow-hidden border border-[#C4BBAF] dark:border-[#3E3931] flex flex-col min-w-0 outline-none"
+        className="w-full max-w-[480px] bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] shadow-xl max-h-[90dvh] overflow-hidden border border-[#C4BBAF] dark:border-[#3E3931] flex flex-col min-w-0 outline-none modal-panel-enter"
       >
         <div className="bg-[#FAF6EF] dark:bg-[#141311] px-6 py-4 border-b border-[#C4BBAF] dark:border-[#3E3931] flex items-center justify-between">
           <div className="flex items-center gap-2.5">

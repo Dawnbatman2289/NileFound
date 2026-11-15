@@ -136,7 +136,7 @@
       "properties": {
         "recipientUid": { "type": "string", "maxLength": 128 },
         "fromUid": { "type": "string", "maxLength": 128 },
-        "type": { "type": "string", "enum": ["claim_received", "claim_approved", "claim_rejected", "match_alert", "item_returned", "admin_review"] },
+        "type": { "type": "string", "enum": ["claim_received", "claim_approved", "claim_rejected", "chat_message", "match_alert", "item_returned", "admin_review"] },
         "title": { "type": "string", "minLength": 2, "maxLength": 120 },
         "message": { "type": "string", "minLength": 2, "maxLength": 500 },
         "read": { "type": "boolean" },
@@ -147,6 +147,18 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["recipientUid", "fromUid", "type", "title", "message", "read", "createdAt"]
+    },
+    "ClaimMessage": {
+      "title": "ClaimMessage",
+      "description": "Private real-time handover message scoped strictly to a claim's claimant, item finder, and authorized campus staff.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderRole": { "type": "string", "enum": ["Finder", "Claimant", "Campus Security", "Admin"] },
+        "text": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "senderRole", "text", "createdAt"]
     }
   },
   "firestore": {
@@ -169,6 +181,10 @@
     "/claims/{claimId}": {
       "schema": "Claim",
       "description": "Ownership claims readable only by the claimant, item finder, or campus staff/admins."
+    },
+    "/claims/{claimId}/messages/{messageId}": {
+      "schema": "ClaimMessage",
+      "description": "Private handover chat messages between the claimant, finder, and authorized staff/admins."
     },
     "/roles/{userId}": {
       "schema": "Role",

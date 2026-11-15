@@ -17,15 +17,29 @@ import { useItemsFeed } from './hooks/useItemsFeed.ts';
 import { useClaims } from './hooks/useClaims.ts';
 import { fetchApprovedHandoverContact } from './services/firestoreService.ts';
 import { safeSetStorage } from './utils/storage.ts';
+import {
+  getAppTabTransitionClass,
+  getUnreadChatClaimIds,
+  resolveChatNotificationRecipient,
+  shouldSendChatNotification,
+} from './utils/chat.ts';
 
 const AdminPanel = lazy(() => import('./components/AdminPanel.tsx').then((m) => ({ default: m.AdminPanel })));
 const PrivacyModal = lazy(() => import('./components/PrivacyModal.tsx').then((m) => ({ default: m.PrivacyModal })));
 const ReportModal = lazy(() => import('./components/ReportModal.tsx').then((m) => ({ default: m.ReportModal })));
 const ClaimModal = lazy(() => import('./components/ClaimModal.tsx').then((m) => ({ default: m.ClaimModal })));
+const ClaimChatModal = lazy(() => import('./components/ClaimChatModal.tsx').then((m) => ({ default: m.ClaimChatModal })));
 const LoginPage = lazy(() => import('./components/LoginPage.tsx').then((m) => ({ default: m.LoginPage })));
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<AppTab>('feed');
+  const [activeTab, setActiveTabState] = useState<AppTab>('feed');
+  const prevTabRef = useRef<AppTab>('feed');
+  const setActiveTab = useCallback((nextTab: AppTab) => {
+    setActiveTabState((curr) => {
+      prevTabRef.current = curr;
+      return nextTab;
+    });
+  }, []);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [lowDataMode, setLowDataMode] = useState(() => {
     try { return localStorage.getItem('nilefound_low_data') === 'true'; } catch { return false; }
@@ -37,7 +51,9 @@ export default function App() {
   const [reportPrefill, setReportPrefill] = useState<Partial<Pick<CampusItem, 'type' | 'title' | 'category' | 'location'>> | null>(null);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [selectedItemForClaim, setSelectedItemForClaim] = useState<CampusItem | null>(null);
+  const [activeChatTarget, setActiveChatTarget] = useState<{ claim: ClaimRecord; item?: CampusItem } | null>(null);
   const [savedDraftCount, setSavedDraftCount] = useState(0);
+  const lastChatNotifSentRef = useRef<Record<string, number>>({});
 
   const sessionHooksRef = useRef<{
     seedDemo: (demoItems: CampusItem[], demoClaims: ClaimRecord[]) => void;
@@ -104,7 +120,48 @@ export default function App() {
     return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); };
   }, []);
 
-  const handleSelectNotificationItem = (itemId?: string, type?: string) => {
+  const unreadChatClaimIds = getUnreadChatClaimIds(
+    notifState.notifications,
+    authSession.currentUser?.id,
+    authSession.isPrivileged
+  );
+
+  const activeChatClaimId = activeChatTarget?.claim.id;
+  const markChatRead = notifState.markClaimChatNotificationsRead;
+  useEffect(() => {
+    if (activeChatClaimId) {
+      markChatRead(activeChatClaimId);
+    }
+  }, [activeChatClaimId, markChatRead]);
+
+  const handleResetAllDemoData = useCallback(async () => {
+    lastChatNotifSentRef.current = {};
+    notifState.clearNotifications();
+    await import('./components/ClaimChatModal.tsx')
+      .then((m) => m.resetDemoChatThreads())
+      .catch((err) => reportError('Reset chat threads failed', err));
+    await authSession.handleResetDemoData();
+  }, [notifState, authSession]);
+
+  const handleAppLogout = useCallback(async () => {
+    lastChatNotifSentRef.current = {};
+    if (import.meta.env.DEV) {
+      await import('./components/ClaimChatModal.tsx')
+        .then((m) => m.resetDemoChatThreads())
+        .catch(() => {});
+    }
+    await authSession.handleLogout();
+  }, [authSession]);
+
+  const handleSelectNotificationItem = (itemId?: string, type?: string, claimId?: string) => {
+    if (type === 'chat_message' && claimId) {
+      const targetClaim = claimsState.claims.find((c) => c.id === claimId);
+      if (targetClaim) {
+        const targetItem = itemsFeed.mergedItems.find((i) => i.id === (itemId || targetClaim.itemId));
+        setActiveChatTarget({ claim: targetClaim, item: targetItem });
+        return;
+      }
+    }
     if (type === 'admin_review' && authSession.isPrivileged) return setActiveTab('admin');
     if (!itemId) return;
     setActiveTab('feed');
@@ -132,7 +189,7 @@ export default function App() {
             onMarkAllAsRead={notifState.markAllAsRead} onMarkAsRead={notifState.markAsRead}
             onSelectNotificationItem={handleSelectNotificationItem}
             isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode((p) => !p)}
-            onLogout={authSession.handleLogout}
+            onLogout={handleAppLogout}
           />
 
           {authSession.roleError && (
@@ -144,28 +201,47 @@ export default function App() {
             </div>
           )}
 
-          {authSession.canUsePersonaSimulation && authSession.isSimulating && (
-            <div className="bg-[#FAF6EF] dark:bg-[#1E1C18] border-b border-[#C4BBAF] dark:border-[#3E3931] px-4 py-2.5 text-sm flex flex-wrap items-center justify-between gap-3 shadow-xs">
-              <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#E8A317]" />
-                <span className="font-bold text-[#1F1B16] dark:text-[#F5F1EA]">Dev Simulation:</span>
-                <span className="text-[#4A443C] dark:text-[#CEC7BB]">
-                  Viewing as <strong className="text-[#0F6E6E] dark:text-[#199595] font-bold">{authSession.currentUser?.name}</strong> ({authSession.currentUser?.role})
+          {import.meta.env.DEV && authSession.canUsePersonaSimulation && authSession.isSimulating && (
+            <div className="bg-[#FAF6EF] dark:bg-[#1E1C18] border-b border-[#C4BBAF] dark:border-[#3E3931] px-4 py-2.5 text-sm flex flex-wrap items-center justify-between gap-2.5 shadow-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 font-bold text-[#1F1B16] dark:text-[#F5F1EA]">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#E8A317]" />
+                  Test Mode:
                 </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {authSession.devPersonas.map((persona) => {
+                    const isCurrent = authSession.currentUser?.id === persona.user.id;
+                    return (
+                      <button
+                        key={persona.user.id}
+                        type="button"
+                        onClick={() => authSession.handleSwitchPersona(persona.user)}
+                        aria-pressed={isCurrent}
+                        className={`min-h-[44px] px-3 py-1.5 rounded-[10px] text-xs font-semibold border transition-colors cursor-pointer ${
+                          isCurrent
+                            ? 'bg-[#0F6E6E] text-white border-[#0F6E6E]'
+                            : 'bg-white dark:bg-[#28241F] text-[#1F1B16] dark:text-[#F5F1EA] border-[#C4BBAF] dark:border-[#3E3931] hover:border-[#0F6E6E]'
+                        }`}
+                      >
+                        {persona.user.name.split(' ')[0]} · {persona.badge}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setActiveTab('admin')} className="bg-white dark:bg-[#28241F] hover:bg-[#F5EFE4] dark:hover:bg-[#332E27] text-[#1F1B16] dark:text-[#F5F1EA] px-3 py-1.5 min-h-[44px] rounded-[10px] text-sm font-medium border border-[#857C70] dark:border-[#787065] transition-colors cursor-pointer btn-campus">
-                  Switch Persona
+                <button type="button" onClick={handleResetAllDemoData} className="bg-white dark:bg-[#28241F] hover:bg-[#F5EFE4] dark:hover:bg-[#332E27] text-[#1F1B16] dark:text-[#F5F1EA] px-3 py-1.5 min-h-[44px] rounded-[10px] text-xs font-medium border border-[#857C70] dark:border-[#787065] transition-colors cursor-pointer btn-campus">
+                  Reset Demo
                 </button>
-                <button type="button" onClick={authSession.handleExitSimulation} className="bg-[#0F6E6E] hover:bg-[#0C5656] text-white px-3.5 py-1.5 min-h-[44px] rounded-[10px] text-sm font-semibold transition-all cursor-pointer shadow-xs btn-campus">
-                  Return to Master Admin
+                <button type="button" onClick={authSession.handleExitSimulation} className="bg-[#0F6E6E] hover:bg-[#0C5656] text-white px-3.5 py-1.5 min-h-[44px] rounded-[10px] text-xs font-semibold transition-all cursor-pointer shadow-xs btn-campus">
+                  Exit Test Mode
                 </button>
               </div>
             </div>
           )}
 
-          <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto p-4 sm:p-6 lg:p-8 pb-24 sm:pb-6">
-            <div key={activeTab} className="tab-fade-in">
+          <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto p-4 sm:p-6 lg:p-8 pb-24 sm:pb-6 overflow-x-clip">
+            <div key={activeTab} className={getAppTabTransitionClass(prevTabRef.current, activeTab)}>
               {activeTab === 'feed' && (
                 <FeedView
                   items={itemsFeed.mergedItems} claims={claimsState.claims} lowDataMode={lowDataMode}
@@ -178,6 +254,8 @@ export default function App() {
                   onFetchClaimPrivateDetails={claimsState.handleFetchClaimPrivateDetails}
                   onApproveClaim={claimsState.handleApproveClaim} onRejectClaim={claimsState.handleRejectClaim}
                   onUpdateItemStatus={itemsFeed.handleUpdateItemStatus}
+                  onOpenClaimChat={(claim, item) => setActiveChatTarget({ claim, item })}
+                  unreadChatClaimIds={unreadChatClaimIds}
                   currentUser={authSession.currentUser} isDemoMode={authSession.isDemoMode}
                   onNavigateToLogin={() => setActiveTab('login')}
                   onLoadMore={itemsFeed.handleLoadMoreItems} onLoadAll={itemsFeed.handleLoadAllItems}
@@ -197,7 +275,10 @@ export default function App() {
                     onFetchFullPhoto={itemsFeed.handleFetchFullPhoto} onLoadAll={itemsFeed.handleLoadAllItems}
                     onUpdateItemStatus={itemsFeed.handleUpdateItemStatus} onDeleteItem={itemsFeed.handleDeleteItem}
                     onApproveClaim={claimsState.handleApproveClaim} onRejectClaim={claimsState.handleRejectClaim}
-                    onExpireOldItems={itemsFeed.handleExpireOldItems} onNavigateToLogin={() => setActiveTab('login')}
+                    onExpireOldItems={itemsFeed.handleExpireOldItems}
+                    onOpenClaimChat={(claim, item) => setActiveChatTarget({ claim, item })}
+                    unreadChatClaimIds={unreadChatClaimIds}
+                    onNavigateToLogin={() => setActiveTab('login')}
                     onSwitchPersona={authSession.canUsePersonaSimulation ? authSession.handleSwitchPersona : undefined}
                     devPersonas={authSession.devPersonas}
                   />
@@ -213,7 +294,10 @@ export default function App() {
                       authSession.setCurrentUser(user);
                       setActiveTab(user.role === 'admin' || user.role === 'security' ? 'admin' : 'feed');
                     }}
-                    onLogout={authSession.handleLogout} onNavigateToFeed={() => setActiveTab('feed')}
+                    onLogout={handleAppLogout}
+                    onNavigateToFeed={() => setActiveTab('feed')}
+                    devPersonas={authSession.devPersonas}
+                    onSwitchDemoPersona={import.meta.env.DEV ? authSession.handleSwitchPersona : undefined}
                   />
                 </Suspense>
               )}
@@ -236,7 +320,51 @@ export default function App() {
               />
             </Suspense>
           )}
-          <NotificationToast notification={notifState.activeToast} onDismiss={notifState.dismissToast} onView={(notif) => (notif.linkTab === 'admin' && authSession.isPrivileged ? setActiveTab('admin') : handleSelectNotificationItem(notif.itemId, notif.type))} />
+          {activeChatTarget && (
+            <Suspense fallback={null}>
+              <ClaimChatModal
+                claim={claimsState.claims.find((c) => c.id === activeChatTarget.claim.id) || activeChatTarget.claim}
+                item={itemsFeed.mergedItems.find((i) => i.id === activeChatTarget.claim.itemId) || activeChatTarget.item}
+                currentUser={authSession.currentUser}
+                isDemoMode={authSession.isDemoMode}
+                onMessageSent={(claim, item) => {
+                  const senderId = authSession.currentUser?.id;
+                  if (!senderId) return;
+                  const recipientUid = resolveChatNotificationRecipient(claim, senderId, item?.holdingLocation);
+                  if (!recipientUid) return;
+                  const key = `${claim.id}:${senderId}:${recipientUid}`;
+                  const now = Date.now();
+                  if (!shouldSendChatNotification(lastChatNotifSentRef.current[key], now)) return;
+                  lastChatNotifSentRef.current[key] = now;
+                  notifState.dispatchNotification({
+                    recipientUid,
+                    fromUid: senderId,
+                    type: 'chat_message',
+                    title: 'New handover message',
+                    message: 'You have a new message in your item handover chat.',
+                    itemId: claim.itemId,
+                    claimId: claim.id,
+                  });
+                }}
+                onClose={() => setActiveChatTarget(null)}
+              />
+            </Suspense>
+          )}
+          <NotificationToast
+            notification={notifState.activeToast}
+            onDismiss={notifState.dismissToast}
+            onView={(notif) => {
+              if (notif.type === 'chat_message' && notif.claimId) {
+                handleSelectNotificationItem(notif.itemId, notif.type, notif.claimId);
+                return;
+              }
+              if (notif.linkTab === 'admin' && authSession.isPrivileged) {
+                setActiveTab('admin');
+                return;
+              }
+              handleSelectNotificationItem(notif.itemId, notif.type, notif.claimId);
+            }}
+          />
           {isPrivacyModalOpen && (
             <Suspense fallback={null}><PrivacyModal isOpen={isPrivacyModalOpen} onClose={() => setIsPrivacyModalOpen(false)} /></Suspense>
           )}

@@ -9,6 +9,7 @@
 import React from 'react';
 import { Shield, Check, AlertCircle } from 'lucide-react';
 import { User } from '../types/index.ts';
+import type { DemoPersonaOption } from '../data/demoPersonas.ts';
 import { useLoginAuth } from '../hooks/useLoginAuth.ts';
 import { SignedInCard } from './login/SignedInCard.tsx';
 import { InboxVerificationCard } from './login/InboxVerificationCard.tsx';
@@ -18,6 +19,8 @@ interface LoginPageProps {
   onLogin: (user: User) => void;
   onLogout: () => void;
   onNavigateToFeed: () => void;
+  devPersonas?: DemoPersonaOption[];
+  onSwitchDemoPersona?: (user: User) => void;
 }
 
 const INPUT_CLASS =
@@ -28,6 +31,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onLogin,
   onLogout,
   onNavigateToFeed,
+  devPersonas = [],
+  onSwitchDemoPersona,
 }) => {
   const authState = useLoginAuth({ onLogin, onLogout, onNavigateToFeed });
 
@@ -136,6 +141,40 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <button type="button" onClick={authState.handleGoogleSignIn} disabled={authState.isSigningIn} className="w-full min-h-[44px] bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] dark:hover:bg-[#332E27] text-[#1F1B16] dark:text-[#F5F1EA] border border-[#857C70] dark:border-[#787065] rounded-[10px] text-sm font-medium cursor-pointer">
                   Continue with Google
                 </button>
+
+                {import.meta.env.DEV && onSwitchDemoPersona && devPersonas.length > 0 && (
+                  <div className="pt-4 border-t border-[#C4BBAF] dark:border-[#3E3931] space-y-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-sm font-serif font-bold text-[#1F1B16] dark:text-[#F5F1EA]">
+                        Test Mode (Local Dev Preview)
+                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded-[10px] bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C] border border-[#E8A317]/30 font-medium">
+                        Dev only
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#5C554C] dark:text-[#A8A095] leading-relaxed">
+                      Switch between Student, Finder, Security, and Admin below to test claims, handover chat, and unread alerts without separate accounts.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {devPersonas.map((persona) => (
+                        <button
+                          key={persona.user.id}
+                          type="button"
+                          onClick={() => onSwitchDemoPersona(persona.user)}
+                          className="min-h-[44px] px-3 py-2 rounded-[10px] border border-[#C4BBAF] dark:border-[#3E3931] bg-[#FAF6EF] dark:bg-[#141311] hover:border-[#0F6E6E] text-left transition-colors cursor-pointer flex items-center gap-2.5"
+                        >
+                          <span className={`w-7 h-7 rounded-[8px] flex items-center justify-center text-xs font-bold border shrink-0 ${persona.badgeClass}`}>
+                            {persona.initial}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-sm font-semibold text-[#1F1B16] dark:text-[#F5F1EA] truncate">{persona.user.name}</span>
+                            <span className="block text-xs text-[#0F6E6E] dark:text-[#199595] font-medium">{persona.badge}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

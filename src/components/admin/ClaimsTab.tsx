@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, MessageSquare, XCircle } from 'lucide-react';
 import { CampusItem, ClaimRecord } from '../../types/index.ts';
 import { formatDateDDMMYYYY } from '../../utils/dateFormatter.ts';
 import { fetchItemPrivateDetails } from '../../services/firestoreService.ts';
@@ -19,6 +19,8 @@ interface ClaimsTabProps {
   onFetchClaimPrivateDetails?: (itemId: string, claimId: string) => Promise<void>;
   onApproveClaim: (claimId: string, itemId: string) => Promise<boolean> | void;
   onRejectClaim: (claimId: string) => Promise<boolean> | void;
+  onOpenClaimChat?: (claim: ClaimRecord, item?: CampusItem) => void;
+  unreadChatClaimIds?: Set<string>;
   onSuccessNotice: (msg: string) => void;
   onErrorNotice: (msg: string) => void;
   onRefreshAudit: () => void;
@@ -37,6 +39,8 @@ export const ClaimsTab: React.FC<ClaimsTabProps> = ({
   onFetchClaimPrivateDetails,
   onApproveClaim,
   onRejectClaim,
+  onOpenClaimChat,
+  unreadChatClaimIds,
   onSuccessNotice,
   onErrorNotice,
   onRefreshAudit,
@@ -153,6 +157,21 @@ export const ClaimsTab: React.FC<ClaimsTabProps> = ({
                     </span>
                   ) : (
                     <>
+                      {onOpenClaimChat && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenClaimChat(claim, matchedItem)}
+                          className="flex items-center gap-1.5 bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] dark:hover:bg-[#332E27] text-[#0F6E6E] dark:text-[#199595] text-sm font-semibold px-3.5 py-2.5 rounded-[10px] border border-[#0F6E6E]/40 transition-colors min-h-[44px] cursor-pointer btn-campus"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          <span>Chat</span>
+                          {unreadChatClaimIds?.has(claim.id) && (
+                            <span className="bg-[#0F6E6E] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-[6px] uppercase">
+                              New
+                            </span>
+                          )}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={async () => {

@@ -1,5 +1,5 @@
 import React, { memo, useState } from 'react';
-import { MapPin, Calendar, Lock } from 'lucide-react';
+import { MapPin, Calendar, Lock, MessageSquare } from 'lucide-react';
 import { CampusItem, ClaimRecord, User } from '../types/index.ts';
 import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
 import { reportError } from './ErrorBoundary.tsx';
@@ -7,6 +7,7 @@ import {
   getClaimButtonState,
   ItemCardMedia,
   ApprovedHandoverBanner,
+  FinderApprovedHandoverBanner,
   FinderClaimReviewCard,
   ItemCardAction,
 } from './ItemCardSections.tsx';
@@ -18,7 +19,9 @@ interface ItemCardProps {
   isDemoMode?: boolean;
   myApprovedClaim?: ClaimRecord;
   myPendingClaim?: ClaimRecord;
+  approvedFinderClaim?: ClaimRecord;
   pendingFinderClaims: ClaimRecord[];
+  unreadChatClaimIds?: Set<string>;
   handoverInfo?: { authorName?: string; authorEmail?: string } | null;
   isLoadingHandover: boolean;
   onSelectDetail: (item: CampusItem) => void;
@@ -30,6 +33,7 @@ interface ItemCardProps {
   onApproveClaim?: (claimId: string, itemId: string) => Promise<boolean> | void;
   onRejectClaim?: (claimId: string) => Promise<boolean> | void;
   onUpdateItemStatus?: (itemId: string, status: CampusItem['status']) => Promise<boolean> | void;
+  onOpenClaimChat?: (claim: ClaimRecord, item: CampusItem) => void;
 }
 
 const holdingLocationLabel = (loc: CampusItem['holdingLocation'], isFoundIdCard: boolean): string => {
@@ -41,10 +45,10 @@ const holdingLocationLabel = (loc: CampusItem['holdingLocation'], isFoundIdCard:
 };
 
 export const ItemCard: React.FC<ItemCardProps> = memo(({
-  item, lowDataMode, currentUser, isDemoMode, myApprovedClaim, myPendingClaim,
-  pendingFinderClaims, handoverInfo, isLoadingHandover, onSelectDetail, onClaimItem,
+  item, lowDataMode, currentUser, isDemoMode, myApprovedClaim, myPendingClaim, approvedFinderClaim,
+  pendingFinderClaims, unreadChatClaimIds, handoverInfo, isLoadingHandover, onSelectDetail, onClaimItem,
   onOpenReportModal, onFoundMatch, onRequestHandoverContact, onFetchClaimPrivateDetails,
-  onApproveClaim, onRejectClaim, onUpdateItemStatus,
+  onApproveClaim, onRejectClaim, onUpdateItemStatus, onOpenClaimChat,
 }) => {
   const [loadingClaimId, setLoadingClaimId] = useState<string | null>(null);
   const [cardActionError, setCardActionError] = useState<string | null>(null);
@@ -127,8 +131,45 @@ export const ItemCard: React.FC<ItemCardProps> = memo(({
             item={item}
             handoverInfo={handoverInfo}
             isLoadingHandover={isLoadingHandover}
+            hasUnreadChat={unreadChatClaimIds?.has(myApprovedClaim.id)}
             onRequestHandoverContact={onRequestHandoverContact}
+            onOpenChat={onOpenClaimChat ? () => onOpenClaimChat(myApprovedClaim, item) : undefined}
           />
+        )}
+
+        {approvedFinderClaim && (
+          <FinderApprovedHandoverBanner
+            item={item}
+            claim={approvedFinderClaim}
+            isDemoMode={isDemoMode}
+            hasUnreadChat={unreadChatClaimIds?.has(approvedFinderClaim.id)}
+            onOpenChat={onOpenClaimChat ? () => onOpenClaimChat(approvedFinderClaim, item) : undefined}
+            onMarkReturned={
+              onUpdateItemStatus
+                ? async () => {
+                    setCardActionError(null);
+                    const ok = await onUpdateItemStatus(item.id, 'returned');
+                    if (ok === false) setCardActionError('Could not confirm handover. Try again.');
+                  }
+                : undefined
+            }
+          />
+        )}
+
+        {myPendingClaim && onOpenClaimChat && item.status !== 'returned' && item.status !== 'expired' && (
+          <button
+            type="button"
+            onClick={() => onOpenClaimChat(myPendingClaim, item)}
+            className="w-full min-h-[44px] bg-white dark:bg-[#1E1C18] hover:bg-[#FAF6EF] dark:hover:bg-[#28241F] text-[#0F6E6E] dark:text-[#199595] border border-[#0F6E6E]/40 rounded-[10px] font-semibold text-sm inline-flex items-center justify-center gap-1.5 cursor-pointer btn-campus"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Message Finder / Desk</span>
+            {unreadChatClaimIds?.has(myPendingClaim.id) && (
+              <span className="bg-[#E8A317] text-[#1F1B16] text-xs font-bold px-2 py-0.5 rounded-full">
+                New
+              </span>
+            )}
+          </button>
         )}
 
         {pendingFinderClaims.map((fc) => (
@@ -137,10 +178,12 @@ export const ItemCard: React.FC<ItemCardProps> = memo(({
             claim={fc}
             itemId={item.id}
             isDemoMode={isDemoMode}
+            hasUnreadChat={unreadChatClaimIds?.has(fc.id)}
             loadingClaimId={loadingClaimId}
             onLoadPrivate={handleLoadClaimPrivate}
             onApproveClaim={onApproveClaim}
             onRejectClaim={onRejectClaim}
+            onOpenChat={onOpenClaimChat ? (claimRecord) => onOpenClaimChat(claimRecord, item) : undefined}
             onActionError={setCardActionError}
           />
         ))}

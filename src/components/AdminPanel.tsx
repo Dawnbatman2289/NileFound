@@ -11,6 +11,7 @@ import { CampusItem, ClaimRecord, User } from '../types/index.ts';
 import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
 import type { DemoPersonaOption } from '../data/demoPersonas.ts';
 import { useAdminPanel } from '../hooks/useAdminPanel.ts';
+import { getDeskTabTransitionClass } from '../utils/chat.ts';
 import { ADMIN_CARD } from './admin/adminStyles.ts';
 import { DeleteConfirmModal } from './admin/DeleteConfirmModal.tsx';
 import { ItemDetailModal } from './admin/ItemDetailModal.tsx';
@@ -42,6 +43,8 @@ interface AdminPanelProps {
   onApproveClaim: (claimId: string, itemId: string) => Promise<boolean> | void;
   onRejectClaim: (claimId: string) => Promise<boolean> | void;
   onExpireOldItems: () => Promise<boolean> | void;
+  onOpenClaimChat?: (claim: ClaimRecord, item?: CampusItem) => void;
+  unreadChatClaimIds?: Set<string>;
   onNavigateToLogin: () => void;
   onSwitchPersona?: (user: User) => void;
   devPersonas?: DemoPersonaOption[];
@@ -50,6 +53,11 @@ interface AdminPanelProps {
 export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const { currentUser, items, claims, onUpdateItemStatus, onDeleteItem, onApproveClaim, onRejectClaim, onExpireOldItems, onNavigateToLogin } = props;
   const [activeTab, setActiveTab] = useState<DeskTab>('claims');
+  const [prevTab, setPrevTab] = useState<DeskTab>('claims');
+  const handleSelectDeskTab = (next: DeskTab) => {
+    setPrevTab(activeTab);
+    setActiveTab(next);
+  };
   const isAdmin = currentUser?.role === 'admin' || Boolean(currentUser?.isAdmin);
   const isSecurity = currentUser?.role === 'security';
   const canUsePersonaSimulation = Boolean(import.meta.env.DEV && props.onSwitchPersona && (props.devPersonas?.length ?? 0) > 0);
@@ -135,7 +143,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
       <AdminTabBar
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={handleSelectDeskTab}
         pendingCount={pendingClaims.length}
         custodyCount={physicalCustodyItems.length}
         itemsCount={items.length}
@@ -159,6 +167,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
       <AdminTabContent
         activeTab={activeTab}
+        transitionClass={getDeskTabTransitionClass(prevTab, activeTab)}
         handlers={props}
         currentUser={currentUser}
         isAdmin={isAdmin}
@@ -188,6 +197,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
           onApproveClaim={onApproveClaim}
           onRejectClaim={onRejectClaim}
           onUpdateItemStatus={onUpdateItemStatus}
+          onOpenClaimChat={props.onOpenClaimChat}
+          unreadChatClaimIds={props.unreadChatClaimIds}
           onSuccessNotice={desk.showNotification}
           onErrorNotice={desk.showError}
           onRefreshAudit={desk.refreshAuditCounts}

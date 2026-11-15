@@ -37,7 +37,7 @@ export const FeedDetailModal: React.FC<FeedDetailModalProps> = ({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 sm:p-5 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 sm:p-5 overflow-y-auto modal-backdrop-enter" onClick={onClose}>
       <div
         ref={dialogRef}
         tabIndex={-1}
@@ -45,7 +45,7 @@ export const FeedDetailModal: React.FC<FeedDetailModalProps> = ({
         aria-modal="true"
         aria-labelledby="feed-detail-title"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] border border-[#C4BBAF] dark:border-[#3E3931] shadow-xl overflow-hidden flex flex-col max-h-[90dvh] outline-none"
+        className="w-full max-w-lg bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] rounded-[12px] border border-[#C4BBAF] dark:border-[#3E3931] shadow-xl overflow-hidden flex flex-col max-h-[90dvh] outline-none modal-panel-enter"
       >
       <div className="bg-[#FAF6EF] dark:bg-[#141311] px-5 py-4 border-b border-[#C4BBAF] dark:border-[#3E3931] flex items-center justify-between gap-3">
         <h3 id="feed-detail-title" className="font-serif font-bold text-base truncate">

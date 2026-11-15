@@ -376,6 +376,59 @@ service cloud.firestore {
         isAdmin() ||
         (isVerifiedUser() && resource.data.finderId == request.auth.uid)
       );
+
+      // Private handover chat messages scoped to the claim's claimant, finder, and authorized staff/admins
+      function isValidClaimMessage(data, claimData) {
+        return data.keys().hasAll(['senderId', 'senderRole', 'text', 'createdAt'])
+          && data.keys().hasOnly(['senderId', 'senderRole', 'text', 'createdAt'])
+          && data.senderId is string && data.senderId == request.auth.uid
+          && data.senderRole in ['Finder', 'Claimant', 'Campus Security', 'Admin']
+          && (
+            (data.senderRole == 'Claimant' && claimData.claimantId == request.auth.uid)
+            || (data.senderRole == 'Finder' && claimData.finderId == request.auth.uid)
+            || (data.senderRole == 'Campus Security' && isSecurity())
+            || (data.senderRole == 'Admin' && isAdmin())
+          )
+          && data.text is string && data.text.size() >= 1 && data.text.size() <= 500
+          && data.createdAt is timestamp;
+      }
+
+      function isClaimChatParticipant(claimData) {
+        return claimData.claimantId == request.auth.uid
+          || claimData.finderId == request.auth.uid
+          || isAdmin()
+          || (
+            isSecurity()
+            && exists(/databases/$(database)/documents/items/$(claimData.itemId))
+            && get(/databases/$(database)/documents/items/$(claimData.itemId)).data.holdingLocation != 'finder_holding'
+          );
+      }
+
+      match /messages/{messageId} {
+        allow get: if isValidId(claimId) && isValidId(messageId) && isVerifiedUser()
+          && exists(/databases/$(database)/documents/claims/$(claimId))
+          && isClaimChatParticipant(get(/databases/$(database)/documents/claims/$(claimId)).data);
+        allow list: if isValidId(claimId) && isVerifiedUser() && request.query.limit <= 50
+          && exists(/databases/$(database)/documents/claims/$(claimId))
+          && isClaimChatParticipant(get(/databases/$(database)/documents/claims/$(claimId)).data);
+        allow create: if isValidId(claimId) && isValidId(messageId) && isVerifiedUser()
+          && exists(/databases/$(database)/documents/claims/$(claimId))
+          && get(/databases/$(database)/documents/claims/$(claimId)).data.status in ['pending', 'approved']
+          && exists(/databases/$(database)/documents/items/$(get(/databases/$(database)/documents/claims/$(claimId)).data.itemId))
+          && !(get(/databases/$(database)/documents/items/$(get(/databases/$(database)/documents/claims/$(claimId)).data.itemId)).data.status in ['returned', 'expired'])
+          && isClaimChatParticipant(get(/databases/$(database)/documents/claims/$(claimId)).data)
+          && isValidClaimMessage(incoming(), get(/databases/$(database)/documents/claims/$(claimId)).data)
+          && incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if isValidId(claimId) && isValidId(messageId) && (
+          isAdmin()
+          || (
+            isVerifiedUser()
+            && exists(/databases/$(database)/documents/claims/$(claimId))
+            && get(/databases/$(database)/documents/claims/$(claimId)).data.finderId == request.auth.uid
+          )
+        );
+      }
     }
 
     // Role assignment collection (/roles/{userId}) - only Master Admin writes
@@ -453,7 +506,7 @@ service cloud.firestore {
         && data.keys().hasOnly(['recipientUid', 'fromUid', 'type', 'title', 'message', 'read', 'createdAt', 'itemId', 'itemTitle', 'claimId', 'sourceItemId'])
         && data.fromUid is string && data.fromUid == request.auth.uid
         && data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid.size() <= 128
-        && data.type in ['claim_received', 'claim_approved', 'claim_rejected', 'match_alert', 'item_returned', 'admin_review']
+        && data.type in ['claim_received', 'claim_approved', 'claim_rejected', 'chat_message', 'match_alert', 'item_returned', 'admin_review']
         && data.title is string && data.title.size() >= 2 && data.title.size() <= 120
         && !data.title.matches('.*@.*')
         && data.message is string && data.message.size() >= 2 && data.message.size() <= 500
@@ -468,6 +521,7 @@ service cloud.firestore {
           (data.type == 'claim_received' && data.title == 'New claim on your item' && data.message == 'A new ownership claim was filed for your item.')
           || (data.type == 'claim_approved' && data.title == 'Claim approved' && data.message == 'Your ownership claim was approved.')
           || (data.type == 'claim_rejected' && data.title == 'Claim rejected' && data.message == 'Your ownership claim was rejected.')
+          || (data.type == 'chat_message' && data.title == 'New handover message' && data.message == 'You have a new message in your item handover chat.')
           || (data.type == 'match_alert' && data.title == 'Possible item match' && data.message == 'A possible match was found for your report.')
           || (data.type == 'item_returned' && data.title == 'Item returned' && data.message == 'Your reported item was marked returned.')
           || (data.type == 'admin_review' && data.title == 'Review needed' && data.message == 'A campus record needs administrator review.')
@@ -534,6 +588,34 @@ service cloud.firestore {
           && (
             isStaffOrAdmin()
             || get(/databases/$(database)/documents/claims/$(data.claimId)).data.finderId == request.auth.uid
+          )
+        )
+        || (
+          data.type == 'chat_message'
+          && 'claimId' in data
+          && 'itemId' in data
+          && data.recipientUid != request.auth.uid
+          && exists(/databases/$(database)/documents/claims/$(data.claimId))
+          && get(/databases/$(database)/documents/claims/$(data.claimId)).data.itemId == data.itemId
+          && get(/databases/$(database)/documents/claims/$(data.claimId)).data.status in ['pending', 'approved']
+          && exists(/databases/$(database)/documents/items/$(data.itemId))
+          && !(get(/databases/$(database)/documents/items/$(data.itemId)).data.status in ['returned', 'expired'])
+          && (
+            get(/databases/$(database)/documents/claims/$(data.claimId)).data.claimantId == request.auth.uid
+            || get(/databases/$(database)/documents/claims/$(data.claimId)).data.finderId == request.auth.uid
+            || isAdmin()
+            || (
+              isSecurity()
+              && get(/databases/$(database)/documents/items/$(data.itemId)).data.holdingLocation != 'finder_holding'
+            )
+          )
+          && (
+            data.recipientUid == get(/databases/$(database)/documents/claims/$(data.claimId)).data.claimantId
+            || data.recipientUid == get(/databases/$(database)/documents/claims/$(data.claimId)).data.finderId
+            || (
+              data.recipientUid == 'admin'
+              && get(/databases/$(database)/documents/items/$(data.itemId)).data.holdingLocation != 'finder_holding'
+            )
           )
         );
     }

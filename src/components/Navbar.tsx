@@ -30,7 +30,7 @@ interface NavbarProps {
   notifications?: CampusNotification[];
   onMarkAllAsRead?: () => void;
   onMarkAsRead?: (id: string) => void;
-  onSelectNotificationItem?: (itemId?: string, type?: string) => void;
+  onSelectNotificationItem?: (itemId?: string, type?: string, claimId?: string) => void;
   isDarkMode?: boolean;
   onToggleDarkMode?: () => void;
   onLogout?: () => void;
@@ -41,7 +41,7 @@ const NavbarNotifications: React.FC<{
   notifications: CampusNotification[];
   onMarkAllAsRead: () => void;
   onMarkAsRead: (id: string) => void;
-  onSelectNotificationItem?: (itemId?: string, type?: string) => void;
+  onSelectNotificationItem?: (itemId?: string, type?: string, claimId?: string) => void;
 }> = ({ unreadCount, notifications, onMarkAllAsRead, onMarkAsRead, onSelectNotificationItem }) => {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const bellButtonRef = useRef<HTMLButtonElement>(null);
@@ -73,7 +73,7 @@ const NavbarNotifications: React.FC<{
         notifications={notifications}
         onMarkAllAsRead={onMarkAllAsRead}
         onMarkAsRead={onMarkAsRead}
-        onSelectItem={(itemId, type) => onSelectNotificationItem?.(itemId, type)}
+        onSelectItem={(itemId, type, claimId) => onSelectNotificationItem?.(itemId, type, claimId)}
       />
     </div>
   );
@@ -104,7 +104,7 @@ const NavbarAccountMenu: React.FC<{
       <button
         type="button"
         onClick={() => setActiveTab(canAccessAdmin ? 'admin' : 'feed')}
-        className="flex items-center gap-2 bg-white dark:bg-[#1E1C18] hover:bg-[#F5EFE4] dark:hover:bg-[#28241F] text-[#1F1B16] dark:text-[#F5F1EA] px-3 py-2 rounded-[10px] text-sm font-medium border border-[#857C70] dark:border-[#787065] transition-colors min-h-[44px] cursor-pointer btn-campus"
+        className="flex items-center gap-2 bg-white dark:bg-[#1E1C18] hover:bg-[#F5EFE4] dark:hover:bg-[#28241F] text-[#1F1B16] dark:text-[#F5F1EA] px-2 sm:px-3 py-2 rounded-[10px] text-sm font-medium border border-[#857C70] dark:border-[#787065] transition-colors min-h-[44px] min-w-[44px] justify-center cursor-pointer btn-campus"
         title={canAccessAdmin ? 'Open Operations Desk' : 'Signed in account'}
       >
         <div className="w-6 h-6 rounded-full bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] font-bold flex items-center justify-center text-xs border border-[#0F6E6E]/20">
@@ -122,7 +122,7 @@ const NavbarAccountMenu: React.FC<{
         <button
           type="button"
           onClick={onLogout}
-          className="flex items-center gap-1.5 bg-white dark:bg-[#1E1C18] hover:bg-[#FDF2F2] dark:hover:bg-[#2B0E0E] text-[#4A443C] hover:text-[#9B1C1C] dark:text-[#CEC7BB] dark:hover:text-[#F87171] px-2.5 sm:px-3 py-2 rounded-[10px] text-sm font-medium border border-[#857C70] dark:border-[#787065] hover:border-[#F87171]/50 transition-colors min-h-[44px] cursor-pointer btn-campus"
+          className="flex items-center gap-1.5 bg-white dark:bg-[#1E1C18] hover:bg-[#FDF2F2] dark:hover:bg-[#2B0E0E] text-[#4A443C] hover:text-[#9B1C1C] dark:text-[#CEC7BB] dark:hover:text-[#F87171] px-2 sm:px-3 py-2 rounded-[10px] text-sm font-medium border border-[#857C70] dark:border-[#787065] hover:border-[#F87171]/50 transition-colors min-h-[44px] min-w-[44px] justify-center cursor-pointer btn-campus"
           title="Sign out of your account"
           aria-label="Log Out"
         >
@@ -146,10 +146,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="sticky top-0 z-30 bg-[#FAF6EF]/95 dark:bg-[#141311]/95 backdrop-blur-sm border-b border-[#C4BBAF] dark:border-[#3E3931] text-[#1F1B16] dark:text-[#F5F1EA] shadow-[0_1px_0_rgba(31,27,22,0.03),0_8px_24px_rgba(31,27,22,0.04)] transition-colors">
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3 min-w-0">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="max-w-7xl mx-auto px-2.5 sm:px-4 py-3 flex items-center justify-between gap-2 sm:gap-3 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <h1 className="font-serif font-bold text-xl leading-none tracking-tight text-[#1F1B16] dark:text-[#F5F1EA]">
+            <h1 className="font-serif font-bold text-lg sm:text-xl leading-none tracking-tight text-[#1F1B16] dark:text-[#F5F1EA] whitespace-nowrap">
               NileFound
             </h1>
             <span className="hidden sm:inline bg-[#F5EFE4] dark:bg-[#28241F] text-[#4A443C] dark:text-[#CEC7BB] border border-[#857C70] dark:border-[#787065] text-xs font-sans font-medium px-2 py-0.5 rounded-[10px] tracking-wide">
@@ -161,7 +161,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 max-w-full shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2.5 min-w-0 max-w-full shrink-0">
           {onToggleDarkMode && (
             <button
               type="button"

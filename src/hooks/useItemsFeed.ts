@@ -4,7 +4,7 @@ import { CampusItem, User } from '../types/index.ts';
 import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
 import { expireOldItems } from '../utils/admin.ts';
 import { calculateMatchScore } from '../utils/matching.ts';
-import { safeSetStorage } from '../utils/storage.ts';
+import { readJson, safeSetStorage } from '../utils/storage.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
 import { auth } from '../lib/firebase.ts';
 import {
@@ -35,7 +35,9 @@ export function useItemsFeed({
   onItemSubmitted,
   onItemDeleted,
 }: UseItemsFeedOptions) {
-  const [items, setItems] = useState<CampusItem[]>([]);
+  const [items, setItemsState] = useState<CampusItem[]>(() =>
+    import.meta.env.DEV && isDemoMode ? readJson<CampusItem[]>('nilefound_demo_items_v1', []) : []
+  );
   const [olderItems, setOlderItems] = useState<CampusItem[]>([]);
   const [itemsCursor, setItemsCursor] = useState<QueryDocumentSnapshot<DocumentData> | undefined>(undefined);
   const [hasMoreItems, setHasMoreItems] = useState(false);
@@ -43,6 +45,12 @@ export function useItemsFeed({
   const [itemsError, setItemsError] = useState<string | null>(null);
   const [itemsRetryNonce, setItemsRetryNonce] = useState(0);
   const hasPaginatedRef = useRef(false);
+  const hasSeededOrMutatedDemoRef = useRef(false);
+
+  const setItems = useCallback<React.Dispatch<React.SetStateAction<CampusItem[]>>>((updater) => {
+    hasSeededOrMutatedDemoRef.current = true;
+    setItemsState(updater);
+  }, []);
 
   const mergedItems = useMemo(() => {
     if (olderItems.length === 0) return items;
@@ -52,6 +60,7 @@ export function useItemsFeed({
 
   useEffect(() => {
     if (!import.meta.env.DEV || !isDemoMode) return;
+    if (items.length === 0 && !hasSeededOrMutatedDemoRef.current) return;
     safeSetStorage('nilefound_demo_items_v1', JSON.stringify(items));
   }, [items, isDemoMode]);
 

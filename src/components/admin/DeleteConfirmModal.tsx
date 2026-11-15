@@ -18,7 +18,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   if (!pendingDelete) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 modal-backdrop-enter" onClick={onCancel}>
       <div
         ref={dialogRef}
         tabIndex={-1}
@@ -26,7 +26,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
         aria-modal="true"
         aria-labelledby="delete-title"
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-[480px] p-5 shadow-xl outline-none ${ADMIN_CARD}`}
+        className={`w-full max-w-[480px] p-5 shadow-xl outline-none modal-panel-enter ${ADMIN_CARD}`}
       >
         <h2 id="delete-title" className="text-base font-bold">Delete this item?</h2>
         <p className="mt-2 text-sm text-[#4A443C] dark:text-[#CEC7BB]">

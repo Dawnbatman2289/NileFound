@@ -12,7 +12,7 @@ import {
   QueryDocumentSnapshot, DocumentData, Unsubscribe,
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase.ts';
-import { CampusItem, ClaimRecord, User, CampusNotification } from '../types/index.ts';
+import { CampusItem, ClaimRecord, User, CampusNotification, ClaimMessage, ChatSenderRole } from '../types/index.ts';
 import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
 import { canUserModerate, isMasterAdminUser } from '../utils/admin.ts';
 import { validateNileEmail } from '../utils/authValidation.ts';
@@ -91,6 +91,7 @@ const NOTIF_TEMPLATES: Record<CampusNotification['type'], { title: string; messa
   claim_received: { title: 'New claim on your item', message: 'A new ownership claim was filed for your item.' },
   claim_approved: { title: 'Claim approved', message: 'Your ownership claim was approved.' },
   claim_rejected: { title: 'Claim rejected', message: 'Your ownership claim was rejected.' },
+  chat_message: { title: 'New handover message', message: 'You have a new message in your item handover chat.' },
   match_alert: { title: 'Possible item match', message: 'A possible match was found for your report.' },
   item_returned: { title: 'Item returned', message: 'Your reported item was marked returned.' },
   admin_review: { title: 'Review needed', message: 'A campus record needs administrator review.' },
@@ -591,14 +592,27 @@ export async function deleteItemFromFirestore(itemId: string): Promise<void> {
       getDocs(query(collection(db, CLAIMS), where('itemId', '==', itemId), limit(50))),
     ]);
 
-    const batch = writeBatch(db);
-    batch.delete(doc(db, ITEMS, itemId, 'media', 'full'));
-    batch.delete(doc(db, ITEMS, itemId, 'private', 'details'));
-    batch.delete(doc(db, ITEMS, itemId, 'secrets', 'verification'));
-    privateClaimsSnap.docs.forEach((d) => batch.delete(d.ref));
-    claimsSnap.docs.forEach((d) => batch.delete(d.ref));
-    batch.delete(doc(db, ITEMS, itemId));
-    await batch.commit();
+    const messageSnaps = await Promise.all(
+      claimsSnap.docs.map((claimDoc) =>
+        getDocs(query(collection(db, CLAIMS, claimDoc.id, 'messages'), limit(50)))
+      )
+    );
+
+    const refsToDelete = [
+      ...messageSnaps.flatMap((snap) => snap.docs.map((d) => d.ref)),
+      doc(db, ITEMS, itemId, 'media', 'full'),
+      doc(db, ITEMS, itemId, 'private', 'details'),
+      doc(db, ITEMS, itemId, 'secrets', 'verification'),
+      ...privateClaimsSnap.docs.map((d) => d.ref),
+      ...claimsSnap.docs.map((d) => d.ref),
+      doc(db, ITEMS, itemId),
+    ];
+
+    for (let i = 0; i < refsToDelete.length; i += 450) {
+      const batch = writeBatch(db);
+      refsToDelete.slice(i, i + 450).forEach((ref) => batch.delete(ref));
+      await batch.commit();
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `${ITEMS}/${itemId}`);
   }
@@ -957,3 +971,68 @@ export async function markNotificationsReadInFirestore(notificationIds: string[]
     throw error;
   }
 }
+
+export function subscribeToClaimMessages(
+  claimId: string,
+  onSuccess: (messages: ClaimMessage[]) => void,
+  onError?: (err: Error) => void,
+  pageSize = 50
+): Unsubscribe {
+  if (!auth.currentUser || !claimId) {
+    onSuccess([]);
+    return () => {};
+  }
+  const safeLimit = Math.min(Math.max(1, pageSize), 50);
+  const q = query(
+    collection(db, CLAIMS, claimId, 'messages'),
+    orderBy('createdAt', 'asc'),
+    limit(safeLimit)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const messages: ClaimMessage[] = snapshot.docs.map((docSnap) => {
+        const d = docSnap.data();
+        return {
+          id: docSnap.id,
+          claimId,
+          senderId: String(d.senderId || ''),
+          senderRole: (d.senderRole || 'Claimant') as ChatSenderRole,
+          text: String(d.text || ''),
+          createdAt: toIsoString(d.createdAt),
+        };
+      });
+      onSuccess(messages);
+    },
+    (error) => {
+      reportError(`subscribeToClaimMessages(${claimId})`, error);
+      onError?.(error);
+    }
+  );
+}
+
+export async function sendClaimMessageToFirestore(
+  claimId: string,
+  text: string,
+  senderRole: ChatSenderRole
+): Promise<string> {
+  if (!auth.currentUser?.uid) {
+    throw new Error('Sign in with your verified Nile account to send messages.');
+  }
+  const cleanText = text.trim().slice(0, 500);
+  if (!cleanText) {
+    throw new Error('Type a short message before sending.');
+  }
+  try {
+    const ref = await addDoc(collection(db, CLAIMS, claimId, 'messages'), {
+      senderId: auth.currentUser.uid,
+      senderRole,
+      text: cleanText,
+      createdAt: serverTimestamp(),
+    });
+    return ref.id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `${CLAIMS}/${claimId}/messages`);
+  }
+}
+

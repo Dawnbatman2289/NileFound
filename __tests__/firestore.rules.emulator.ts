@@ -846,3 +846,157 @@ test('notification rules allow valid claim_received/match_alert/item_returned/ad
   );
 });
 
+test('claim chat allows finder/claimant messages on active claims and blocks intruders, role spoofing, and closed claims', async () => {
+  const claimId = `chatItem_${CLAIMANT_UID}`;
+  const rejectedClaimId = `chatItem_${INTRUDER_UID}`;
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const adminDb = ctx.firestore();
+    await setDoc(doc(adminDb, 'items/chatItem'), {
+      title: 'Black HP Charger',
+      type: 'found',
+      category: 'phone_tech',
+      description: 'Found in Engineering Block.',
+      location: 'Engineering Block',
+      status: 'verified',
+      holdingLocation: 'finder_holding',
+      authorId: FINDER_UID,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await setDoc(doc(adminDb, `claims/${claimId}`), {
+      itemId: 'chatItem',
+      itemTitle: 'Black HP Charger',
+      claimantId: CLAIMANT_UID,
+      finderId: FINDER_UID,
+      status: 'approved',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await setDoc(doc(adminDb, `claims/${rejectedClaimId}`), {
+      itemId: 'chatItem',
+      itemTitle: 'Black HP Charger',
+      claimantId: INTRUDER_UID,
+      finderId: FINDER_UID,
+      status: 'rejected',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  });
+
+  const finderDb = testEnv.authenticatedContext(FINDER_UID, verifiedToken(FINDER_EMAIL)).firestore();
+  const claimantDb = testEnv.authenticatedContext(CLAIMANT_UID, verifiedToken(CLAIMANT_EMAIL)).firestore();
+  const intruderDb = testEnv.authenticatedContext(INTRUDER_UID, verifiedToken(INTRUDER_EMAIL)).firestore();
+
+  // Allowed: claimant and finder message each other and read the thread
+  await assertSucceeds(
+    setDoc(doc(claimantDb, `claims/${claimId}/messages/m1`), {
+      senderId: CLAIMANT_UID,
+      senderRole: 'Claimant',
+      text: 'Hello, I can pick it up at the Main Gate at 2pm.',
+      createdAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(
+    setDoc(doc(finderDb, `claims/${claimId}/messages/m2`), {
+      senderId: FINDER_UID,
+      senderRole: 'Finder',
+      text: 'Works for me, see you by 2pm.',
+      createdAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(getDocs(query(collection(claimantDb, `claims/${claimId}/messages`), limit(20))));
+
+  // Denied: third-party student cannot read or write chat messages
+  await assertFails(getDocs(query(collection(intruderDb, `claims/${claimId}/messages`), limit(20))));
+  await assertFails(
+    setDoc(doc(intruderDb, `claims/${claimId}/messages/mIntruder`), {
+      senderId: INTRUDER_UID,
+      senderRole: 'Claimant',
+      text: 'Let me in too.',
+      createdAt: serverTimestamp(),
+    })
+  );
+
+  // Denied: claimant cannot spoof Admin role label
+  await assertFails(
+    setDoc(doc(claimantDb, `claims/${claimId}/messages/mSpoofRole`), {
+      senderId: CLAIMANT_UID,
+      senderRole: 'Admin',
+      text: 'Impersonating admin',
+      createdAt: serverTimestamp(),
+    })
+  );
+
+  // Denied: rejected claim cannot receive new messages
+  await assertFails(
+    setDoc(doc(intruderDb, `claims/${rejectedClaimId}/messages/mClosed`), {
+      senderId: INTRUDER_UID,
+      senderRole: 'Claimant',
+      text: 'Still trying after rejection.',
+      createdAt: serverTimestamp(),
+    })
+  );
+
+  // Allowed: claimant and finder can send scoped chat_message notifications to each other
+  await assertSucceeds(
+    setDoc(doc(claimantDb, 'notifications/nChat1'), {
+      recipientUid: FINDER_UID,
+      fromUid: CLAIMANT_UID,
+      type: 'chat_message',
+      title: 'New handover message',
+      message: 'You have a new message in your item handover chat.',
+      read: false,
+      itemId: 'chatItem',
+      claimId,
+      createdAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(
+    setDoc(doc(finderDb, 'notifications/nChat2'), {
+      recipientUid: CLAIMANT_UID,
+      fromUid: FINDER_UID,
+      type: 'chat_message',
+      title: 'New handover message',
+      message: 'You have a new message in your item handover chat.',
+      read: false,
+      itemId: 'chatItem',
+      claimId,
+      createdAt: serverTimestamp(),
+    })
+  );
+
+  // Denied: intruder cannot send chat_message notification, and finder cannot target unrelated user
+  await assertFails(
+    setDoc(doc(intruderDb, 'notifications/nChatSpoof1'), {
+      recipientUid: FINDER_UID,
+      fromUid: INTRUDER_UID,
+      type: 'chat_message',
+      title: 'New handover message',
+      message: 'You have a new message in your item handover chat.',
+      read: false,
+      itemId: 'chatItem',
+      claimId,
+      createdAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    setDoc(doc(finderDb, 'notifications/nChatSpoof2'), {
+      recipientUid: INTRUDER_UID,
+      fromUid: FINDER_UID,
+      type: 'chat_message',
+      title: 'New handover message',
+      message: 'You have a new message in your item handover chat.',
+      read: false,
+      itemId: 'chatItem',
+      claimId,
+      createdAt: serverTimestamp(),
+    })
+  );
+
+  // Denied: claimant and intruder cannot delete chat messages; Allowed: finder can delete during item cleanup
+  await assertFails(deleteDoc(doc(claimantDb, `claims/${claimId}/messages/m1`)));
+  await assertFails(deleteDoc(doc(intruderDb, `claims/${claimId}/messages/m1`)));
+  await assertSucceeds(deleteDoc(doc(finderDb, `claims/${claimId}/messages/m1`)));
+  await assertSucceeds(deleteDoc(doc(finderDb, `claims/${claimId}/messages/m2`)));
+});
+

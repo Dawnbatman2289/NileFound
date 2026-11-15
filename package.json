@@ -12,7 +12,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "tsx --test src/utils/*.test.ts __tests__/*.test.ts",
-    "test:emulator": "firebase emulators:exec --only firestore \"tsx --test __tests__/firestore.rules.emulator.ts\"",
+    "test:emulator": "firebase emulators:exec --only firestore --project demo-nilefound \"tsx --test __tests__/firestore.rules.emulator.ts\"",
     "clean": "node -e \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
     "lint": "eslint firestore.rules && tsc --noEmit"
   },

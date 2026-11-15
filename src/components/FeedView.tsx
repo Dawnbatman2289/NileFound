@@ -29,6 +29,8 @@ interface FeedViewProps {
   onApproveClaim?: (claimId: string, itemId: string) => Promise<boolean> | void;
   onRejectClaim?: (claimId: string) => Promise<boolean> | void;
   onUpdateItemStatus?: (itemId: string, status: CampusItem['status']) => Promise<boolean> | void;
+  onOpenClaimChat?: (claim: ClaimRecord, item: CampusItem) => void;
+  unreadChatClaimIds?: Set<string>;
   currentUser?: User | null;
   isDemoMode?: boolean;
   onNavigateToLogin?: () => void;
@@ -63,10 +65,11 @@ const FeedEmptyState: React.FC<{
 );
 
 function getItemClaimContext(claims: ClaimRecord[], item: CampusItem, currentUserId?: string) {
-  if (!currentUserId) return { myApprovedClaim: undefined, myPendingClaim: undefined, pendingFinderClaims: [] };
+  if (!currentUserId) return { myApprovedClaim: undefined, myPendingClaim: undefined, approvedFinderClaim: undefined, pendingFinderClaims: [] };
   return {
     myApprovedClaim: claims.find((c) => c.itemId === item.id && c.claimantId === currentUserId && c.status === 'approved'),
     myPendingClaim: claims.find((c) => c.itemId === item.id && c.claimantId === currentUserId && c.status === 'pending'),
+    approvedFinderClaim: item.authorId === currentUserId ? claims.find((c) => c.itemId === item.id && c.status === 'approved') : undefined,
     pendingFinderClaims: item.authorId === currentUserId ? claims.filter((c) => c.itemId === item.id && c.status === 'pending') : [],
   };
 }
@@ -74,7 +77,7 @@ function getItemClaimContext(claims: ClaimRecord[], item: CampusItem, currentUse
 export const FeedView: React.FC<FeedViewProps> = ({
   items, claims = [], lowDataMode, itemsError, onRetryLoadItems, onClaimItem, onOpenReportModal, onFoundMatch,
   onFetchHandoverContact, onFetchFullPhoto, onFetchClaimPrivateDetails, onApproveClaim, onRejectClaim, onUpdateItemStatus,
-  currentUser, isDemoMode, onNavigateToLogin, onLoadMore, onLoadAll, hasMoreItems = false, isLoadingMoreItems = false,
+  onOpenClaimChat, unreadChatClaimIds, currentUser, isDemoMode, onNavigateToLogin, onLoadMore, onLoadAll, hasMoreItems = false, isLoadingMoreItems = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<'all' | ItemType>('all');
@@ -276,7 +279,9 @@ export const FeedView: React.FC<FeedViewProps> = ({
                   isDemoMode={isDemoMode}
                   myApprovedClaim={claimCtx.myApprovedClaim}
                   myPendingClaim={claimCtx.myPendingClaim}
+                  approvedFinderClaim={claimCtx.approvedFinderClaim}
                   pendingFinderClaims={claimCtx.pendingFinderClaims}
+                  unreadChatClaimIds={unreadChatClaimIds}
                   handoverInfo={handoverContacts[item.id]}
                   isLoadingHandover={loadingHandoverId === item.id}
                   onSelectDetail={setDetailItem}
@@ -288,6 +293,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
                   onApproveClaim={onApproveClaim}
                   onRejectClaim={onRejectClaim}
                   onUpdateItemStatus={onUpdateItemStatus}
+                  onOpenClaimChat={onOpenClaimChat}
                 />
               );
             })}

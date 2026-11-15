@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CampusItem, ClaimRecord, User } from '../types/index.ts';
-import { safeSetStorage } from '../utils/storage.ts';
+import { readJson, safeSetStorage } from '../utils/storage.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
 import { auth } from '../lib/firebase.ts';
 import {
@@ -43,12 +43,20 @@ export function useClaims({
   setOlderItems,
   dispatchNotification,
 }: UseClaimsOptions) {
-  const [claims, setClaims] = useState<ClaimRecord[]>([]);
+  const [claims, setClaimsState] = useState<ClaimRecord[]>(() =>
+    import.meta.env.DEV && isDemoMode ? readJson<ClaimRecord[]>('nilefound_demo_claims_v1', []) : []
+  );
   const [claimsCursor, setClaimsCursor] = useState<ClaimsCursor | undefined>(undefined);
   const [hasMoreClaims, setHasMoreClaims] = useState(false);
   const [isLoadingMoreClaims, setIsLoadingMoreClaims] = useState(false);
   const [claimsError, setClaimsError] = useState<string | null>(null);
   const [claimsRetryNonce, setClaimsRetryNonce] = useState(0);
+  const hasSeededOrMutatedDemoRef = useRef(false);
+
+  const setClaims = useCallback<React.Dispatch<React.SetStateAction<ClaimRecord[]>>>((updater) => {
+    hasSeededOrMutatedDemoRef.current = true;
+    setClaimsState(updater);
+  }, []);
 
   const userId = currentUser?.id;
   const userRole = currentUser?.role;
@@ -56,6 +64,7 @@ export function useClaims({
 
   useEffect(() => {
     if (!import.meta.env.DEV || !isDemoMode) return;
+    if (claims.length === 0 && !hasSeededOrMutatedDemoRef.current) return;
     safeSetStorage('nilefound_demo_claims_v1', JSON.stringify(claims));
   }, [claims, isDemoMode]);
 

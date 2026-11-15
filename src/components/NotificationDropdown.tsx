@@ -17,7 +17,7 @@ interface NotificationDropdownProps {
   notifications: CampusNotification[];
   onMarkAllAsRead: () => void;
   onMarkAsRead: (id: string) => void;
-  onSelectItem?: (itemId?: string, type?: string) => void;
+  onSelectItem?: (itemId?: string, type?: string, claimId?: string) => void;
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
@@ -74,6 +74,8 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         return 'Claim Approved';
       case 'claim_rejected':
         return 'Claim Rejected';
+      case 'chat_message':
+        return 'Handover Chat';
       case 'match_alert':
         return 'Match Found';
       case 'item_returned':
@@ -94,6 +96,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         return 'bg-[#FDF2F2] dark:bg-[#2B0E0E] text-[#9B1C1C] dark:text-[#F87171] border-[#F87171]/40';
       case 'match_alert':
         return 'bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C] border-[#E8A317]/40';
+      case 'chat_message':
       case 'admin_review':
         return 'bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border-[#0F6E6E]/30';
       default:
@@ -166,7 +169,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                 type="button"
                 onClick={() => {
                   if (isUnread) onMarkAsRead(notif.id);
-                  onSelectItem?.(notif.itemId, notif.type);
+                  onSelectItem?.(notif.itemId, notif.type, notif.claimId);
                   onClose();
                 }}
                 className={`w-full text-left p-3.5 transition-colors cursor-pointer flex items-start gap-3 hover:bg-[#FAF6EF] dark:hover:bg-[#28241F] ${

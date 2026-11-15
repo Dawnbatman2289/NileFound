@@ -63,17 +63,22 @@ export function useAuthSession({
     import.meta.env.DEV && (isRealUserAdmin || currentUser?.role === 'admin' || isSimulating)
   );
 
+  const hasSeededDemoRef = useRef(false);
+
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     import('../data/demoPersonas.ts')
       .then((m) => setDevPersonas(m.DEV_TEST_PERSONAS))
       .catch((err) => reportError('Load dev personas failed', err));
-    if (isSimulating) {
+    if (isSimulating && !hasSeededDemoRef.current) {
+      hasSeededDemoRef.current = true;
       import('../data/mockItems.ts')
         .then((m) => {
+          const savedItems = readJson<CampusItem[]>('nilefound_demo_items_v1', []);
+          const savedClaims = readJson<ClaimRecord[]>('nilefound_demo_claims_v1', []);
           onSeedDemoDataRef.current(
-            readJson('nilefound_demo_items_v1', m.DEMO_ITEMS),
-            readJson('nilefound_demo_claims_v1', m.DEMO_CLAIMS)
+            savedItems.length > 0 ? savedItems : m.DEMO_ITEMS,
+            savedClaims.length > 0 ? savedClaims : m.DEMO_CLAIMS
           );
         })
         .catch((err) => reportError('Load demo seed items failed', err));
@@ -155,6 +160,10 @@ export function useAuthSession({
       } else {
         setRealUser(null);
         setRoleError(null);
+        if (import.meta.env.DEV && isSimulatingRef.current) {
+          return;
+        }
+        hasSeededDemoRef.current = false;
         setCurrentUser(null);
         onResetSessionDataRef.current();
         setIsSimulating(false);
@@ -170,24 +179,45 @@ export function useAuthSession({
 
   const handleSwitchPersona = useCallback(async (user: User) => {
     if (!import.meta.env.DEV) return;
+    const wasSimulating = isSimulatingRef.current;
+    if (!wasSimulating || !hasSeededDemoRef.current) {
+      hasSeededDemoRef.current = true;
+      try {
+        const m = await import('../data/mockItems.ts');
+        const savedItems = readJson<CampusItem[]>('nilefound_demo_items_v1', []);
+        const savedClaims = readJson<ClaimRecord[]>('nilefound_demo_claims_v1', []);
+        onSeedDemoDataRef.current(
+          savedItems.length > 0 ? savedItems : m.DEMO_ITEMS,
+          savedClaims.length > 0 ? savedClaims : m.DEMO_CLAIMS
+        );
+      } catch (err) {
+        reportError('Load simulation mock items failed', err);
+      }
+    }
     setIsSimulating(true);
     setIsDemoMode(true);
     setCurrentUser(user);
     safeSetStorage('nilefound_admin_simulating', 'true');
     safeSetStorage('nilefound_simulated_persona', JSON.stringify(user));
-    try {
-      const m = await import('../data/mockItems.ts');
-      onSeedDemoDataRef.current(
-        readJson('nilefound_demo_items_v1', m.DEMO_ITEMS),
-        readJson('nilefound_demo_claims_v1', m.DEMO_CLAIMS)
-      );
-    } catch (err) {
-      reportError('Load simulation mock items failed', err);
-    }
     setActiveTabRef.current(user.role === 'admin' || user.role === 'security' ? 'admin' : 'feed');
   }, []);
 
+  const handleResetDemoData = useCallback(async () => {
+    if (!import.meta.env.DEV) return;
+    safeRemoveStorage('nilefound_demo_items_v1');
+    safeRemoveStorage('nilefound_demo_claims_v1');
+    safeRemoveStorage('nilefound_demo_notifs_v1');
+    hasSeededDemoRef.current = true;
+    try {
+      const m = await import('../data/mockItems.ts');
+      onSeedDemoDataRef.current(m.DEMO_ITEMS, m.DEMO_CLAIMS);
+    } catch (err) {
+      reportError('Reset simulation mock items failed', err);
+    }
+  }, []);
+
   const handleExitSimulation = useCallback(() => {
+    hasSeededDemoRef.current = false;
     setIsSimulating(false);
     setIsDemoMode(false);
     safeRemoveStorage('nilefound_admin_simulating');
@@ -196,12 +226,14 @@ export function useAuthSession({
       setCurrentUser(realUser);
       setActiveTabRef.current(realUser.role === 'admin' || realUser.role === 'security' ? 'admin' : 'feed');
     } else {
+      onResetSessionDataRef.current();
       setCurrentUser(null);
       setActiveTabRef.current('login');
     }
   }, [realUser]);
 
   const handleLogout = useCallback(async () => {
+    hasSeededDemoRef.current = false;
     await signOut(auth).catch((err) => reportError('Sign out failed cleanly', err));
     setRealUser(null);
     setRoleError(null);
@@ -212,6 +244,9 @@ export function useAuthSession({
     safeRemoveStorage('nilefound_user_v1');
     safeRemoveStorage('nilefound_admin_simulating');
     safeRemoveStorage('nilefound_simulated_persona');
+    safeRemoveStorage('nilefound_demo_items_v1');
+    safeRemoveStorage('nilefound_demo_claims_v1');
+    safeRemoveStorage('nilefound_demo_notifs_v1');
     safeRemoveStorage('nilefound_report_draft_v1');
     try {
       sessionStorage.removeItem('nilefound_feed_filters');
@@ -222,7 +257,7 @@ export function useAuthSession({
 
     await clearOfflinePersistence();
     setCurrentUser(null);
-    setActiveTabRef.current('feed');
+    setActiveTabRef.current('login');
   }, []);
 
   return {
@@ -237,6 +272,7 @@ export function useAuthSession({
     isPrivileged,
     canUsePersonaSimulation,
     handleSwitchPersona,
+    handleResetDemoData,
     handleExitSimulation,
     handleLogout,
   };

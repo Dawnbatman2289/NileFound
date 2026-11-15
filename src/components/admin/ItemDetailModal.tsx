@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, CheckCircle, Clock, Mail, MapPin, ShieldCheck, Tag, Trash2, User as UserIcon, X } from 'lucide-react';
+import { Calendar, CheckCircle, Clock, Mail, MapPin, MessageSquare, ShieldCheck, Tag, Trash2, User as UserIcon, X } from 'lucide-react';
 import { CampusItem, ClaimRecord } from '../../types/index.ts';
 import { formatDateDDMMYYYY } from '../../utils/dateFormatter.ts';
 import type { ItemPrivateDetails } from '../../services/firestoreService.ts';
@@ -23,6 +23,8 @@ interface ItemDetailModalProps {
   onApproveClaim: (claimId: string, itemId: string) => Promise<boolean> | void;
   onRejectClaim: (claimId: string) => Promise<boolean> | void;
   onUpdateItemStatus: (itemId: string, status: CampusItem['status']) => Promise<boolean> | void;
+  onOpenClaimChat?: (claim: ClaimRecord, item: CampusItem) => void;
+  unreadChatClaimIds?: Set<string>;
   onSuccessNotice: (msg: string) => void;
   onErrorNotice: (msg: string) => void;
   onRefreshAudit: () => void;
@@ -46,6 +48,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onApproveClaim,
   onRejectClaim,
   onUpdateItemStatus,
+  onOpenClaimChat,
+  unreadChatClaimIds,
   onSuccessNotice,
   onErrorNotice,
   onRefreshAudit,
@@ -54,14 +58,14 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const itemClaims = claims.filter((c) => c.itemId === selectedItem.id);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/55 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/55 overflow-y-auto modal-backdrop-enter" onClick={onClose}>
       <div
         ref={dialogRef}
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="admin-item-modal-title"
-        className={`w-full max-w-[672px] shadow-xl max-h-[90dvh] overflow-hidden flex flex-col min-w-0 outline-none ${ADMIN_CARD}`}
+        className={`w-full max-w-[672px] shadow-xl max-h-[90dvh] overflow-hidden flex flex-col min-w-0 outline-none modal-panel-enter ${ADMIN_CARD}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bg-[#FAF6EF] dark:bg-[#141311] px-5 sm:px-6 py-4 border-b border-[#C4BBAF] dark:border-[#3E3931] flex items-center justify-between gap-3">
@@ -195,34 +199,51 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       {loadingClaimId === claim.id ? 'Loading details…' : 'Inspect Claimant & Answer'}
                     </button>
                   ) : null}
-                  {claim.status === 'pending' && (
-                    <div className="flex items-center gap-2 pt-1">
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {onOpenClaimChat && (isAdmin || selectedItem.holdingLocation !== 'finder_holding') && claim.status !== 'rejected' && (
                       <button
                         type="button"
-                        onClick={async () => {
-                          const ok = await onApproveClaim(claim.id, selectedItem.id);
-                          if (ok === false) return onErrorNotice('Could not approve claim. Check permissions and try again.');
-                          onSuccessNotice(`Verified claim for ${selectedItem.title}.`);
-                          onRefreshAudit();
-                        }}
-                        className="bg-[#0F6E6E] hover:bg-[#0C5656] text-white font-medium px-3 py-2 min-h-[44px] rounded-[10px] text-sm cursor-pointer btn-campus shadow-xs"
+                        onClick={() => onOpenClaimChat(claim, selectedItem)}
+                        className="bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] text-[#0F6E6E] dark:text-[#199595] border border-[#0F6E6E]/40 font-medium px-3 py-2 min-h-[44px] rounded-[10px] text-sm inline-flex items-center gap-1.5 cursor-pointer btn-campus"
                       >
-                        Approve for Handover
+                        <MessageSquare className="w-4 h-4" />
+                        <span>Handover Chat</span>
+                        {unreadChatClaimIds?.has(claim.id) && (
+                          <span className="bg-[#0F6E6E] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-[6px] uppercase">
+                            New
+                          </span>
+                        )}
                       </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const ok = await onRejectClaim(claim.id);
-                          if (ok === false) return onErrorNotice('Could not reject claim. Check permissions and try again.');
-                          onSuccessNotice('Rejected claim.');
-                          onRefreshAudit();
-                        }}
-                        className="bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] text-[#9B1C1C] dark:text-[#F87171] border border-[#F87171]/50 font-medium px-3 py-2 min-h-[44px] rounded-[10px] text-sm cursor-pointer btn-campus"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  )}
+                    )}
+                    {claim.status === 'pending' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const ok = await onApproveClaim(claim.id, selectedItem.id);
+                            if (ok === false) return onErrorNotice('Could not approve claim. Check permissions and try again.');
+                            onSuccessNotice(`Verified claim for ${selectedItem.title}.`);
+                            onRefreshAudit();
+                          }}
+                          className="bg-[#0F6E6E] hover:bg-[#0C5656] text-white font-medium px-3 py-2 min-h-[44px] rounded-[10px] text-sm cursor-pointer btn-campus shadow-xs"
+                        >
+                          Approve for Handover
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const ok = await onRejectClaim(claim.id);
+                            if (ok === false) return onErrorNotice('Could not reject claim. Check permissions and try again.');
+                            onSuccessNotice('Rejected claim.');
+                            onRefreshAudit();
+                          }}
+                          className="bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] text-[#9B1C1C] dark:text-[#F87171] border border-[#F87171]/50 font-medium px-3 py-2 min-h-[44px] rounded-[10px] text-sm cursor-pointer btn-campus"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               ))
             )}

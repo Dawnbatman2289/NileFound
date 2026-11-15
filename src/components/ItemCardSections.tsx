@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Mail, Image as ImageIcon, ShieldCheck } from 'lucide-react';
+import { Shield, Mail, Image as ImageIcon, ShieldCheck, MessageSquare } from 'lucide-react';
 import { CampusItem, ClaimRecord } from '../types/index.ts';
 
 const STATUS_LABELS: Record<CampusItem['status'], string> = {
@@ -82,10 +82,12 @@ export const ApprovedHandoverBanner: React.FC<{
   item: CampusItem;
   handoverInfo?: { authorName?: string; authorEmail?: string } | null;
   isLoadingHandover: boolean;
+  hasUnreadChat?: boolean;
   onRequestHandoverContact?: (itemId: string) => void;
-}> = ({ item, handoverInfo, isLoadingHandover, onRequestHandoverContact }) => (
+  onOpenChat?: () => void;
+}> = ({ item, handoverInfo, isLoadingHandover, hasUnreadChat, onRequestHandoverContact, onOpenChat }) => (
   <div className="bg-[#EDF7F1] dark:bg-[#0E2417] border border-[#2F7D4F]/30 rounded-[10px] p-3 text-sm space-y-2">
-    <div className="flex items-center justify-between gap-2">
+    <div className="flex items-center justify-between gap-2 flex-wrap">
       <span className="font-semibold text-[#1B5633] dark:text-[#75CE9A]">Claim Approved</span>
       {!handoverInfo && onRequestHandoverContact && (
         <button type="button" disabled={isLoadingHandover} onClick={() => onRequestHandoverContact(item.id)} className="text-sm font-semibold text-[#0F6E6E] dark:text-[#199595] underline cursor-pointer min-h-[44px]">
@@ -106,6 +108,63 @@ export const ApprovedHandoverBanner: React.FC<{
         )}
       </div>
     )}
+    {onOpenChat && item.status !== 'returned' && item.status !== 'expired' && (
+      <button
+        type="button"
+        onClick={onOpenChat}
+        className="w-full min-h-[44px] bg-white dark:bg-[#1E1C18] hover:bg-[#FAF6EF] dark:hover:bg-[#28241F] text-[#0F6E6E] dark:text-[#199595] border border-[#0F6E6E]/40 rounded-[10px] font-semibold text-sm inline-flex items-center justify-center gap-1.5 cursor-pointer btn-campus"
+      >
+        <MessageSquare className="w-4 h-4" />
+        <span>Open Handover Chat</span>
+        {hasUnreadChat && (
+          <span className="bg-[#E8A317] text-[#1F1B16] text-xs font-bold px-2 py-0.5 rounded-full">
+            New
+          </span>
+        )}
+      </button>
+    )}
+  </div>
+);
+
+export const FinderApprovedHandoverBanner: React.FC<{
+  item: CampusItem;
+  claim: ClaimRecord;
+  isDemoMode?: boolean;
+  hasUnreadChat?: boolean;
+  onOpenChat?: () => void;
+  onMarkReturned?: () => void;
+}> = ({ item, claim, isDemoMode, hasUnreadChat, onOpenChat, onMarkReturned }) => (
+  <div className="bg-[#EDF7F1] dark:bg-[#0E2417] border border-[#2F7D4F]/30 rounded-[10px] p-3 text-sm space-y-2">
+    <div className="flex items-center justify-between gap-2 flex-wrap">
+      <span className="font-semibold text-[#1B5633] dark:text-[#75CE9A]">
+        {claim.privateLoaded || isDemoMode ? `Approved for ${claim.claimantName}` : 'Claim Approved for Handover'}
+      </span>
+    </div>
+    {onOpenChat && item.status !== 'returned' && item.status !== 'expired' && (
+      <button
+        type="button"
+        onClick={onOpenChat}
+        className="w-full min-h-[44px] bg-white dark:bg-[#1E1C18] hover:bg-[#FAF6EF] dark:hover:bg-[#28241F] text-[#0F6E6E] dark:text-[#199595] border border-[#0F6E6E]/40 rounded-[10px] font-semibold text-sm inline-flex items-center justify-center gap-1.5 cursor-pointer btn-campus"
+      >
+        <MessageSquare className="w-4 h-4" />
+        <span>Open Handover Chat</span>
+        {hasUnreadChat && (
+          <span className="bg-[#E8A317] text-[#1F1B16] text-xs font-bold px-2 py-0.5 rounded-full">
+            New
+          </span>
+        )}
+      </button>
+    )}
+    {onMarkReturned && item.status !== 'returned' && (
+      <button
+        type="button"
+        onClick={onMarkReturned}
+        className="w-full min-h-[44px] bg-[#0F6E6E] hover:bg-[#0C5656] text-white rounded-[10px] font-semibold text-sm inline-flex items-center justify-center gap-1.5 cursor-pointer btn-campus"
+      >
+        <ShieldCheck className="w-4 h-4" />
+        <span>Confirm Handover (Mark Returned)</span>
+      </button>
+    )}
   </div>
 );
 
@@ -113,29 +172,48 @@ export const FinderClaimReviewCard: React.FC<{
   claim: ClaimRecord;
   itemId: string;
   isDemoMode?: boolean;
+  hasUnreadChat?: boolean;
   loadingClaimId: string | null;
   onLoadPrivate: (claimId: string) => void;
   onApproveClaim?: (claimId: string, itemId: string) => Promise<boolean> | void;
   onRejectClaim?: (claimId: string) => Promise<boolean> | void;
+  onOpenChat?: (claim: ClaimRecord) => void;
   onActionError: (msg: string | null) => void;
-}> = ({ claim, itemId, isDemoMode, loadingClaimId, onLoadPrivate, onApproveClaim, onRejectClaim, onActionError }) => {
+}> = ({ claim, itemId, isDemoMode, hasUnreadChat, loadingClaimId, onLoadPrivate, onApproveClaim, onRejectClaim, onOpenChat, onActionError }) => {
   const showDetails = claim.privateLoaded || isDemoMode;
   return (
     <div className="bg-[#FEF7E9] dark:bg-[#2B210A] border border-[#E8A317]/40 rounded-[10px] p-3 text-sm space-y-2">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="font-semibold text-[#7A5000] dark:text-[#F9CF7C]">
           {showDetails ? `Claim from ${claim.claimantName}` : 'Pending ownership claim'}
         </p>
-        {!showDetails && (
-          <button
-            type="button"
-            disabled={loadingClaimId === claim.id}
-            onClick={() => onLoadPrivate(claim.id)}
-            className="text-xs font-semibold text-[#0F6E6E] dark:text-[#199595] underline cursor-pointer min-h-[36px]"
-          >
-            {loadingClaimId === claim.id ? 'Loading…' : 'Review answer'}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {!showDetails && (
+            <button
+              type="button"
+              disabled={loadingClaimId === claim.id}
+              onClick={() => onLoadPrivate(claim.id)}
+              className="text-xs font-semibold text-[#0F6E6E] dark:text-[#199595] underline cursor-pointer min-h-[36px]"
+            >
+              {loadingClaimId === claim.id ? 'Loading…' : 'Review answer'}
+            </button>
+          )}
+          {onOpenChat && (
+            <button
+              type="button"
+              onClick={() => onOpenChat(claim)}
+              className="text-xs font-semibold text-[#0F6E6E] dark:text-[#199595] bg-white dark:bg-[#1E1C18] border border-[#0F6E6E]/35 rounded-[8px] px-2.5 min-h-[44px] inline-flex items-center gap-1 cursor-pointer"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Chat</span>
+              {hasUnreadChat && (
+                <span className="bg-[#E8A317] text-[#1F1B16] text-[11px] font-bold px-1.5 py-0.5 rounded-full">
+                  New
+                </span>
+              )}
+            </button>
+          )}
+        </div>
       </div>
       {showDetails && (
         <p className="text-[#4A443C] dark:text-[#CEC7BB]">Answer: {claim.submittedAnswer || 'None provided'}</p>
