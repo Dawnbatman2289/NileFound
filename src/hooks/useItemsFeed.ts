@@ -240,7 +240,9 @@ export function useItemsFeed({
           }
         }
         return true;
-      } catch {
+      } catch (err) {
+        reportError('handleUpdateItemStatus failed', err);
+        setItemsError('Could not update item status. Check your connection and try again.');
         return false;
       }
     },
@@ -257,7 +259,9 @@ export function useItemsFeed({
         setOlderItems((prev) => prev.filter((it) => it.id !== itemId));
         onItemDeleted?.(itemId);
         return true;
-      } catch {
+      } catch (err) {
+        reportError('handleDeleteItem failed', err);
+        setItemsError('Could not delete item. Check your connection and try again.');
         return false;
       }
     },

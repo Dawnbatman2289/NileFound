@@ -42,10 +42,10 @@ export default function App() {
   }, []);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [lowDataMode, setLowDataMode] = useState(() => {
-    try { return localStorage.getItem('nilefound_low_data') === 'true'; } catch { return false; }
+    try { return localStorage.getItem('nilefound_low_data') === 'true'; } catch (err) { reportError('Read low-data preference failed', err); return false; }
   });
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    try { return localStorage.getItem('nilefound_theme') === 'dark'; } catch { return false; }
+    try { return localStorage.getItem('nilefound_theme') === 'dark'; } catch (err) { reportError('Read theme preference failed', err); return false; }
   });
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportPrefill, setReportPrefill] = useState<ReportPrefill | null>(null);
@@ -148,7 +148,7 @@ export default function App() {
     if (import.meta.env.DEV) {
       await import('./components/ClaimChatModal.tsx')
         .then((m) => m.resetDemoChatThreads())
-        .catch(() => {});
+        .catch((err) => reportError('Reset demo chat threads on logout failed', err));
     }
     await authSession.handleLogout();
   }, [authSession]);
@@ -198,6 +198,12 @@ export default function App() {
               <button type="button" onClick={authSession.retryRoleCheck} className="min-h-[36px] px-3 rounded-[8px] border border-[#F87171]/50 bg-white dark:bg-[#1E1C18] text-xs font-semibold cursor-pointer">
                 Retry role check
               </button>
+            </div>
+          )}
+
+          {authSession.logoutNotice && (
+            <div role="status" className="bg-[#FEF7E9] dark:bg-[#2B210A] border-b border-[#E8A317]/40 text-[#7A5000] dark:text-[#F9CF7C] px-4 py-2.5 text-sm">
+              {authSession.logoutNotice}
             </div>
           )}
 
@@ -318,9 +324,10 @@ export default function App() {
               <ClaimModal
                 item={selectedItemForClaim}
                 currentUser={authSession.currentUser}
-                existingClaim={claimsState.claims.find((c) => c.itemId === selectedItemForClaim.id && c.claimantId === authSession.currentUser?.id && (c.status === 'pending' || c.status === 'approved'))}
+                existingClaim={claimsState.claims.find((c) => c.itemId === selectedItemForClaim.id && c.claimantId === authSession.currentUser?.id)}
                 onClose={() => setSelectedItemForClaim(null)}
                 onSuccessClaim={claimsState.handleClaimSuccess}
+                onResubmitClaim={claimsState.handleResubmitClaim}
               />
             </Suspense>
           )}

@@ -6,6 +6,8 @@
  * Enforces DD/MM/YYYY format across all campus views.
  */
 
+import { reportError } from '../components/ErrorBoundary.tsx';
+
 export function formatDateDDMMYYYY(dateInput: string | number | Date | null | undefined): string {
   if (!dateInput) return '';
 
@@ -29,7 +31,8 @@ export function formatDateDDMMYYYY(dateInput: string | number | Date | null | un
       year: 'numeric',
     }).format(d);
     return parts;
-  } catch {
+  } catch (err) {
+    reportError('formatDateDDMMYYYY failed', err);
     return String(dateInput);
   }
 }
@@ -61,7 +64,8 @@ export function formatRelativeTime(dateInput: string | number | Date | null | un
     if (diffDays < 7) return `${diffDays} days ago`;
 
     return formatDateDDMMYYYY(dateInput);
-  } catch {
+  } catch (err) {
+    reportError('formatRelativeTime failed', err);
     return '';
   }
 }
@@ -77,7 +81,8 @@ export function getTodayWatIsoDate(reference = new Date()): string {
       month: '2-digit',
       day: '2-digit',
     }).format(reference);
-  } catch {
+  } catch (err) {
+    reportError('getTodayWatIsoDate failed', err);
     return reference.toISOString().split('T')[0];
   }
 }

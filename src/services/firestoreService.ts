@@ -16,6 +16,7 @@ import { CampusItem, ClaimRecord, User, UserRole, CampusNotification, ClaimMessa
 import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
 import { canUserModerate, isMasterAdminUser } from '../utils/admin.ts';
 import { validateNileEmail } from '../utils/authValidation.ts';
+import { ClaimDecisionBatchPlan, decideClaimWithFreshPending } from '../utils/claimDecision.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
 
 const ITEMS = 'items';
@@ -68,6 +69,12 @@ export interface ClaimsPage {
   claims: ClaimRecord[];
   hasMore: boolean;
   cursor?: ClaimsCursor;
+}
+
+export interface ClaimMessagesPage {
+  messages: ClaimMessage[];
+  hasMore: boolean;
+  nextCursor?: QueryDocumentSnapshot<DocumentData>;
 }
 
 export interface RolesPage {
@@ -152,6 +159,7 @@ function mapDocToClaimRecord(docSnap: QueryDocumentSnapshot<DocumentData>): Clai
     submittedAnswer: '',
     privateLoaded: false,
     status: (d.status || 'pending') as ClaimRecord['status'],
+    resubmitted: Boolean(d.resubmitted),
     claimantId: d.claimantId || undefined,
     finderId: d.finderId || undefined,
     createdAt: toIsoString(d.createdAt),
@@ -178,13 +186,6 @@ export async function fetchUserRole(uid: string, email?: string | null): Promise
       if (inviteSnap.exists()) {
         const role = inviteSnap.data().role;
         if (role === 'admin' || role === 'security' || role === 'staff') return role;
-      }
-    }
-
-    if (uid) {
-      const userSnap = await getDoc(doc(db, USERS, uid));
-      if (userSnap.exists() && userSnap.data().role === 'staff') {
-        return 'staff';
       }
     }
 
@@ -594,6 +595,11 @@ export async function fetchCampusAuditCounts(): Promise<CampusAuditCounts> {
 
 export async function deleteItemFromFirestore(itemId: string): Promise<void> {
   try {
+    const uid = auth.currentUser?.uid;
+    const isAdminUser = Boolean(
+      uid && (isMasterAdminUser(uid) || (await isConfiguredAdmin(uid)) || (await fetchUserRole(uid)) === 'admin')
+    );
+
     const [privateClaimsSnap, claimsSnap] = await Promise.all([
       getDocs(query(collection(db, ITEMS, itemId, 'privateClaims'), limit(50))),
       getDocs(query(collection(db, CLAIMS), where('itemId', '==', itemId), limit(50))),
@@ -605,8 +611,14 @@ export async function deleteItemFromFirestore(itemId: string): Promise<void> {
       )
     );
 
+    const messageRefsToDelete = messageSnaps.flatMap((snap) =>
+      snap.docs
+        .filter((d) => isAdminUser || (uid && d.data().senderId === uid))
+        .map((d) => d.ref)
+    );
+
     const refsToDelete = [
-      ...messageSnaps.flatMap((snap) => snap.docs.map((d) => d.ref)),
+      ...messageRefsToDelete,
       doc(db, ITEMS, itemId, 'media', 'full'),
       doc(db, ITEMS, itemId, 'private', 'details'),
       doc(db, ITEMS, itemId, 'secrets', 'verification'),
@@ -783,6 +795,7 @@ export async function saveClaimToFirestore(claim: ClaimRecord, _user?: User | nu
       claimantId: uid,
       finderId: resolvedFinderId,
       status: 'pending',
+      resubmitted: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -806,33 +819,70 @@ export async function saveClaimToFirestore(claim: ClaimRecord, _user?: User | nu
   }
 }
 
+export async function resubmitClaimInFirestore(
+  claimId: string,
+  itemId: string,
+  updatedAnswer: string
+): Promise<void> {
+  if (!auth.currentUser) throw new Error('You must be signed in with a verified Nile account to resubmit a claim.');
+  try {
+    const batch = writeBatch(db);
+    batch.update(doc(db, CLAIMS, claimId), {
+      status: 'pending',
+      resubmitted: true,
+      updatedAt: serverTimestamp(),
+    });
+    batch.update(doc(db, ITEMS, itemId, 'privateClaims', claimId), {
+      submittedAnswer: updatedAnswer.trim().slice(0, 500),
+      updatedAt: serverTimestamp(),
+    });
+    batch.update(doc(db, ITEMS, itemId), {
+      status: 'claim_requested',
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `${CLAIMS}/${claimId}`);
+  }
+}
+
 export async function updateClaimStatusInFirestore(
   claimId: string,
   itemId: string,
   status: 'approved' | 'rejected',
-  otherPendingClaimIds: string[] = []
-): Promise<'verified' | 'open' | 'claim_requested'> {
+  finderIdForQuery?: string
+): Promise<ClaimDecisionBatchPlan> {
   try {
-    const batch = writeBatch(db);
-    batch.update(doc(db, CLAIMS, claimId), { status, updatedAt: serverTimestamp() });
-
-    let nextItemStatus: 'verified' | 'open' | 'claim_requested' = 'claim_requested';
-    if (status === 'approved') {
-      // Mark verified for handover and atomically close competing pending claims.
-      nextItemStatus = 'verified';
-      batch.update(doc(db, ITEMS, itemId), { status: 'verified', updatedAt: serverTimestamp() });
-      otherPendingClaimIds.forEach((otherId) => {
-        if (otherId !== claimId) {
-          batch.update(doc(db, CLAIMS, otherId), { status: 'rejected', updatedAt: serverTimestamp() });
+    return await decideClaimWithFreshPending({
+      claimId,
+      itemId,
+      decision: status,
+      queryPendingClaimIds: async (targetItemId) => {
+        const pendingSnap = await getDocs(
+          query(
+            collection(db, CLAIMS),
+            where('itemId', '==', targetItemId),
+            where('status', '==', 'pending'),
+            ...(finderIdForQuery ? [where('finderId', '==', finderIdForQuery)] : []),
+            limit(50)
+          )
+        );
+        return pendingSnap.docs.map((d) => d.id);
+      },
+      commitDecisionBatch: async (plan) => {
+        const batch = writeBatch(db);
+        batch.update(doc(db, CLAIMS, claimId), { status, updatedAt: serverTimestamp() });
+        if (status === 'approved') {
+          batch.update(doc(db, ITEMS, itemId), { status: 'verified', updatedAt: serverTimestamp() });
+          plan.autoRejectedIds.forEach((otherId) => {
+            batch.update(doc(db, CLAIMS, otherId), { status: 'rejected', updatedAt: serverTimestamp() });
+          });
+        } else if (plan.nextItemStatus === 'open') {
+          batch.update(doc(db, ITEMS, itemId), { status: 'open', updatedAt: serverTimestamp() });
         }
-      });
-    } else if (otherPendingClaimIds.length === 0) {
-      nextItemStatus = 'open';
-      batch.update(doc(db, ITEMS, itemId), { status: 'open', updatedAt: serverTimestamp() });
-    }
-
-    await batch.commit();
-    return nextItemStatus;
+        await batch.commit();
+      },
+    });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${CLAIMS}/${claimId}`);
   }
@@ -850,7 +900,7 @@ export async function syncUserProfile(user: User): Promise<void> {
       await setDoc(userRef, {
         name: displayName,
         email: authEmail,
-        role: user.role === 'staff' ? 'staff' : 'student',
+        role: 'student',
         department: user.department?.slice(0, 100) || '',
         matricNumber: user.matricNumber?.slice(0, 20) || '',
         createdAt: serverTimestamp(),
@@ -934,19 +984,28 @@ export async function saveNotificationToFirestore(notification: {
 }): Promise<string> {
   if (!auth.currentUser?.uid) throw new Error('You must be signed in to create a notification.');
   const template = NOTIF_TEMPLATES[notification.type];
+  const recipientUid = notification.recipientUid.slice(0, 128);
+  const claimId = notification.claimId ? notification.claimId.slice(0, 128) : undefined;
+  const payload = {
+    recipientUid,
+    fromUid: auth.currentUser.uid.slice(0, 128),
+    type: notification.type,
+    title: template.title,
+    message: template.message,
+    read: false,
+    createdAt: serverTimestamp(),
+    ...(notification.itemId && { itemId: notification.itemId.slice(0, 128) }),
+    ...(claimId && { claimId }),
+    ...(notification.sourceItemId && { sourceItemId: notification.sourceItemId.slice(0, 128) }),
+  };
+
   try {
-    const docRef = await addDoc(collection(db, NOTIFICATIONS), {
-      recipientUid: notification.recipientUid.slice(0, 128),
-      fromUid: auth.currentUser.uid.slice(0, 128),
-      type: notification.type,
-      title: template.title,
-      message: template.message,
-      read: false,
-      createdAt: serverTimestamp(),
-      ...(notification.itemId && { itemId: notification.itemId.slice(0, 128) }),
-      ...(notification.claimId && { claimId: notification.claimId.slice(0, 128) }),
-      ...(notification.sourceItemId && { sourceItemId: notification.sourceItemId.slice(0, 128) }),
-    });
+    if (notification.type === 'chat_message' && claimId) {
+      const docId = `chat_${claimId}_${recipientUid}`;
+      await setDoc(doc(db, NOTIFICATIONS, docId), payload);
+      return docId;
+    }
+    const docRef = await addDoc(collection(db, NOTIFICATIONS), payload);
     return docRef.id;
   } catch (error) {
     reportError('saveNotificationToFirestore', error);
@@ -979,43 +1038,75 @@ export async function markNotificationsReadInFirestore(notificationIds: string[]
   }
 }
 
+function mapDocToClaimMessage(docSnap: QueryDocumentSnapshot<DocumentData>, claimId: string): ClaimMessage {
+  const d = docSnap.data();
+  return {
+    id: docSnap.id,
+    claimId,
+    senderId: String(d.senderId || ''),
+    senderRole: (d.senderRole || 'Claimant') as ChatSenderRole,
+    text: String(d.text || ''),
+    createdAt: toIsoString(d.createdAt),
+  };
+}
+
 export function subscribeToClaimMessages(
   claimId: string,
-  onSuccess: (messages: ClaimMessage[]) => void,
+  onSuccess: (messages: ClaimMessage[], hasMore: boolean, nextCursor?: QueryDocumentSnapshot<DocumentData>) => void,
   onError?: (err: Error) => void,
-  pageSize = 50
+  pageSize = 49
 ): Unsubscribe {
   if (!auth.currentUser || !claimId) {
-    onSuccess([]);
+    onSuccess([], false, undefined);
     return () => {};
   }
-  const safeLimit = Math.min(Math.max(1, pageSize), 50);
+  const safeLimit = Math.min(Math.max(1, pageSize), 49);
   const q = query(
     collection(db, CLAIMS, claimId, 'messages'),
-    orderBy('createdAt', 'asc'),
-    limit(safeLimit)
+    orderBy('createdAt', 'desc'),
+    limit(safeLimit + 1)
   );
   return onSnapshot(
     q,
     (snapshot) => {
-      const messages: ClaimMessage[] = snapshot.docs.map((docSnap) => {
-        const d = docSnap.data();
-        return {
-          id: docSnap.id,
-          claimId,
-          senderId: String(d.senderId || ''),
-          senderRole: (d.senderRole || 'Claimant') as ChatSenderRole,
-          text: String(d.text || ''),
-          createdAt: toIsoString(d.createdAt),
-        };
-      });
-      onSuccess(messages);
+      const hasMore = snapshot.docs.length > safeLimit;
+      const pageDocs = snapshot.docs.slice(0, safeLimit);
+      const oldestDoc = pageDocs.at(-1);
+      const messages = [...pageDocs].reverse().map((docSnap) => mapDocToClaimMessage(docSnap, claimId));
+      onSuccess(messages, hasMore, hasMore ? oldestDoc : undefined);
     },
     (error) => {
       reportError(`subscribeToClaimMessages(${claimId})`, error);
       onError?.(error);
     }
   );
+}
+
+export async function fetchOlderClaimMessages(
+  claimId: string,
+  cursor: QueryDocumentSnapshot<DocumentData>,
+  pageSize = 49
+): Promise<ClaimMessagesPage> {
+  const safeLimit = Math.min(Math.max(1, pageSize), 49);
+  const q = query(
+    collection(db, CLAIMS, claimId, 'messages'),
+    orderBy('createdAt', 'desc'),
+    startAfter(cursor),
+    limit(safeLimit + 1)
+  );
+  try {
+    const snapshot = await getDocs(q);
+    const hasMore = snapshot.docs.length > safeLimit;
+    const pageDocs = snapshot.docs.slice(0, safeLimit);
+    const oldestDoc = pageDocs.at(-1);
+    return {
+      messages: [...pageDocs].reverse().map((docSnap) => mapDocToClaimMessage(docSnap, claimId)),
+      hasMore,
+      nextCursor: hasMore ? oldestDoc : undefined,
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, `${CLAIMS}/${claimId}/messages`);
+  }
 }
 
 export async function sendClaimMessageToFirestore(

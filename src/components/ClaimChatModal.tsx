@@ -8,9 +8,11 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { X, Send, MessageSquare, Lock, AlertTriangle } from 'lucide-react';
 import { CampusItem, ClaimMessage, ClaimRecord, User } from '../types/index.ts';
 import { detectPii } from '../utils/piiDetector.ts';
+import { reportError } from './ErrorBoundary.tsx';
 import {
   isClaimChatWritable,
   MAX_CHAT_MESSAGE_LENGTH,
@@ -19,6 +21,7 @@ import {
   validateChatMessageInput,
 } from '../utils/chat.ts';
 import {
+  fetchOlderClaimMessages,
   sendClaimMessageToFirestore,
   subscribeToClaimMessages,
 } from '../services/firestoreService.ts';
@@ -46,7 +49,11 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
   onMessageSent,
   onClose,
 }) => {
-  const [messages, setMessages] = useState<ClaimMessage[]>([]);
+  const [latestMessages, setLatestMessages] = useState<ClaimMessage[]>([]);
+  const [olderMessages, setOlderMessages] = useState<ClaimMessage[]>([]);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [olderCursor, setOlderCursor] = useState<QueryDocumentSnapshot<DocumentData> | undefined>(undefined);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [draftText, setDraftText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
@@ -55,13 +62,22 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
   const dialogRef = useRef<HTMLDivElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const lastLatestIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!claim) return;
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  const claimId = claim?.id ?? null;
+  const currentUserId = currentUser?.id ?? null;
+
+  useEffect(() => {
+    if (!claimId) return;
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     const focusTimer = window.setTimeout(() => dialogRef.current?.focus(), 0);
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -69,16 +85,20 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
       document.removeEventListener('keydown', onKeyDown);
       previousFocusRef.current?.focus?.();
     };
-  }, [claim, onClose]);
+  }, [claimId]);
 
   useEffect(() => {
-    if (!claim || !currentUser) return;
+    if (!claimId || !currentUserId) return;
     setChatError(null);
+    setOlderMessages([]);
+    setOlderCursor(undefined);
+    setHasMoreMessages(false);
+    lastLatestIdRef.current = null;
 
     if (isDemoMode) {
-      const existing = demoMessageThreads.get(claim.id);
+      const existing = demoMessageThreads.get(claimId);
       if (existing) {
-        setMessages(existing);
+        setLatestMessages(existing);
         setIsLoading(false);
         return;
       }
@@ -87,14 +107,15 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
       import('../data/mockItems.ts')
         .then((m) => {
           if (cancelled) return;
-          const seeded = m.DEMO_CHAT_MESSAGES[claim.id] || [];
-          demoMessageThreads.set(claim.id, seeded);
-          setMessages(seeded);
+          const seeded = m.DEMO_CHAT_MESSAGES[claimId] || [];
+          demoMessageThreads.set(claimId, seeded);
+          setLatestMessages(seeded);
           setIsLoading(false);
         })
-        .catch(() => {
+        .catch((err) => {
+          reportError('Load demo chat messages failed', err);
           if (!cancelled) {
-            setMessages([]);
+            setLatestMessages([]);
             setIsLoading(false);
           }
         });
@@ -103,22 +124,55 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
 
     setIsLoading(true);
     const unsub = subscribeToClaimMessages(
-      claim.id,
-      (nextMessages) => {
-        setMessages(nextMessages);
+      claimId,
+      (nextMessages, hasMore, nextCursor) => {
+        setLatestMessages(nextMessages);
+        setHasMoreMessages((prevHasMore) => (olderCursor ? prevHasMore : hasMore));
+        setOlderCursor((prevCursor) => prevCursor ?? nextCursor);
         setIsLoading(false);
       },
       (err) => {
+        reportError('subscribeToClaimMessages failed', err);
         setIsLoading(false);
         setChatError(err.message || 'Could not connect to handover chat. Check your network and try again.');
       }
     );
     return () => unsub();
-  }, [claim, currentUser, isDemoMode]);
+  }, [claimId, currentUserId, isDemoMode]);
+
+  const messages = useMemo(() => {
+    if (olderMessages.length === 0) return latestMessages;
+    const latestIds = new Set(latestMessages.map((m) => m.id));
+    return [...olderMessages.filter((m) => !latestIds.has(m.id)), ...latestMessages];
+  }, [olderMessages, latestMessages]);
 
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages.length]);
+    const newestId = latestMessages.at(-1)?.id ?? null;
+    if (newestId && newestId !== lastLatestIdRef.current) {
+      lastLatestIdRef.current = newestId;
+      threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [latestMessages]);
+
+  const handleLoadEarlier = async () => {
+    if (!claimId || !olderCursor || isLoadingOlder || isDemoMode) return;
+    setIsLoadingOlder(true);
+    setChatError(null);
+    try {
+      const page = await fetchOlderClaimMessages(claimId, olderCursor);
+      setOlderMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        return [...page.messages.filter((m) => !seen.has(m.id)), ...prev];
+      });
+      setHasMoreMessages(page.hasMore);
+      setOlderCursor(page.nextCursor);
+    } catch (err) {
+      reportError('fetchOlderClaimMessages failed', err);
+      setChatError('Could not load earlier messages. Check your connection and try again.');
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  };
 
   const piiWarning = useMemo(() => {
     if (!draftText.trim() || claim?.status === 'approved') return null;
@@ -159,13 +213,14 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
         };
         const updated = [...(demoMessageThreads.get(claim.id) || []), nextMsg];
         demoMessageThreads.set(claim.id, updated);
-        setMessages(updated);
+        setLatestMessages(updated);
       } else {
         await sendClaimMessageToFirestore(claim.id, validation.trimmed, senderRole);
       }
       setDraftText('');
       onMessageSent?.(claim, item);
     } catch (err: unknown) {
+      reportError('sendClaimMessage failed', err);
       setChatError(err instanceof Error ? err.message : 'Message failed to send. Please try again.');
     } finally {
       setIsSending(false);
@@ -175,7 +230,7 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/55 overflow-y-auto modal-backdrop-enter"
-      onClick={onClose}
+      onClick={() => onCloseRef.current()}
     >
       <div
         ref={dialogRef}
@@ -203,7 +258,7 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => onCloseRef.current()}
             className="text-[#5C554C] dark:text-[#A8A095] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-[10px] cursor-pointer"
             aria-label="Close handover chat"
           >
@@ -220,6 +275,19 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
           className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 bg-[#FAF6EF]/35 dark:bg-[#141311]/35"
           aria-live="polite"
         >
+          {hasMoreMessages && !isDemoMode && (
+            <div className="flex justify-center pb-1">
+              <button
+                type="button"
+                onClick={handleLoadEarlier}
+                disabled={isLoadingOlder}
+                className="min-h-[44px] px-4 py-2 rounded-[10px] border border-[#857C70] dark:border-[#787065] bg-white dark:bg-[#1E1C18] hover:bg-[#FAF6EF] dark:hover:bg-[#28241F] text-xs font-medium text-[#1F1B16] dark:text-[#F5F1EA] disabled:opacity-60 cursor-pointer"
+              >
+                {isLoadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}
+              </button>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="space-y-2.5 animate-pulse">
               <div className="h-12 w-3/4 rounded-[10px] bg-[#EDE7DC] dark:bg-[#28241F]" />
@@ -295,17 +363,23 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
             <form onSubmit={handleSend} className="flex items-end gap-2">
               <div className="flex-1 min-w-0">
                 <label htmlFor="claim-chat-input" className="sr-only">Message</label>
-                <input
+                <textarea
                   id="claim-chat-input"
-                  type="text"
+                  rows={2}
                   maxLength={MAX_CHAT_MESSAGE_LENGTH}
                   value={draftText}
                   onChange={(e) => {
                     setDraftText(e.target.value);
                     if (chatError) setChatError(null);
                   }}
-                  placeholder="Write a short handover message…"
-                  className="w-full text-base sm:text-sm px-3.5 py-2.5 rounded-[10px] border border-[#857C70] dark:border-[#787065] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] placeholder:text-[#5C554C] dark:placeholder:text-[#A8A095] min-h-[44px]"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  placeholder="Write a short handover message..."
+                  className="w-full text-base sm:text-sm px-3.5 py-2.5 rounded-[10px] border border-[#857C70] dark:border-[#787065] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] placeholder:text-[#5C554C] dark:placeholder:text-[#A8A095] min-h-[44px] resize-none"
                 />
               </div>
               <button

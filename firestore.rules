@@ -131,26 +131,28 @@ service cloud.firestore {
 
     function isValidClaim(data) {
       return data.keys().hasAll(['itemId', 'itemTitle', 'claimantId', 'finderId', 'status', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['itemId', 'itemTitle', 'claimantId', 'finderId', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['itemId', 'itemTitle', 'claimantId', 'finderId', 'status', 'resubmitted', 'createdAt', 'updatedAt'])
         && data.itemId is string && data.itemId.size() <= 128
         && data.itemTitle is string && data.itemTitle.size() <= 100
         && data.claimantId is string && data.claimantId.size() <= 128
         && data.finderId is string && data.finderId.size() <= 128
         && data.status in ['pending', 'approved', 'rejected']
+        && (!('resubmitted' in data) || (data.resubmitted is bool))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
 
     function isValidPrivateClaim(data, itemId, claimId) {
       return data.keys().hasAll(['itemId', 'claimId', 'claimantId', 'claimantName', 'claimantEmail', 'submittedAnswer', 'createdAt'])
-        && data.keys().hasOnly(['itemId', 'claimId', 'claimantId', 'claimantName', 'claimantEmail', 'submittedAnswer', 'createdAt'])
+        && data.keys().hasOnly(['itemId', 'claimId', 'claimantId', 'claimantName', 'claimantEmail', 'submittedAnswer', 'createdAt', 'updatedAt'])
         && data.itemId == itemId
         && data.claimId == claimId
         && data.claimantId == request.auth.uid
         && data.claimantName is string && data.claimantName.size() >= 2 && data.claimantName.size() <= 100
         && data.claimantEmail is string && data.claimantEmail.size() >= 3 && data.claimantEmail.size() <= 100
         && data.submittedAnswer is string && data.submittedAnswer.size() <= 500
-        && data.createdAt is timestamp;
+        && data.createdAt is timestamp
+        && (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
 
     function isValidPrivateDetails(data, itemId) {
@@ -169,7 +171,7 @@ service cloud.firestore {
         && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
         && data.email is string && data.email.size() <= 100
         && request.auth.token.email is string && data.email == request.auth.token.email
-        && data.role in ['student', 'staff', 'security', 'admin']
+        && data.role == 'student'
         && data.createdAt is timestamp
         && (!('updatedAt' in data) || (data.updatedAt is timestamp))
         && (!('department' in data) || (data.department is string && data.department.size() <= 100))
@@ -292,7 +294,26 @@ service cloud.firestore {
           && existsAfter(/databases/$(database)/documents/claims/$(claimId))
           && getAfter(/databases/$(database)/documents/claims/$(claimId)).data.claimantId == request.auth.uid
           && getAfter(/databases/$(database)/documents/claims/$(claimId)).data.itemId == itemId;
-        allow update: if isValidId(claimId) && isAdmin();
+        allow update: if isValidId(claimId) && (
+          isAdmin()
+          || (
+            isVerifiedUser()
+            && isValidPrivateClaim(incoming(), itemId, claimId)
+            && resource.data.claimantId == request.auth.uid
+            && incoming().claimantId == existing().claimantId
+            && incoming().itemId == existing().itemId
+            && incoming().claimId == existing().claimId
+            && incoming().createdAt == existing().createdAt
+            && incoming().updatedAt == request.time
+            && incoming().diff(existing()).affectedKeys().hasOnly(['submittedAnswer', 'updatedAt'])
+            && exists(/databases/$(database)/documents/claims/$(claimId))
+            && get(/databases/$(database)/documents/claims/$(claimId)).data.claimantId == request.auth.uid
+            && get(/databases/$(database)/documents/claims/$(claimId)).data.status == 'rejected'
+            && (!('resubmitted' in get(/databases/$(database)/documents/claims/$(claimId)).data) || get(/databases/$(database)/documents/claims/$(claimId)).data.resubmitted == false)
+            && getAfter(/databases/$(database)/documents/claims/$(claimId)).data.status == 'pending'
+            && getAfter(/databases/$(database)/documents/claims/$(claimId)).data.resubmitted == true
+          )
+        );
         allow delete: if isValidId(claimId) && (
           isAdmin()
           || (isVerifiedUser() && resource.data.claimantId == request.auth.uid)
@@ -338,6 +359,7 @@ service cloud.firestore {
         && !exists(/databases/$(database)/documents/claims/$(claimId))
         && incoming().claimantId == request.auth.uid
         && incoming().status == 'pending'
+        && (!('resubmitted' in incoming()) || incoming().resubmitted == false)
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
         && exists(/databases/$(database)/documents/items/$(incoming().itemId))
@@ -352,24 +374,42 @@ service cloud.firestore {
         && incoming().itemId == existing().itemId
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
-        && existing().status == 'pending'
-        && incoming().status in ['approved', 'rejected']
         && exists(/databases/$(database)/documents/items/$(existing().itemId))
         && get(/databases/$(database)/documents/items/$(existing().itemId)).data.status != 'returned'
         && (
-          incoming().status != 'approved'
-          || (
-            get(/databases/$(database)/documents/items/$(existing().itemId)).data.status in ['open', 'claim_requested']
-            && getAfter(/databases/$(database)/documents/items/$(existing().itemId)).data.status == 'verified'
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && existing().status == 'pending'
+            && incoming().status in ['approved', 'rejected']
+            && (
+              incoming().status != 'approved'
+              || (
+                get(/databases/$(database)/documents/items/$(existing().itemId)).data.status in ['open', 'claim_requested']
+                && getAfter(/databases/$(database)/documents/items/$(existing().itemId)).data.status == 'verified'
+              )
+            )
+            && (
+              isAdmin()
+              || resource.data.finderId == request.auth.uid
+              || (
+                isSecurity()
+                && get(/databases/$(database)/documents/items/$(existing().itemId)).data.holdingLocation != 'finder_holding'
+              )
+            )
           )
-        )
-        && (
-          isAdmin()
-          || resource.data.finderId == request.auth.uid
           || (
-            isSecurity()
-            && get(/databases/$(database)/documents/items/$(existing().itemId)).data.holdingLocation != 'finder_holding'
+            resource.data.claimantId == request.auth.uid
+            && existing().status == 'rejected'
+            && (!('resubmitted' in existing()) || existing().resubmitted == false)
+            && incoming().status == 'pending'
+            && incoming().resubmitted == true
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'resubmitted', 'updatedAt'])
+            && get(/databases/$(database)/documents/items/$(existing().itemId)).data.type == 'found'
+            && get(/databases/$(database)/documents/items/$(existing().itemId)).data.status in ['open', 'claim_requested']
+            && getAfter(/databases/$(database)/documents/items/$(existing().itemId)).data.status == 'claim_requested'
+            && existsAfter(/databases/$(database)/documents/items/$(existing().itemId)/privateClaims/$(claimId))
+            && getAfter(/databases/$(database)/documents/items/$(existing().itemId)/privateClaims/$(claimId)).data.claimantId == request.auth.uid
+            && getAfter(/databases/$(database)/documents/items/$(existing().itemId)/privateClaims/$(claimId)).data.updatedAt == request.time
           )
         );
       allow delete: if isValidId(claimId) && (
@@ -422,11 +462,7 @@ service cloud.firestore {
         allow update: if false;
         allow delete: if isValidId(claimId) && isValidId(messageId) && (
           isAdmin()
-          || (
-            isVerifiedUser()
-            && exists(/databases/$(database)/documents/claims/$(claimId))
-            && get(/databases/$(database)/documents/claims/$(claimId)).data.finderId == request.auth.uid
-          )
+          || (isVerifiedUser() && resource.data.senderId == request.auth.uid)
         );
       }
     }
@@ -488,13 +524,13 @@ service cloud.firestore {
         && request.auth.uid == userId
         && isValidUser(incoming())
         && incoming().createdAt == request.time
-        && (incoming().role in ['student', 'staff'] || isMasterAdmin());
+        && incoming().role == 'student';
       allow update: if isValidId(userId) && isVerifiedUser()
         && request.auth.uid == userId
         && isValidUser(incoming())
         && incoming().createdAt == existing().createdAt
         && (!('updatedAt' in incoming()) || incoming().updatedAt == request.time)
-        && (incoming().role == existing().role || isMasterAdmin());
+        && incoming().role == existing().role;
       allow delete: if isValidId(userId) && (
         isAdmin() || (isVerifiedUser() && request.auth.uid == userId)
       );
@@ -620,6 +656,11 @@ service cloud.firestore {
         );
     }
 
+    function isChatNotifId(notificationId, data) {
+      return data.type != 'chat_message'
+        || ('claimId' in data && notificationId == 'chat_' + data.claimId + '_' + data.recipientUid);
+    }
+
     match /notifications/{notificationId} {
       allow get: if isVerifiedUser() && (
         resource.data.recipientUid == request.auth.uid ||
@@ -631,11 +672,24 @@ service cloud.firestore {
       );
       allow create: if isValidId(notificationId) && isVerifiedUser()
         && isValidNotification(incoming())
+        && isChatNotifId(notificationId, incoming())
         && canCreateNotification(incoming());
-      allow update: if isValidId(notificationId) && isVerifiedUser()
-        && (resource.data.recipientUid == request.auth.uid || (isStaffOrAdmin() && resource.data.recipientUid == 'admin'))
-        && incoming().diff(existing()).affectedKeys().hasOnly(['read'])
-        && incoming().read is bool;
+      allow update: if isValidId(notificationId) && isVerifiedUser() && (
+        (
+          (resource.data.recipientUid == request.auth.uid || (isStaffOrAdmin() && resource.data.recipientUid == 'admin'))
+          && incoming().diff(existing()).affectedKeys().hasOnly(['read'])
+          && incoming().read is bool
+        )
+        || (
+          existing().type == 'chat_message'
+          && incoming().type == 'chat_message'
+          && incoming().recipientUid == existing().recipientUid
+          && incoming().claimId == existing().claimId
+          && isChatNotifId(notificationId, incoming())
+          && isValidNotification(incoming())
+          && canCreateNotification(incoming())
+        )
+      );
       allow delete: if isValidId(notificationId) && (
         isAdmin() ||
         (isVerifiedUser() && resource.data.recipientUid == request.auth.uid)

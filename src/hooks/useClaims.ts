@@ -3,12 +3,14 @@ import { CampusItem, ClaimRecord, User } from '../types/index.ts';
 import { readJson, safeSetStorage } from '../utils/storage.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
 import { auth } from '../lib/firebase.ts';
+import { canUserModerate } from '../utils/admin.ts';
 import {
   subscribeToRealtimeClaims,
   fetchMoreClaimsPage,
   ClaimsCursor,
   fetchClaimPrivateDetails,
   saveClaimToFirestore,
+  resubmitClaimInFirestore,
   updateClaimStatusInFirestore,
 } from '../services/firestoreService.ts';
 import type { DispatchNotificationFn } from './useNotifications.ts';
@@ -161,18 +163,72 @@ export function useClaims({
     [isDemoMode, currentUser, items, setItems, dispatchNotification]
   );
 
+  const handleResubmitClaim = useCallback(
+    async (claim: ClaimRecord, updatedAnswer: string): Promise<void> => {
+      if (claim.status !== 'rejected' || claim.resubmitted) {
+        throw new Error('You have already used your one claim resubmission for this item.');
+      }
+      const cleanAnswer = updatedAnswer.trim().slice(0, 500);
+      const fromUid = auth.currentUser?.uid || currentUser?.id || 'claimant';
+      const matchingItem = items.find((i) => i.id === claim.itemId);
+
+      if (isDemoMode) {
+        setClaims((prev) =>
+          prev.map((c) =>
+            c.id === claim.id
+              ? { ...c, status: 'pending', resubmitted: true, submittedAnswer: cleanAnswer, privateLoaded: true }
+              : c
+          )
+        );
+      } else {
+        await resubmitClaimInFirestore(claim.id, claim.itemId, cleanAnswer);
+        setClaims((prev) =>
+          prev.map((c) =>
+            c.id === claim.id
+              ? { ...c, status: 'pending', resubmitted: true, submittedAnswer: cleanAnswer }
+              : c
+          )
+        );
+      }
+
+      setItems((prev) =>
+        prev.map((it) => (it.id === claim.itemId ? { ...it, status: 'claim_requested' } : it))
+      );
+      setOlderItems((prev) =>
+        prev.map((it) => (it.id === claim.itemId ? { ...it, status: 'claim_requested' } : it))
+      );
+
+      if (matchingItem?.authorId && matchingItem.authorId !== fromUid) {
+        dispatchNotification({
+          recipientUid: matchingItem.authorId,
+          fromUid,
+          type: 'claim_received',
+          title: `Updated claim on ${matchingItem.title}`,
+          message: 'A claimant submitted their final updated verification answer.',
+          itemId: matchingItem.id,
+          claimId: claim.id,
+        });
+      }
+    },
+    [isDemoMode, currentUser, items, setItems, setOlderItems, dispatchNotification]
+  );
+
   const handleApproveClaim = useCallback(
     async (claimId: string, itemId: string): Promise<boolean> => {
       try {
         const fromUid = auth.currentUser?.uid || currentUser?.id || 'admin';
         const claim = claims.find((c) => c.id === claimId);
-        const otherPendingIds = claims
+        let autoRejectedIds = claims
           .filter((c) => c.itemId === itemId && c.id !== claimId && c.status === 'pending')
           .map((c) => c.id);
+
         if (!isDemoMode) {
-          await updateClaimStatusInFirestore(claimId, itemId, 'approved', otherPendingIds);
+          const finderFilter = canUserModerate(currentUser) ? undefined : fromUid;
+          const result = await updateClaimStatusInFirestore(claimId, itemId, 'approved', finderFilter);
+          autoRejectedIds = result.autoRejectedIds;
         }
-        const rejectedSet = new Set(otherPendingIds);
+
+        const rejectedSet = new Set(autoRejectedIds);
         setClaims((prev) =>
           prev.map((c) =>
             c.id === claimId
@@ -197,7 +253,9 @@ export function useClaims({
           });
         }
         return true;
-      } catch {
+      } catch (err) {
+        reportError('handleApproveClaim failed', err);
+        setClaimsError('Could not approve claim. Check your connection and try again.');
         return false;
       }
     },
@@ -210,19 +268,16 @@ export function useClaims({
         const fromUid = auth.currentUser?.uid || currentUser?.id || 'admin';
         const claim = claims.find((c) => c.id === claimId);
         if (!claim) return false;
-        const otherPendingIds = claims
-          .filter((c) => c.itemId === claim.itemId && c.id !== claimId && c.status === 'pending')
-          .map((c) => c.id);
+        const localOtherPendingCount = claims.filter(
+          (c) => c.itemId === claim.itemId && c.id !== claimId && c.status === 'pending'
+        ).length;
 
         let nextItemStatus: CampusItem['status'] =
-          otherPendingIds.length === 0 ? 'open' : 'claim_requested';
+          localOtherPendingCount === 0 ? 'open' : 'claim_requested';
         if (!isDemoMode) {
-          nextItemStatus = await updateClaimStatusInFirestore(
-            claimId,
-            claim.itemId,
-            'rejected',
-            otherPendingIds
-          );
+          const finderFilter = canUserModerate(currentUser) ? undefined : fromUid;
+          const result = await updateClaimStatusInFirestore(claimId, claim.itemId, 'rejected', finderFilter);
+          nextItemStatus = result.nextItemStatus;
         }
         setClaims((prev) => prev.map((c) => (c.id === claimId ? { ...c, status: 'rejected' } : c)));
         setItems((prev) =>
@@ -244,7 +299,9 @@ export function useClaims({
           });
         }
         return true;
-      } catch {
+      } catch (err) {
+        reportError('handleRejectClaim failed', err);
+        setClaimsError('Could not reject claim. Check your connection and try again.');
         return false;
       }
     },
@@ -271,6 +328,7 @@ export function useClaims({
     handleLoadMoreClaims,
     handleFetchClaimPrivateDetails,
     handleClaimSuccess,
+    handleResubmitClaim,
     handleApproveClaim,
     handleRejectClaim,
     removeClaimsForItem,

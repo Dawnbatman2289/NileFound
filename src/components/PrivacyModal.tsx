@@ -7,7 +7,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { X, ShieldCheck, Clock, Trash2, Database } from 'lucide-react';
+import { X, ShieldCheck, Clock, Trash2, Database, MessageSquare } from 'lucide-react';
 import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
 
 interface PrivacyModalProps {
@@ -18,13 +18,18 @@ interface PrivacyModalProps {
 export const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onClose }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     const timer = window.setTimeout(() => dialogRef.current?.focus(), 0);
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -32,7 +37,7 @@ export const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onClose }) =
       document.removeEventListener('keydown', onKeyDown);
       previousFocusRef.current?.focus?.();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -83,6 +88,19 @@ export const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onClose }) =
               <li><strong className="text-[#1F1B16] dark:text-[#F5F1EA]">Found Student ID cards:</strong> names and matric numbers are blocked, and ID card photos are disabled in both the app and security rules.</li>
               <li><strong className="text-[#1F1B16] dark:text-[#F5F1EA]">Verification answers:</strong> private answers are stored in protected Firestore subcollections accessible only to the finder and authorised staff.</li>
             </ul>
+          </div>
+
+          <div className="border border-[#C4BBAF] dark:border-[#3E3931] rounded-[10px] p-4 bg-[#FAF6EF] dark:bg-[#141311] space-y-1.5">
+            <div className="flex items-center gap-2 font-semibold text-[#0F6E6E] dark:text-[#199595] text-sm">
+              <MessageSquare className="w-4 h-4 shrink-0" />
+              <span>Handover chat</span>
+            </div>
+            <p className="text-[#4A443C] dark:text-[#CEC7BB]">
+              Only the claimant, the finder, campus admins, and desk security (for items handed in at a campus desk) can read messages in a claim thread. Other students cannot read your chat.
+            </p>
+            <p className="text-[#4A443C] dark:text-[#CEC7BB]">
+              Chat threads become read-only once a claim is closed or the item is marked returned or expired, and messages are deleted when the item is removed from the Operations Desk (you can also delete your own messages).
+            </p>
           </div>
 
           <div className="border border-[#C4BBAF] dark:border-[#3E3931] rounded-[10px] p-4 bg-[#FAF6EF] dark:bg-[#141311] space-y-1.5">

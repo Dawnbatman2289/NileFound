@@ -22,7 +22,7 @@ import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY;
+const appCheckSiteKey = import.meta.env?.VITE_FIREBASE_APPCHECK_SITE_KEY;
 if (appCheckSiteKey) {
   initializeAppCheck(app, {
     provider: new ReCaptchaV3Provider(appCheckSiteKey),
@@ -98,12 +98,14 @@ export function handleFirestoreError(
   throw new Error(userFacingMessage);
 }
 
-export async function clearOfflinePersistence(): Promise<void> {
+export async function clearOfflinePersistence(): Promise<{ cleared: boolean }> {
   try {
     await terminate(db);
     await clearIndexedDbPersistence(db);
+    return { cleared: true };
   } catch (persistenceErr: unknown) {
     console.warn('[NileFound] Could not clear offline persistence:', persistenceErr);
+    return { cleared: false };
   }
 }
 

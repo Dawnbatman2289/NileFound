@@ -3,6 +3,7 @@ import { Calendar, CheckCircle, Clock, Mail, MapPin, MessageSquare, ShieldCheck,
 import { CampusItem, ClaimRecord } from '../../types/index.ts';
 import { formatDateDDMMYYYY } from '../../utils/dateFormatter.ts';
 import type { ItemPrivateDetails } from '../../services/firestoreService.ts';
+import { reportError } from '../ErrorBoundary.tsx';
 import { ADMIN_CARD } from './adminStyles.ts';
 
 interface ItemDetailModalProps {
@@ -188,7 +189,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                         setLoadingClaimId(claim.id);
                         try {
                           await onFetchClaimPrivateDetails(selectedItem.id, claim.id);
-                        } catch {
+                        } catch (err) {
+                          reportError('Load claimant private details failed', err);
                           onErrorNotice('Could not load claimant contact details.');
                         } finally {
                           setLoadingClaimId(null);

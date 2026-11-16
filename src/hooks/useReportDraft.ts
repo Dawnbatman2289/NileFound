@@ -119,8 +119,8 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
           return;
         }
       }
-    } catch {
-      // Ignore corrupt draft storage
+    } catch (err) {
+      reportError('Restore report draft failed', err);
     }
     resetEmptyFields(null);
     setHasRestoredDraft(false);
@@ -152,8 +152,8 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
       try {
         localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData));
         onDraftSaved();
-      } catch {
-        // Ignore storage quota or restricted storage
+      } catch (err) {
+        reportError('Save report draft failed', err);
       }
     },
     [reportType, title, category, location, locationDetails, description, dateLostOrFound, holdingLocation, verificationQuestion, onDraftSaved]

@@ -19,10 +19,12 @@ interface ItemCardProps {
   isDemoMode?: boolean;
   myApprovedClaim?: ClaimRecord;
   myPendingClaim?: ClaimRecord;
+  myRejectedClaim?: ClaimRecord;
   approvedFinderClaim?: ClaimRecord;
   pendingFinderClaims: ClaimRecord[];
   unreadChatClaimIds?: Set<string>;
   handoverInfo?: { authorName?: string; authorEmail?: string } | null;
+  handoverError?: string;
   isLoadingHandover: boolean;
   onSelectDetail: (item: CampusItem) => void;
   onClaimItem: (item: CampusItem) => void;
@@ -45,8 +47,8 @@ const holdingLocationLabel = (loc: CampusItem['holdingLocation'], isFoundIdCard:
 };
 
 export const ItemCard: React.FC<ItemCardProps> = memo(({
-  item, lowDataMode, currentUser, isDemoMode, myApprovedClaim, myPendingClaim, approvedFinderClaim,
-  pendingFinderClaims, unreadChatClaimIds, handoverInfo, isLoadingHandover, onSelectDetail, onClaimItem,
+  item, lowDataMode, currentUser, isDemoMode, myApprovedClaim, myPendingClaim, myRejectedClaim, approvedFinderClaim,
+  pendingFinderClaims, unreadChatClaimIds, handoverInfo, handoverError, isLoadingHandover, onSelectDetail, onClaimItem,
   onOpenReportModal, onFoundMatch, onRequestHandoverContact, onFetchClaimPrivateDetails,
   onApproveClaim, onRejectClaim, onUpdateItemStatus, onOpenClaimChat,
 }) => {
@@ -58,7 +60,7 @@ export const ItemCard: React.FC<ItemCardProps> = memo(({
   const isFoundIdCard = isFound && item.category === 'student_id';
   const displayTitle = isFoundIdCard ? 'A student ID card was found' : item.title;
   const previewPhoto = isFoundIdCard ? undefined : (item.thumbUrl || item.imageUrl);
-  const claimState = getClaimButtonState(item, currentUser?.id, myPendingClaim, myApprovedClaim);
+  const claimState = getClaimButtonState(item, currentUser?.id, myPendingClaim, myApprovedClaim, myRejectedClaim);
 
   const handleLoadClaimPrivate = async (claimId: string) => {
     if (!onFetchClaimPrivateDetails) return;
@@ -130,6 +132,7 @@ export const ItemCard: React.FC<ItemCardProps> = memo(({
           <ApprovedHandoverBanner
             item={item}
             handoverInfo={handoverInfo}
+            handoverError={handoverError}
             isLoadingHandover={isLoadingHandover}
             hasUnreadChat={unreadChatClaimIds?.has(myApprovedClaim.id)}
             onRequestHandoverContact={onRequestHandoverContact}

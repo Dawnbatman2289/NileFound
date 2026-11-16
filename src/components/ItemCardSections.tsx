@@ -14,17 +14,25 @@ export function getClaimButtonState(
   item: CampusItem,
   currentUserId: string | undefined,
   myPendingClaim?: ClaimRecord,
-  myApprovedClaim?: ClaimRecord
+  myApprovedClaim?: ClaimRecord,
+  myRejectedClaim?: ClaimRecord
 ): { disabled: boolean; label: string } {
   const isOwner = item.authorId === currentUserId;
+  const canRetryRejected = Boolean(
+    myRejectedClaim && !myRejectedClaim.resubmitted && (item.status === 'open' || item.status === 'claim_requested')
+  );
+  const blockedRejected = Boolean(myRejectedClaim) && !canRetryRejected;
+
   const disabled = item.status === 'returned' || item.status === 'verified' || item.status === 'expired'
-    || Boolean(myPendingClaim) || Boolean(myApprovedClaim) || isOwner;
+    || Boolean(myPendingClaim) || Boolean(myApprovedClaim) || blockedRejected || isOwner;
 
   if (item.status === 'returned') return { disabled, label: 'Item Reunited' };
   if (item.status === 'verified') return { disabled, label: 'Verified — Awaiting Handover' };
   if (item.status === 'expired') return { disabled, label: 'Notice Expired' };
   if (myApprovedClaim) return { disabled, label: 'Claim Approved' };
   if (myPendingClaim) return { disabled, label: 'Claim Submitted' };
+  if (canRetryRejected) return { disabled: false, label: 'Retry Claim (1 left)' };
+  if (blockedRejected) return { disabled: true, label: 'Claim Rejected (Final)' };
   if (isOwner) return { disabled, label: 'Your Found Post' };
   return { disabled, label: 'This is Mine (Claim)' };
 }
@@ -81,11 +89,12 @@ export const ItemCardMedia: React.FC<{
 export const ApprovedHandoverBanner: React.FC<{
   item: CampusItem;
   handoverInfo?: { authorName?: string; authorEmail?: string } | null;
+  handoverError?: string;
   isLoadingHandover: boolean;
   hasUnreadChat?: boolean;
   onRequestHandoverContact?: (itemId: string) => void;
   onOpenChat?: () => void;
-}> = ({ item, handoverInfo, isLoadingHandover, hasUnreadChat, onRequestHandoverContact, onOpenChat }) => (
+}> = ({ item, handoverInfo, handoverError, isLoadingHandover, hasUnreadChat, onRequestHandoverContact, onOpenChat }) => (
   <div className="bg-[#EDF7F1] dark:bg-[#0E2417] border border-[#2F7D4F]/30 rounded-[10px] p-3 text-sm space-y-2">
     <div className="flex items-center justify-between gap-2 flex-wrap">
       <span className="font-semibold text-[#1B5633] dark:text-[#75CE9A]">Claim Approved</span>
@@ -95,6 +104,11 @@ export const ApprovedHandoverBanner: React.FC<{
         </button>
       )}
     </div>
+    {handoverError && (
+      <p role="alert" className="text-xs text-[#9B1C1C] dark:text-[#F87171]">
+        {handoverError}
+      </p>
+    )}
     {handoverInfo && (
       <div className="text-[#1F1B16] dark:text-[#F5F1EA] flex items-center gap-1.5 flex-wrap">
         <Mail className="w-4 h-4 text-[#0F6E6E] dark:text-[#199595] shrink-0" />

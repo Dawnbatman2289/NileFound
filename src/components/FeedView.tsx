@@ -65,10 +65,19 @@ const FeedEmptyState: React.FC<{
 );
 
 function getItemClaimContext(claims: ClaimRecord[], item: CampusItem, currentUserId?: string) {
-  if (!currentUserId) return { myApprovedClaim: undefined, myPendingClaim: undefined, approvedFinderClaim: undefined, pendingFinderClaims: [] };
+  if (!currentUserId) {
+    return {
+      myApprovedClaim: undefined,
+      myPendingClaim: undefined,
+      myRejectedClaim: undefined,
+      approvedFinderClaim: undefined,
+      pendingFinderClaims: [],
+    };
+  }
   return {
     myApprovedClaim: claims.find((c) => c.itemId === item.id && c.claimantId === currentUserId && c.status === 'approved'),
     myPendingClaim: claims.find((c) => c.itemId === item.id && c.claimantId === currentUserId && c.status === 'pending'),
+    myRejectedClaim: claims.find((c) => c.itemId === item.id && c.claimantId === currentUserId && c.status === 'rejected'),
     approvedFinderClaim: item.authorId === currentUserId ? claims.find((c) => c.itemId === item.id && c.status === 'approved') : undefined,
     pendingFinderClaims: item.authorId === currentUserId ? claims.filter((c) => c.itemId === item.id && c.status === 'pending') : [],
   };
@@ -89,6 +98,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
   const [demoSeedItems, setDemoSeedItems] = useState<CampusItem[]>([]);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [handoverContacts, setHandoverContacts] = useState<Record<string, { authorName?: string; authorEmail?: string } | null>>({});
+  const [handoverErrors, setHandoverErrors] = useState<Record<string, string>>({});
   const [loadingHandoverId, setLoadingHandoverId] = useState<string | null>(null);
   const [detailItem, setDetailItem] = useState<CampusItem | null>(null);
   const [detailPhotoUrl, setDetailPhotoUrl] = useState<string | null>(null);
@@ -117,8 +127,8 @@ export const FeedView: React.FC<FeedViewProps> = ({
   useEffect(() => {
     try {
       sessionStorage.setItem('nilefound_feed_filters', JSON.stringify({ category: selectedCategory, location: selectedLocation, type: selectedType }));
-    } catch {
-      // Ignore storage quota errors
+    } catch (err) {
+      reportError('Save feed filters failed', err);
     }
   }, [selectedCategory, selectedLocation, selectedType]);
 
@@ -161,10 +171,21 @@ export const FeedView: React.FC<FeedViewProps> = ({
   const handleRequestHandoverContact = useCallback(async (itemId: string) => {
     if (!onFetchHandoverContact) return;
     setLoadingHandoverId(itemId);
+    setHandoverErrors((prev) => {
+      if (!prev[itemId]) return prev;
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
     try {
       const info = await onFetchHandoverContact(itemId);
       setHandoverContacts((prev) => ({ ...prev, [itemId]: info }));
-    } catch {
+    } catch (err) {
+      reportError('Fetch handover contact failed', err);
+      setHandoverErrors((prev) => ({
+        ...prev,
+        [itemId]: 'Could not load handover contact. Check your connection and try again.',
+      }));
       setHandoverContacts((prev) => ({ ...prev, [itemId]: null }));
     } finally {
       setLoadingHandoverId(null);
@@ -279,10 +300,12 @@ export const FeedView: React.FC<FeedViewProps> = ({
                   isDemoMode={isDemoMode}
                   myApprovedClaim={claimCtx.myApprovedClaim}
                   myPendingClaim={claimCtx.myPendingClaim}
+                  myRejectedClaim={claimCtx.myRejectedClaim}
                   approvedFinderClaim={claimCtx.approvedFinderClaim}
                   pendingFinderClaims={claimCtx.pendingFinderClaims}
                   unreadChatClaimIds={unreadChatClaimIds}
                   handoverInfo={handoverContacts[item.id]}
+                  handoverError={handoverErrors[item.id]}
                   isLoadingHandover={loadingHandoverId === item.id}
                   onSelectDetail={setDetailItem}
                   onClaimItem={onClaimItem}

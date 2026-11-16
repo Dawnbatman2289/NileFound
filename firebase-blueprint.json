@@ -58,6 +58,7 @@
         "claimantId": { "type": "string", "maxLength": 128 },
         "finderId": { "type": "string", "maxLength": 128 },
         "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "resubmitted": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -74,7 +75,8 @@
         "claimantName": { "type": "string", "minLength": 2, "maxLength": 100 },
         "claimantEmail": { "type": "string", "minLength": 3, "maxLength": 100 },
         "submittedAnswer": { "type": "string", "maxLength": 500 },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["itemId", "claimId", "claimantId", "claimantName", "claimantEmail", "submittedAnswer", "createdAt"]
     },
@@ -98,7 +100,7 @@
       "properties": {
         "name": { "type": "string", "minLength": 2, "maxLength": 100 },
         "email": { "type": "string", "maxLength": 100 },
-        "role": { "type": "string", "enum": ["student", "staff", "security", "admin"] },
+        "role": { "type": "string", "enum": ["student"] },
         "matricNumber": { "type": "string", "maxLength": 20 },
         "department": { "type": "string", "maxLength": 100 },
         "createdAt": { "type": "string", "format": "date-time" },

@@ -6,6 +6,7 @@
  */
 
 import { CampusNotification } from '../types/index.ts';
+import { reportError } from '../components/ErrorBoundary.tsx';
 
 export const CAMPUS_OPERATIONS_CONTACT = 'studentaffairs@nileuniversity.edu.ng';
 
@@ -62,8 +63,8 @@ export function playNotificationChime() {
 
     playNote(880, 0, 0.25, 0.08);
     playNote(1318.5, 0.1, 0.35, 0.09);
-  } catch {
-    // Audio playback blocked or unavailable.
+  } catch (err) {
+    reportError('Notification chime failed', err);
   }
 }
 
@@ -88,8 +89,8 @@ export function sendBrowserPushNotification(title: string, options?: Notificatio
       .catch(() => {
         try {
           new Notification(title, payload);
-        } catch {
-          // Ignore environments where window.Notification constructor throws (e.g., Android Chrome)
+        } catch (err) {
+          reportError('Browser notification fallback failed', err);
         }
       });
     return;
@@ -97,8 +98,8 @@ export function sendBrowserPushNotification(title: string, options?: Notificatio
 
   try {
     new Notification(title, payload);
-  } catch {
-    // Safe fallback if notifications are disabled
+  } catch (err) {
+    reportError('Browser notification failed', err);
   }
 }
 
@@ -108,7 +109,8 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   }
   try {
     return await Notification.requestPermission();
-  } catch {
+  } catch (err) {
+    reportError('Notification permission request failed', err);
     return 'denied';
   }
 }
@@ -145,8 +147,8 @@ export function createAdminEmailDispatch(
   try {
     const existing = getAdminEmailDispatchLogs();
     localStorage.setItem(EMAIL_LOG_KEY, JSON.stringify([record, ...existing].slice(0, 50)));
-  } catch {
-    // Ignore storage quota / restricted storage environments
+  } catch (err) {
+    reportError('Save admin email dispatch log failed', err);
   }
 
   return record;
@@ -156,7 +158,8 @@ export function getAdminEmailDispatchLogs(): EmailDispatchRecord[] {
   try {
     const raw = localStorage.getItem(EMAIL_LOG_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch {
+  } catch (err) {
+    reportError('Read admin email dispatch logs failed', err);
     return [];
   }
 }
@@ -164,8 +167,8 @@ export function getAdminEmailDispatchLogs(): EmailDispatchRecord[] {
 export function clearNotificationStorage(): void {
   try {
     localStorage.removeItem(EMAIL_LOG_KEY);
-  } catch {
-    // Ignore
+  } catch (err) {
+    reportError('Clear notification storage failed', err);
   }
 }
 

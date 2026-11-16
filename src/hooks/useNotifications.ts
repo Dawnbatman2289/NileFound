@@ -93,15 +93,19 @@ export function useNotifications({
         payload.type === 'admin_review' || (payload.type === 'claim_received' && isPrivileged)
           ? 'admin'
           : 'feed';
+      const deterministicId =
+        payload.type === 'chat_message' && payload.claimId
+          ? `chat_${payload.claimId}_${payload.recipientUid}`
+          : `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       const record: CampusNotification = {
         ...payload,
         linkTab,
-        id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: deterministicId,
         read: false,
         createdAt: new Date().toISOString(),
       };
       if (isDemoMode) {
-        setDemoNotifications((prev) => [record, ...prev]);
+        setDemoNotifications((prev) => [record, ...prev.filter((n) => n.id !== record.id)]);
         const isForCurrentUser =
           record.recipientUid === currentUser?.id ||
           (record.recipientUid === 'admin' && canUserModerate(currentUser));
@@ -120,7 +124,7 @@ export function useNotifications({
         record.recipientUid === currentUser?.id ||
         (record.recipientUid === 'admin' && canUserModerate(currentUser));
       if (isForCurrentUser) {
-        setLiveNotifications((prev) => [record, ...prev]);
+        setLiveNotifications((prev) => [record, ...prev.filter((n) => n.id !== record.id)]);
         if (toast) {
           playNotificationChime();
           setActiveToast(record);

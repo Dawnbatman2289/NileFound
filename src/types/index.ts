@@ -100,6 +100,7 @@ export interface ClaimRecord {
   submittedAnswer: string;
   privateLoaded?: boolean;
   status: 'pending' | 'approved' | 'rejected';
+  resubmitted?: boolean;
   createdAt: string;
 }
 

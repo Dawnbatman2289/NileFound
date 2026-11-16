@@ -19,6 +19,7 @@ import {
   getDocs,
   limit,
   query,
+  where,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -937,9 +938,25 @@ test('claim chat allows finder/claimant messages on active claims and blocks int
     })
   );
 
-  // Allowed: claimant and finder can send scoped chat_message notifications to each other
+  // Allowed: claimant and finder can send scoped chat_message notifications using deterministic chat_{claimId}_{recipientUid} IDs
+  const finderChatNotifId = `chat_${claimId}_${FINDER_UID}`;
+  const claimantChatNotifId = `chat_${claimId}_${CLAIMANT_UID}`;
   await assertSucceeds(
-    setDoc(doc(claimantDb, 'notifications/nChat1'), {
+    setDoc(doc(claimantDb, `notifications/${finderChatNotifId}`), {
+      recipientUid: FINDER_UID,
+      fromUid: CLAIMANT_UID,
+      type: 'chat_message',
+      title: 'New handover message',
+      message: 'You have a new message in your item handover chat.',
+      read: false,
+      itemId: 'chatItem',
+      claimId,
+      createdAt: serverTimestamp(),
+    })
+  );
+  // Allowed: in-place overwrite keeps read:false and refreshes createdAt without spamming new docs
+  await assertSucceeds(
+    setDoc(doc(claimantDb, `notifications/${finderChatNotifId}`), {
       recipientUid: FINDER_UID,
       fromUid: CLAIMANT_UID,
       type: 'chat_message',
@@ -952,7 +969,7 @@ test('claim chat allows finder/claimant messages on active claims and blocks int
     })
   );
   await assertSucceeds(
-    setDoc(doc(finderDb, 'notifications/nChat2'), {
+    setDoc(doc(finderDb, `notifications/${claimantChatNotifId}`), {
       recipientUid: CLAIMANT_UID,
       fromUid: FINDER_UID,
       type: 'chat_message',
@@ -965,9 +982,24 @@ test('claim chat allows finder/claimant messages on active claims and blocks int
     })
   );
 
+  // Denied: random-ID chat_message notification is blocked to prevent notification spam
+  await assertFails(
+    setDoc(doc(claimantDb, 'notifications/nChatRandomSpam'), {
+      recipientUid: FINDER_UID,
+      fromUid: CLAIMANT_UID,
+      type: 'chat_message',
+      title: 'New handover message',
+      message: 'You have a new message in your item handover chat.',
+      read: false,
+      itemId: 'chatItem',
+      claimId,
+      createdAt: serverTimestamp(),
+    })
+  );
+
   // Denied: intruder cannot send chat_message notification, and finder cannot target unrelated user
   await assertFails(
-    setDoc(doc(intruderDb, 'notifications/nChatSpoof1'), {
+    setDoc(doc(intruderDb, `notifications/chat_${claimId}_${FINDER_UID}`), {
       recipientUid: FINDER_UID,
       fromUid: INTRUDER_UID,
       type: 'chat_message',
@@ -980,7 +1012,7 @@ test('claim chat allows finder/claimant messages on active claims and blocks int
     })
   );
   await assertFails(
-    setDoc(doc(finderDb, 'notifications/nChatSpoof2'), {
+    setDoc(doc(finderDb, `notifications/chat_${claimId}_${INTRUDER_UID}`), {
       recipientUid: INTRUDER_UID,
       fromUid: FINDER_UID,
       type: 'chat_message',
@@ -993,14 +1025,161 @@ test('claim chat allows finder/claimant messages on active claims and blocks int
     })
   );
 
-  // Denied: claimant and intruder cannot delete chat messages; Allowed: finder can delete during item cleanup
-  await assertFails(deleteDoc(doc(claimantDb, `claims/${claimId}/messages/m1`)));
+  // Denied: finder and intruder cannot delete claimant's chat message; Allowed: sender deletes own message or admin deletes any
+  await assertFails(deleteDoc(doc(finderDb, `claims/${claimId}/messages/m1`)));
   await assertFails(deleteDoc(doc(intruderDb, `claims/${claimId}/messages/m1`)));
-  await assertSucceeds(deleteDoc(doc(finderDb, `claims/${claimId}/messages/m1`)));
+  await assertSucceeds(deleteDoc(doc(claimantDb, `claims/${claimId}/messages/m1`)));
   await assertSucceeds(deleteDoc(doc(finderDb, `claims/${claimId}/messages/m2`)));
+
+  const masterDb = testEnv.authenticatedContext(MASTER_UID, verifiedToken(MASTER_EMAIL)).firestore();
+  await assertSucceeds(
+    setDoc(doc(claimantDb, `claims/${claimId}/messages/m3`), {
+      senderId: CLAIMANT_UID,
+      senderRole: 'Claimant',
+      text: 'One more note before handover.',
+      createdAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(deleteDoc(doc(masterDb, `claims/${claimId}/messages/m3`)));
 });
 
-test('university staff role allows school-email signup and item reporting without granting moderation PII access', async () => {
+test('rejected claimant can resubmit once atomically, second retry and unauthorized users are denied', async () => {
+  const claimId = `retryItem_${CLAIMANT_UID}`;
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const adminDb = ctx.firestore();
+    await setDoc(doc(adminDb, 'items/retryItem'), {
+      title: 'Green Power Bank',
+      type: 'found',
+      category: 'power_bank',
+      description: 'Found in Cafeteria.',
+      location: 'Central Cafeteria',
+      status: 'open',
+      holdingLocation: 'finder_holding',
+      authorId: FINDER_UID,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await setDoc(doc(adminDb, `claims/${claimId}`), {
+      itemId: 'retryItem',
+      itemTitle: 'Green Power Bank',
+      claimantId: CLAIMANT_UID,
+      finderId: FINDER_UID,
+      status: 'rejected',
+      resubmitted: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await setDoc(doc(adminDb, `items/retryItem/privateClaims/${claimId}`), {
+      itemId: 'retryItem',
+      claimId,
+      claimantId: CLAIMANT_UID,
+      claimantName: 'Aisha',
+      claimantEmail: CLAIMANT_EMAIL,
+      submittedAnswer: 'First guess',
+      createdAt: new Date(),
+    });
+  });
+
+  const finderDb = testEnv.authenticatedContext(FINDER_UID, verifiedToken(FINDER_EMAIL)).firestore();
+  const claimantDb = testEnv.authenticatedContext(CLAIMANT_UID, verifiedToken(CLAIMANT_EMAIL)).firestore();
+  const intruderDb = testEnv.authenticatedContext(INTRUDER_UID, verifiedToken(INTRUDER_EMAIL)).firestore();
+
+  // Allowed: finder queries fresh pending claims scoped by finderId; Denied: intruder queries pending claims
+  await assertSucceeds(
+    getDocs(
+      query(
+        collection(finderDb, 'claims'),
+        where('itemId', '==', 'retryItem'),
+        where('status', '==', 'pending'),
+        where('finderId', '==', FINDER_UID),
+        limit(50)
+      )
+    )
+  );
+  await assertFails(
+    getDocs(
+      query(
+        collection(intruderDb, 'claims'),
+        where('itemId', '==', 'retryItem'),
+        where('status', '==', 'pending'),
+        limit(50)
+      )
+    )
+  );
+
+  // Denied: another user cannot resubmit claimant's rejected claim
+  const intruderRetry = writeBatch(intruderDb);
+  intruderRetry.update(doc(intruderDb, `claims/${claimId}`), {
+    status: 'pending',
+    resubmitted: true,
+    updatedAt: serverTimestamp(),
+  });
+  intruderRetry.update(doc(intruderDb, `items/retryItem/privateClaims/${claimId}`), {
+    submittedAnswer: 'Hijacked answer',
+    updatedAt: serverTimestamp(),
+  });
+  intruderRetry.update(doc(intruderDb, 'items/retryItem'), {
+    status: 'claim_requested',
+    updatedAt: serverTimestamp(),
+  });
+  await assertFails(intruderRetry.commit());
+
+  // Denied: updating privateClaims answer alone without atomic claims resubmission fails
+  await assertFails(
+    updateDoc(doc(claimantDb, `items/retryItem/privateClaims/${claimId}`), {
+      submittedAnswer: 'Unpaired edit',
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  // Allowed: claimant resubmits once atomically with privateClaims + item status
+  const retryBatch = writeBatch(claimantDb);
+  retryBatch.update(doc(claimantDb, `claims/${claimId}`), {
+    status: 'pending',
+    resubmitted: true,
+    updatedAt: serverTimestamp(),
+  });
+  retryBatch.update(doc(claimantDb, `items/retryItem/privateClaims/${claimId}`), {
+    submittedAnswer: '20000mAh Oraimo with scratch on corner',
+    updatedAt: serverTimestamp(),
+  });
+  retryBatch.update(doc(claimantDb, 'items/retryItem'), {
+    status: 'claim_requested',
+    updatedAt: serverTimestamp(),
+  });
+  await assertSucceeds(retryBatch.commit());
+
+  // Finder rejects the resubmitted claim
+  const rejectSecond = writeBatch(finderDb);
+  rejectSecond.update(doc(finderDb, `claims/${claimId}`), {
+    status: 'rejected',
+    updatedAt: serverTimestamp(),
+  });
+  rejectSecond.update(doc(finderDb, 'items/retryItem'), {
+    status: 'open',
+    updatedAt: serverTimestamp(),
+  });
+  await assertSucceeds(rejectSecond.commit());
+
+  // Denied: second resubmission is blocked because resubmitted is already true
+  const secondRetryBatch = writeBatch(claimantDb);
+  secondRetryBatch.update(doc(claimantDb, `claims/${claimId}`), {
+    status: 'pending',
+    resubmitted: true,
+    updatedAt: serverTimestamp(),
+  });
+  secondRetryBatch.update(doc(claimantDb, `items/retryItem/privateClaims/${claimId}`), {
+    submittedAnswer: 'Third try',
+    updatedAt: serverTimestamp(),
+  });
+  secondRetryBatch.update(doc(claimantDb, 'items/retryItem'), {
+    status: 'claim_requested',
+    updatedAt: serverTimestamp(),
+  });
+  await assertFails(secondRetryBatch.commit());
+});
+
+test('staff role cannot be self-assigned in /users and comes only from /roles or /staffInvites without moderation PII access', async () => {
   const STAFF_UID = 'staffFaculty01';
   const STAFF_EMAIL = 'n.okafor@nileuniversity.edu.ng';
   const INVITED_STAFF_EMAIL = 'lecturer@nileuniversity.edu.ng';
@@ -1031,8 +1210,8 @@ test('university staff role allows school-email signup and item reporting withou
   const staffDb = testEnv.authenticatedContext(STAFF_UID, verifiedToken(STAFF_EMAIL)).firestore();
   const masterDb = testEnv.authenticatedContext(MASTER_UID, verifiedToken(MASTER_EMAIL)).firestore();
 
-  // Allowed: verified @nileuniversity.edu.ng member can register with role 'staff'
-  await assertSucceeds(
+  // Denied: verified user cannot self-assign role 'staff' on /users/{uid}
+  await assertFails(
     setDoc(doc(staffDb, `users/${STAFF_UID}`), {
       name: 'Ngozi Okafor',
       email: STAFF_EMAIL,
@@ -1041,7 +1220,24 @@ test('university staff role allows school-email signup and item reporting withou
     })
   );
 
-  // Allowed: staff can report lost/found items using their school account
+  // Allowed: /users/{uid} must be created with role 'student'
+  await assertSucceeds(
+    setDoc(doc(staffDb, `users/${STAFF_UID}`), {
+      name: 'Ngozi Okafor',
+      email: STAFF_EMAIL,
+      role: 'student',
+      createdAt: serverTimestamp(),
+    })
+  );
+
+  // Allowed: provisioned staff member can report items, denied reading moderation PII
+  await assertSucceeds(
+    setDoc(doc(masterDb, `roles/${STAFF_UID}`), {
+      email: STAFF_EMAIL,
+      role: 'staff',
+      assignedAt: serverTimestamp(),
+    })
+  );
   await assertSucceeds(
     setDoc(doc(staffDb, 'items/staffLostMic'), {
       title: 'Missing Lecture Microphone',
@@ -1076,5 +1272,6 @@ test('university staff role allows school-email signup and item reporting withou
     })
   );
 });
+
 
 

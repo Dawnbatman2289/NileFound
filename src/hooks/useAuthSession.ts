@@ -37,6 +37,7 @@ export function useAuthSession({
   const [devPersonas, setDevPersonas] = useState<DemoPersonaOption[]>([]);
   const [realUser, setRealUser] = useState<User | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
+  const [logoutNotice, setLogoutNotice] = useState<string | null>(null);
   const [roleRetryNonce, setRoleRetryNonce] = useState(0);
   const lastConfirmedRoleRef = useRef<Record<string, UserRole>>({});
 
@@ -133,17 +134,6 @@ export function useAuthSession({
         let role: UserRole = lastConfirmedRoleRef.current[fbUser.uid] || 'student';
         try {
           role = await fetchUserRole(fbUser.uid, email);
-          if (role === 'student') {
-            try {
-              const pendingRole = sessionStorage.getItem('nilefound_pending_signup_role');
-              if (pendingRole === 'staff') {
-                role = 'staff';
-                sessionStorage.removeItem('nilefound_pending_signup_role');
-              }
-            } catch {
-              // Ignore storage restrictions
-            }
-          }
           lastConfirmedRoleRef.current[fbUser.uid] = role;
           setRoleError(null);
         } catch (roleErr) {
@@ -261,9 +251,14 @@ export function useAuthSession({
     }
     clearNotificationStorage();
 
-    await clearOfflinePersistence();
+    const { cleared } = await clearOfflinePersistence();
     setCurrentUser(null);
     setActiveTabRef.current('login');
+    if (!cleared) {
+      setLogoutNotice('Offline cache is open in another tab. Close other NileFound tabs to wipe offline data. Reloading...');
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+    }
+    window.location.assign('/');
   }, []);
 
   return {
@@ -274,6 +269,7 @@ export function useAuthSession({
     setIsDemoMode,
     devPersonas,
     roleError,
+    logoutNotice,
     retryRoleCheck: () => setRoleRetryNonce((n) => n + 1),
     isPrivileged,
     canUsePersonaSimulation,

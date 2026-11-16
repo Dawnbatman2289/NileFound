@@ -18,12 +18,20 @@ interface ClaimModalProps {
   existingClaim?: ClaimRecord;
   onClose: () => void;
   onSuccessClaim: (claim: ClaimRecord) => Promise<void> | void;
+  onResubmitClaim?: (claim: ClaimRecord, updatedAnswer: string) => Promise<void> | void;
 }
 
 const INPUT_CLASS =
   'w-full text-base sm:text-sm px-3.5 py-2.5 rounded-[10px] border border-[#857C70] dark:border-[#787065] bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] placeholder:text-[#5C554C] dark:placeholder:text-[#A8A095] focus:border-[#0F6E6E] min-h-[44px]';
 
-export const ClaimModal: React.FC<ClaimModalProps> = ({ item, currentUser, existingClaim, onClose, onSuccessClaim }) => {
+export const ClaimModal: React.FC<ClaimModalProps> = ({
+  item,
+  currentUser,
+  existingClaim,
+  onClose,
+  onSuccessClaim,
+  onResubmitClaim,
+}) => {
   const [claimantName, setClaimantName] = useState(currentUser?.name || '');
   const [claimantEmail, setClaimantEmail] = useState(currentUser?.email || '');
   const [verificationAnswer, setVerificationAnswer] = useState('');
@@ -33,9 +41,15 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, currentUser, exist
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  const itemId = item?.id ?? null;
 
   useEffect(() => {
-    if (!item) return;
+    if (!itemId) return;
     setIsSubmitted(false);
     setErrorMsg('');
     setVerificationAnswer('');
@@ -44,7 +58,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, currentUser, exist
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     const timer = window.setTimeout(() => dialogRef.current?.focus(), 0);
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -52,13 +66,21 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, currentUser, exist
       document.removeEventListener('keydown', onKeyDown);
       previousFocusRef.current?.focus?.();
     };
-  }, [item, currentUser?.name, currentUser?.email, onClose]);
+  }, [itemId]);
 
   if (!item) return null;
 
+  const isRetryEligible = Boolean(
+    existingClaim &&
+      existingClaim.status === 'rejected' &&
+      !existingClaim.resubmitted &&
+      (item.status === 'open' || item.status === 'claim_requested')
+  );
+  const isBlockedExisting = Boolean(existingClaim) && !isRetryEligible;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmitting || isBlockedExisting) return;
 
     const sanitizedName = claimantName.trim().slice(0, 100);
     const sanitizedEmail = claimantEmail.trim().toLowerCase().slice(0, 100);
@@ -96,7 +118,11 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, currentUser, exist
     };
 
     try {
-      await onSuccessClaim(newClaim);
+      if (isRetryEligible && existingClaim && onResubmitClaim) {
+        await onResubmitClaim(existingClaim, sanitizedAnswer);
+      } else {
+        await onSuccessClaim(newClaim);
+      }
       setIsSubmitted(true);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Could not save your claim to the database. Please try again.');
@@ -213,7 +239,11 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, currentUser, exist
 
               {existingClaim && (
                 <div role="status" className="text-sm text-[#7A5000] dark:text-[#F9CF7C] bg-[#FEF7E9] dark:bg-[#2B210A] p-3 rounded-[10px] border border-[#E8A317]/40">
-                  You already have a {existingClaim.status} claim on this item. Check your notices or feed card for updates.
+                  {isRetryEligible
+                    ? 'Your first claim was rejected. You can submit one final updated verification answer.'
+                    : existingClaim.status === 'rejected' && existingClaim.resubmitted
+                      ? 'Your final resubmitted claim was rejected. Visit Student Affairs or Main Gate Security if needed.'
+                      : `You already have a ${existingClaim.status} claim on this item. Check your notices or feed card for updates.`}
                 </div>
               )}
 
@@ -234,10 +264,16 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({ item, currentUser, exist
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || Boolean(existingClaim)}
+                  disabled={isSubmitting || isBlockedExisting}
                   className="w-1/2 py-2.5 text-sm font-semibold text-white bg-[#0F6E6E] hover:bg-[#0C5656] disabled:opacity-50 rounded-[10px] shadow-xs transition-colors flex items-center justify-center gap-1.5 min-h-[44px] cursor-pointer btn-campus active:scale-98"
                 >
-                  {isSubmitting ? 'Submitting...' : existingClaim ? 'Claim Already Filed' : 'Submit Claim'}
+                  {isSubmitting
+                    ? 'Submitting...'
+                    : isRetryEligible
+                      ? 'Submit Final Retry'
+                      : isBlockedExisting
+                        ? 'Claim Already Filed'
+                        : 'Submit Claim'}
                 </button>
               </div>
             </form>

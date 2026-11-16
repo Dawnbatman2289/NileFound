@@ -13,10 +13,33 @@ interface ErrorBoundaryState {
   isChunkError: boolean;
 }
 
+let globalHandlersInstalled = false;
+
 export function reportError(context: string, error: unknown): void {
-  if (import.meta.env.DEV) {
+  if (import.meta.env?.DEV) {
     console.warn(`[NileFound] ${context}:`, error);
+    return;
   }
+  console.error(`[NileFound] ${context}:`, error);
+  const dsn = import.meta.env?.VITE_SENTRY_DSN;
+  if (dsn) {
+    import('../lib/sentry.ts')
+      .then((m) => m.sendToSentry(dsn, context, error))
+      .catch((sentryErr) => {
+        console.error('[NileFound] Sentry delivery failed:', sentryErr);
+      });
+  }
+}
+
+export function installGlobalErrorHandlers(): void {
+  if (typeof window === 'undefined' || globalHandlersInstalled) return;
+  globalHandlersInstalled = true;
+  window.addEventListener('error', (event) => {
+    reportError('Uncaught window error', event.error || event.message);
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    reportError('Unhandled promise rejection', event.reason);
+  });
 }
 
 export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {

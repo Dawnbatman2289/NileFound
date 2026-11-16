@@ -157,7 +157,8 @@ export function useAdminPanel({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       showNotification(`Exported ${items.length} records to CSV.`);
-    } catch {
+    } catch (err) {
+      reportError('exportAuditLogCsv failed', err);
       showError('Could not complete full audit export. Please try again.');
     } finally {
       setIsExportingCsv(false);
