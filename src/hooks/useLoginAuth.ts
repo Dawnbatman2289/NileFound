@@ -11,11 +11,10 @@ import {
   signOut,
   updateProfile,
 } from 'firebase/auth';
-import { auth } from '../lib/firebase.ts';
+import { auth } from '../lib/firebaseAuth.ts';
 import { User, UserRole } from '../types/index.ts';
-import { fetchUserRole, isConfiguredAdmin } from '../services/firestoreService.ts';
 import { canUserModerate, getDefaultDepartmentForRole, isMasterAdminUser } from '../utils/admin.ts';
-import { validateEmailFormat, validateFullName, validateNileEmail, validatePassword } from '../utils/authValidation.ts';
+import { isCampusAccountAllowed, validateEmailFormat, validateFullName, validateNileEmail, validatePassword } from '../utils/authValidation.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
 
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
@@ -38,12 +37,28 @@ const friendlyAuthError = (error: unknown): string => {
   return AUTH_ERROR_MESSAGES[code] || 'Could not complete sign-in. Check your details and connection, then try again.';
 };
 
-async function isAllowedCampusAccount(uid: string, email: string): Promise<boolean> {
-  return validateNileEmail(email) || isMasterAdminUser(uid) || (await isConfiguredAdmin(uid));
+async function isAllowedCampusAccount(
+  uid: string,
+  email: string,
+  emailVerified: boolean
+): Promise<boolean> {
+  const isMaster = isMasterAdminUser(uid);
+  let isDelegated = false;
+  if (!validateNileEmail(email) && !isMaster && emailVerified) {
+    const { isConfiguredAdmin } = await import('../services/firestore/roles.ts');
+    isDelegated = await isConfiguredAdmin(uid);
+  }
+  return isCampusAccountAllowed({
+    email,
+    emailVerified,
+    isMasterAdmin: isMaster,
+    isDelegatedAdmin: isDelegated,
+  });
 }
 
 async function buildUserFromFirebase(fbUser: import('firebase/auth').User): Promise<User> {
   const userEmail = (fbUser.email || '').trim().toLowerCase();
+  const { fetchUserRole } = await import('../services/firestore/roles.ts');
   const role: UserRole = await fetchUserRole(fbUser.uid, userEmail);
   return {
     id: fbUser.uid,
@@ -59,9 +74,15 @@ interface UseLoginAuthOptions {
   onLogin: (user: User) => void;
   onLogout: () => void;
   onNavigateToFeed: () => void;
+  onClearSessionAuthError?: () => void;
 }
 
-export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAuthOptions) {
+export function useLoginAuth({
+  onLogin,
+  onLogout,
+  onNavigateToFeed,
+  onClearSessionAuthError,
+}: UseLoginAuthOptions) {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -77,14 +98,17 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
   const cooldownTimer = useRef<number | null>(null);
   const onLoginRef = useRef(onLogin);
   const onNavigateRef = useRef(onNavigateToFeed);
+  const onClearSessionErrorRef = useRef(onClearSessionAuthError);
   useEffect(() => {
     onLoginRef.current = onLogin;
     onNavigateRef.current = onNavigateToFeed;
-  }, [onLogin, onNavigateToFeed]);
+    onClearSessionErrorRef.current = onClearSessionAuthError;
+  }, [onLogin, onNavigateToFeed, onClearSessionAuthError]);
 
   const clearFeedback = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
+    onClearSessionErrorRef.current?.();
   };
 
   useEffect(() => {
@@ -92,15 +116,15 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
     getRedirectResult(auth)
       .then(async (result) => {
         if (!active || !result?.user) return;
-        const userEmail = result.user.email?.toLowerCase() || '';
-        if (!(await isAllowedCampusAccount(result.user.uid, userEmail))) {
-          await signOut(auth);
-          setErrorMessage('Please use your @nileuniversity.edu.ng email.');
-          return;
-        }
+        const userEmail = (result.user.email || '').trim().toLowerCase();
         if (!result.user.emailVerified) {
           await signOut(auth);
           setErrorMessage('Verify your Google email address before accessing NileFound.');
+          return;
+        }
+        if (!(await isAllowedCampusAccount(result.user.uid, userEmail, result.user.emailVerified))) {
+          await signOut(auth);
+          setErrorMessage('Please use your @nileuniversity.edu.ng email.');
           return;
         }
         const loggedUser = await buildUserFromFirebase(result.user);
@@ -125,6 +149,13 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
       try {
         await auth.currentUser.reload();
         if (auth.currentUser.emailVerified) {
+          const userEmail = (auth.currentUser.email || '').trim().toLowerCase();
+          if (!(await isAllowedCampusAccount(auth.currentUser.uid, userEmail, auth.currentUser.emailVerified))) {
+            await signOut(auth);
+            setShowInbox(false);
+            setErrorMessage('Please use your @nileuniversity.edu.ng email.');
+            return;
+          }
           setShowInbox(false);
           const loggedUser = await buildUserFromFirebase(auth.currentUser);
           onLoginRef.current(loggedUser);
@@ -166,12 +197,17 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
 
       const result = await signInWithEmailAndPassword(auth, normalizedEmail, password);
       if (!result.user.emailVerified) {
+        if (!validateNileEmail(normalizedEmail) && !isMasterAdminUser(result.user.uid)) {
+          await signOut(auth);
+          setErrorMessage('Please use your @nileuniversity.edu.ng email.');
+          return;
+        }
         await sendEmailVerification(result.user).catch((err) => reportError('Send verification email failed', err));
         setShowInbox(true);
         setSuccessMessage('Verify your email first, or sign in with Google if your institution uses Gmail.');
         return;
       }
-      if (!(await isAllowedCampusAccount(result.user.uid, normalizedEmail))) {
+      if (!(await isAllowedCampusAccount(result.user.uid, normalizedEmail, result.user.emailVerified))) {
         await signOut(auth);
         setErrorMessage('Please use your @nileuniversity.edu.ng email.');
         return;
@@ -212,14 +248,14 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
     provider.setCustomParameters({ prompt: 'select_account' });
     try {
       const result = await signInWithPopup(auth, provider);
-      const userEmail = result.user.email?.toLowerCase() || '';
-      if (!(await isAllowedCampusAccount(result.user.uid, userEmail))) {
-        await signOut(auth);
-        return setErrorMessage('Please use your @nileuniversity.edu.ng email.');
-      }
+      const userEmail = (result.user.email || '').trim().toLowerCase();
       if (!result.user.emailVerified) {
         await signOut(auth);
         return setErrorMessage('Verify your Google email address before accessing NileFound.');
+      }
+      if (!(await isAllowedCampusAccount(result.user.uid, userEmail, result.user.emailVerified))) {
+        await signOut(auth);
+        return setErrorMessage('Please use your @nileuniversity.edu.ng email.');
       }
       const loggedUser = await buildUserFromFirebase(result.user);
       onLogin(loggedUser);
@@ -242,6 +278,12 @@ export function useLoginAuth({ onLogin, onLogout, onNavigateToFeed }: UseLoginAu
       await auth.currentUser.reload();
       if (!auth.currentUser.emailVerified) {
         return setErrorMessage('Your email is not verified yet. Open the verification link, then try again.');
+      }
+      const userEmail = (auth.currentUser.email || '').trim().toLowerCase();
+      if (!(await isAllowedCampusAccount(auth.currentUser.uid, userEmail, auth.currentUser.emailVerified))) {
+        await signOut(auth);
+        setShowInbox(false);
+        return setErrorMessage('Please use your @nileuniversity.edu.ng email.');
       }
       const loggedUser = await buildUserFromFirebase(auth.currentUser);
       onLogin(loggedUser);

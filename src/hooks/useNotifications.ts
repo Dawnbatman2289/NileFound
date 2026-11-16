@@ -2,13 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { CampusNotification, User } from '../types/index.ts';
 import type { AppTab } from '../components/Navbar.tsx';
 import { reportError } from '../components/ErrorBoundary.tsx';
-import { auth } from '../lib/firebase.ts';
-import {
-  subscribeToRealtimeNotifications,
-  saveNotificationToFirestore,
-  markNotificationAsReadInFirestore,
-  markNotificationsReadInFirestore,
-} from '../services/firestoreService.ts';
+import { auth } from '../lib/firebaseAuth.ts';
 import {
   playNotificationChime,
   sendBrowserPushNotification,
@@ -28,6 +22,26 @@ interface UseNotificationsOptions {
 }
 
 const DEMO_NOTIFS_KEY = 'nilefound_demo_notifs_v1';
+
+export function createNotificationDocId(
+  payload: Pick<CampusNotification, 'type' | 'claimId' | 'recipientUid'>
+): string {
+  if (payload.type === 'chat_message' && payload.claimId) {
+    return `chat_${payload.claimId}_${payload.recipientUid}`;
+  }
+  return `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function shouldAlertIncomingNotification(
+  prevIds: Set<string>,
+  newest: CampusNotification | undefined,
+  currentUserId?: string | null
+): boolean {
+  if (!newest || newest.read) return false;
+  if (prevIds.has(newest.id)) return false;
+  if (currentUserId && newest.fromUid === currentUserId) return false;
+  return true;
+}
 
 export function useNotifications({
   isDemoMode,
@@ -57,32 +71,40 @@ export function useNotifications({
       return;
     }
     let isMounted = true;
-    const unsubscribe = subscribeToRealtimeNotifications(
-      currentUser,
-      (realtimeNotifs) => {
+    let unsubscribe: (() => void) | undefined;
+    import('../services/firestoreService.ts')
+      .then(({ subscribeToRealtimeNotifications }) => {
         if (!isMounted) return;
-        setLiveNotifications((prev) => {
-          if (!hasLoadedInitialRef.current) {
-            hasLoadedInitialRef.current = true;
-            return realtimeNotifs;
+        unsubscribe = subscribeToRealtimeNotifications(
+          currentUser,
+          (realtimeNotifs) => {
+            if (!isMounted) return;
+            setLiveNotifications((prev) => {
+              if (!hasLoadedInitialRef.current) {
+                hasLoadedInitialRef.current = true;
+                return realtimeNotifs;
+              }
+              const prevIds = new Set(prev.map((n) => n.id));
+              const newest = realtimeNotifs[0];
+              if (shouldAlertIncomingNotification(prevIds, newest, userId)) {
+                playNotificationChime();
+                setActiveToast(newest);
+                sendBrowserPushNotification(newest.title, { body: newest.message });
+              }
+              return realtimeNotifs;
+            });
+          },
+          (err) => {
+            if (isMounted) reportError('subscribeToRealtimeNotifications failed', err);
           }
-          const prevIds = new Set(prev.map((n) => n.id));
-          const newest = realtimeNotifs[0];
-          if (newest && !prevIds.has(newest.id) && !newest.read) {
-            playNotificationChime();
-            setActiveToast(newest);
-            sendBrowserPushNotification(newest.title, { body: newest.message });
-          }
-          return realtimeNotifs;
-        });
-      },
-      (err) => {
-        if (isMounted) reportError('subscribeToRealtimeNotifications failed', err);
-      }
-    );
+        );
+      })
+      .catch((err) => {
+        if (isMounted) reportError('Load Firestore notifications module failed', err);
+      });
     return () => {
       isMounted = false;
-      unsubscribe();
+      unsubscribe?.();
     };
   }, [isDemoMode, userId, userRole, userIsAdmin]);
 
@@ -98,13 +120,10 @@ export function useNotifications({
   const dispatchNotification = useCallback<DispatchNotificationFn>(
     (payload, { toast = false, push = false } = {}) => {
       const linkTab: AppTab =
-        payload.type === 'admin_review' || (payload.type === 'claim_received' && isPrivileged)
+        payload.type === 'claim_received' && isPrivileged
           ? 'admin'
           : 'feed';
-      const deterministicId =
-        payload.type === 'chat_message' && payload.claimId
-          ? `chat_${payload.claimId}_${payload.recipientUid}`
-          : `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const deterministicId = createNotificationDocId(payload);
       const record: CampusNotification = {
         ...payload,
         linkTab,
@@ -125,9 +144,9 @@ export function useNotifications({
         return;
       }
 
-      saveNotificationToFirestore(record).catch((err) =>
-        reportError('saveNotificationToFirestore failed', err)
-      );
+      import('../services/firestoreService.ts')
+        .then(({ saveNotificationToFirestore }) => saveNotificationToFirestore(record))
+        .catch((err) => reportError('saveNotificationToFirestore failed', err));
       const isForCurrentUser =
         record.recipientUid === currentUser?.id ||
         (record.recipientUid === 'admin' && canUserModerate(currentUser));
@@ -154,9 +173,9 @@ export function useNotifications({
       return;
     }
     setLiveNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    markNotificationsReadInFirestore(unreadIds).catch((err) =>
-      reportError('Mark notifications read failed', err)
-    );
+    import('../services/firestoreService.ts')
+      .then(({ markNotificationsReadInFirestore }) => markNotificationsReadInFirestore(unreadIds))
+      .catch((err) => reportError('Mark notifications read failed', err));
   }, [notifications, isDemoMode]);
 
   const markAsRead = useCallback(
@@ -166,9 +185,9 @@ export function useNotifications({
         return;
       }
       setLiveNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-      markNotificationAsReadInFirestore(id).catch((err) =>
-        reportError('Mark notification read failed', err)
-      );
+      import('../services/firestoreService.ts')
+        .then(({ markNotificationAsReadInFirestore }) => markNotificationAsReadInFirestore(id))
+        .catch((err) => reportError('Mark notification read failed', err));
     },
     [isDemoMode]
   );
@@ -186,9 +205,9 @@ export function useNotifications({
         return;
       }
       setLiveNotifications((prev) => prev.map((n) => (unreadSet.has(n.id) ? { ...n, read: true } : n)));
-      markNotificationsReadInFirestore(unreadIds).catch((err) =>
-        reportError('Mark chat notifications read failed', err)
-      );
+      import('../services/firestoreService.ts')
+        .then(({ markNotificationsReadInFirestore }) => markNotificationsReadInFirestore(unreadIds))
+        .catch((err) => reportError('Mark chat notifications read failed', err));
     },
     [notifications, isDemoMode]
   );

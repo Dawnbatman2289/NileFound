@@ -62,6 +62,13 @@ With Java installed locally, you can also run the Firestore emulator rules test 
 npm run test:emulator
 ```
 
+Before deploying rules that reject legacy inline `items.imageUrl` fields on existing projects, migrate legacy photos into `items/{id}/media/full`:
+
+```bash
+node scripts/migrate-images.mjs --dry-run
+node scripts/migrate-images.mjs --apply
+```
+
 Deploy rules, composite indexes, and Hosting headers (`firebase.json` + `.firebaserc`):
 
 ```bash

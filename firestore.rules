@@ -46,7 +46,7 @@ service cloud.firestore {
           && request.auth.token.email_verified == true
           && request.auth.token.email is string
           && (
-            request.auth.token.email.matches('^[^@]+@nileuniversity\\.edu\\.ng$')
+            request.auth.token.email.lower().matches('^[^@\\s]+@nileuniversity\\.edu\\.ng$')
             || isConfiguredAdmin()
           )
         );
@@ -77,10 +77,11 @@ service cloud.firestore {
       return isAdmin() || isSecurity();
     }
 
-    // Item schema and field validation (no PII or photos for student_id)
+    // Item schema and field validation (no PII, no legacy imageUrl, and no photos for student_id)
     function isValidItem(data) {
       return data.keys().hasAll(['title', 'type', 'category', 'description', 'location', 'status', 'holdingLocation', 'authorId', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['title', 'type', 'category', 'description', 'location', 'locationDetails', 'dateLostOrFound', 'status', 'holdingLocation', 'authorId', 'thumbUrl', 'imageUrl', 'isSensitiveId', 'verificationQuestion', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['title', 'type', 'category', 'description', 'location', 'locationDetails', 'dateLostOrFound', 'status', 'holdingLocation', 'custodyStatus', 'authorId', 'thumbUrl', 'isSensitiveId', 'verificationQuestion', 'createdAt', 'updatedAt'])
+        && !('imageUrl' in data)
         && data.title is string && data.title.size() >= 2 && data.title.size() <= 100
         && data.type in ['lost', 'found']
         && data.category in ['student_id', 'phone_tech', 'power_bank', 'calculator', 'flash_drive', 'keys', 'bag_backpack', 'lab_coat_clothing', 'books_notes', 'other']
@@ -90,20 +91,16 @@ service cloud.firestore {
         && (!('dateLostOrFound' in data) || (data.dateLostOrFound is string && data.dateLostOrFound.size() <= 40))
         && data.status in ['open', 'claim_requested', 'verified', 'returned', 'expired']
         && data.holdingLocation in ['finder_holding', 'security_main_gate', 'student_affairs_office', 'faculty_officer', 'library_desk']
+        && (!('custodyStatus' in data) || data.custodyStatus in ['awaiting_dropoff', 'confirmed'])
         && data.authorId is string && data.authorId.size() <= 128
         && data.createdAt is timestamp
         && data.updatedAt is timestamp
-        && !(data.category == 'student_id' && ('imageUrl' in data || 'thumbUrl' in data))
+        && !(data.category == 'student_id' && 'thumbUrl' in data)
         && (data.category != 'student_id' || data.isSensitiveId == true)
         && (!('thumbUrl' in data) || (
           data.thumbUrl is string
           && data.thumbUrl.size() <= 4200
           && data.thumbUrl.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')
-        ))
-        && (!('imageUrl' in data) || (
-          data.imageUrl is string
-          && data.imageUrl.size() <= 140000
-          && data.imageUrl.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')
         ))
         && (!('verificationQuestion' in data) || (data.verificationQuestion is string && data.verificationQuestion.size() <= 300))
         && (!('isSensitiveId' in data) || (data.isSensitiveId is bool));
@@ -186,10 +183,24 @@ service cloud.firestore {
         && isValidItem(incoming())
         && incoming().authorId == request.auth.uid
         && incoming().status == 'open'
+        && (
+          !('custodyStatus' in incoming())
+            ? (incoming().type != 'found' || incoming().holdingLocation == 'finder_holding' || isStaffOrAdmin())
+            : (
+              incoming().custodyStatus in ['awaiting_dropoff', 'confirmed']
+              && (
+                incoming().custodyStatus != 'confirmed'
+                || isStaffOrAdmin()
+                || incoming().type != 'found'
+                || incoming().holdingLocation == 'finder_holding'
+              )
+            )
+        )
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
       allow update: if isValidId(itemId) && isVerifiedUser()
         && isValidItem(incoming())
+        // Enforce immutable reporter identity (authorId) and createdAt post-creation
         && incoming().authorId == existing().authorId
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
@@ -197,7 +208,21 @@ service cloud.firestore {
           isAdmin()
           || (
             isSecurity()
-            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && existing().holdingLocation != 'finder_holding'
+            && (
+              (
+                incoming().diff(existing()).affectedKeys().hasOnly(['custodyStatus', 'updatedAt'])
+                && (!('custodyStatus' in existing()) || existing().custodyStatus == 'awaiting_dropoff')
+                && incoming().custodyStatus == 'confirmed'
+              )
+              || (
+                incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+                && (
+                  (existing().status == 'verified' && incoming().status == 'returned')
+                  || (existing().status in ['open', 'claim_requested'] && incoming().status == 'verified')
+                )
+              )
+            )
           )
           || (
             existing().authorId == request.auth.uid
@@ -209,6 +234,7 @@ service cloud.firestore {
             existing().status in ['open', 'claim_requested']
             && existing().type == 'found'
             && existing().authorId != request.auth.uid
+            && (!('custodyStatus' in existing()) || existing().custodyStatus != 'awaiting_dropoff')
             && incoming().status == 'claim_requested'
             && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
             && existsAfter(/databases/$(database)/documents/claims/$(itemId + '_' + request.auth.uid))
@@ -218,6 +244,15 @@ service cloud.firestore {
         isAdmin() ||
         (isVerifiedUser() && existing().authorId == request.auth.uid)
       );
+
+      // Guard nested /items/{itemId}/claims/{claimId} if ever queried directly: claimant or admin only
+      match /claims/{nestedClaimId} {
+        allow get: if isValidId(itemId) && isValidId(nestedClaimId) && isVerifiedUser()
+          && (isAdmin() || resource.data.claimantId == request.auth.uid);
+        allow list: if isValidId(itemId) && isVerifiedUser() && request.query.limit <= 50
+          && (isAdmin() || resource.data.claimantId == request.auth.uid);
+        allow write: if false;
+      }
 
       // Private secret verification answer subcollection
       match /secrets/{secretId} {
@@ -365,6 +400,7 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/items/$(incoming().itemId))
         && get(/databases/$(database)/documents/items/$(incoming().itemId)).data.type == 'found'
         && get(/databases/$(database)/documents/items/$(incoming().itemId)).data.status in ['open', 'claim_requested']
+        && (!('custodyStatus' in get(/databases/$(database)/documents/items/$(incoming().itemId)).data) || get(/databases/$(database)/documents/items/$(incoming().itemId)).data.custodyStatus != 'awaiting_dropoff')
         && get(/databases/$(database)/documents/items/$(incoming().itemId)).data.authorId != request.auth.uid
         && incoming().finderId == get(/databases/$(database)/documents/items/$(incoming().itemId)).data.authorId;
       allow update: if isValidId(claimId) && isVerifiedUser()
@@ -406,6 +442,7 @@ service cloud.firestore {
             && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'resubmitted', 'updatedAt'])
             && get(/databases/$(database)/documents/items/$(existing().itemId)).data.type == 'found'
             && get(/databases/$(database)/documents/items/$(existing().itemId)).data.status in ['open', 'claim_requested']
+            && (!('custodyStatus' in get(/databases/$(database)/documents/items/$(existing().itemId)).data) || get(/databases/$(database)/documents/items/$(existing().itemId)).data.custodyStatus != 'awaiting_dropoff')
             && getAfter(/databases/$(database)/documents/items/$(existing().itemId)).data.status == 'claim_requested'
             && existsAfter(/databases/$(database)/documents/items/$(existing().itemId)/privateClaims/$(claimId))
             && getAfter(/databases/$(database)/documents/items/$(existing().itemId)/privateClaims/$(claimId)).data.claimantId == request.auth.uid
@@ -488,7 +525,8 @@ service cloud.firestore {
       allow list: if isAdmin() && request.query.limit <= 50;
       allow create, update: if isMasterAdmin()
         && inviteEmail.size() <= 128
-        && inviteEmail.matches('^[^/]+@nileuniversity\\.edu\\.ng$')
+        && inviteEmail == inviteEmail.lower()
+        && inviteEmail.matches('^[^/@\\s]+@nileuniversity\\.edu\\.ng$')
         && incoming().keys().hasAll(['email', 'role', 'assignedAt'])
         && incoming().keys().hasOnly(['email', 'role', 'assignedAt', 'assignedBy'])
         && incoming().email == inviteEmail
@@ -542,7 +580,7 @@ service cloud.firestore {
         && data.keys().hasOnly(['recipientUid', 'fromUid', 'type', 'title', 'message', 'read', 'createdAt', 'itemId', 'itemTitle', 'claimId', 'sourceItemId'])
         && data.fromUid is string && data.fromUid == request.auth.uid
         && data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid.size() <= 128
-        && data.type in ['claim_received', 'claim_approved', 'claim_rejected', 'chat_message', 'match_alert', 'item_returned', 'admin_review']
+        && data.type in ['claim_received', 'claim_approved', 'claim_rejected', 'chat_message', 'match_alert', 'item_returned', 'custody_confirmed']
         && data.title is string && data.title.size() >= 2 && data.title.size() <= 120
         && !data.title.matches('.*@.*')
         && data.message is string && data.message.size() >= 2 && data.message.size() <= 500
@@ -560,29 +598,12 @@ service cloud.firestore {
           || (data.type == 'chat_message' && data.title == 'New handover message' && data.message == 'You have a new message in your item handover chat.')
           || (data.type == 'match_alert' && data.title == 'Possible item match' && data.message == 'A possible match was found for your report.')
           || (data.type == 'item_returned' && data.title == 'Item returned' && data.message == 'Your reported item was marked returned.')
-          || (data.type == 'admin_review' && data.title == 'Review needed' && data.message == 'A campus record needs administrator review.')
+          || (data.type == 'custody_confirmed' && data.title == 'Drop-off confirmed' && data.message == 'Campus desk confirmed physical custody of your found item.')
         );
     }
 
     function canCreateNotification(data) {
       return (data.recipientUid == request.auth.uid && data.type == 'match_alert')
-        || (
-          data.recipientUid == 'admin'
-          && data.type == 'admin_review'
-          && (
-            isStaffOrAdmin()
-            || (
-              'itemId' in data
-              && exists(/databases/$(database)/documents/items/$(data.itemId))
-              && get(/databases/$(database)/documents/items/$(data.itemId)).data.authorId == request.auth.uid
-            )
-            || (
-              'claimId' in data
-              && exists(/databases/$(database)/documents/claims/$(data.claimId))
-              && get(/databases/$(database)/documents/claims/$(data.claimId)).data.claimantId == request.auth.uid
-            )
-          )
-        )
         || (
           data.type == 'claim_received'
           && 'claimId' in data
@@ -601,6 +622,14 @@ service cloud.firestore {
             isStaffOrAdmin()
             || get(/databases/$(database)/documents/items/$(data.itemId)).data.authorId == request.auth.uid
           )
+        )
+        || (
+          data.type == 'custody_confirmed'
+          && 'itemId' in data
+          && isStaffOrAdmin()
+          && exists(/databases/$(database)/documents/items/$(data.itemId))
+          && get(/databases/$(database)/documents/items/$(data.itemId)).data.authorId == data.recipientUid
+          && get(/databases/$(database)/documents/items/$(data.itemId)).data.custodyStatus == 'confirmed'
         )
         || (
           data.type == 'match_alert'

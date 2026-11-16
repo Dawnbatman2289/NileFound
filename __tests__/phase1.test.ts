@@ -402,6 +402,16 @@ test('Item 5: rejected claimants get exactly one retry while item stays open or 
     getClaimButtonState(returnedItem, 'claimant-1', undefined, undefined, firstRejection),
     { disabled: true, label: 'Item Reunited' }
   );
+
+  const awaitingDropoffDeskItem = makeItem({
+    holdingLocation: 'security_main_gate',
+    custodyStatus: 'awaiting_dropoff',
+    status: 'open',
+  });
+  assert.deepEqual(
+    getClaimButtonState(awaitingDropoffDeskItem, 'claimant-1', undefined, undefined, firstRejection),
+    { disabled: true, label: 'Awaiting Desk Drop-off' }
+  );
 });
 
 test('Item 6: global error handlers and reportError log in non-DEV without throwing', () => {

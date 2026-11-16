@@ -1,4 +1,11 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Realtime campus feed items subscription, pagination, matching alerts, and status actions.
+ */
+
+import React, { useReducer, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { CampusItem, User } from '../types/index.ts';
 import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
@@ -6,17 +13,9 @@ import { expireOldItems } from '../utils/admin.ts';
 import { calculateMatchScore } from '../utils/matching.ts';
 import { readJson, safeSetStorage } from '../utils/storage.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
-import { auth } from '../lib/firebase.ts';
-import {
-  subscribeToRealtimeItems,
-  fetchItemsPage,
-  saveItemToFirestore,
-  updateItemStatusInFirestore,
-  expireItemsInFirestore,
-  fetchItemFullPhoto,
-  deleteItemFromFirestore,
-} from '../services/firestoreService.ts';
+import { auth } from '../lib/firebaseAuth.ts';
 import type { DispatchNotificationFn } from './useNotifications.ts';
+import { itemsFeedReducer, type ItemsFeedState } from './reducers.ts';
 
 interface UseItemsFeedOptions {
   isDemoMode: boolean;
@@ -27,6 +26,69 @@ interface UseItemsFeedOptions {
   onItemDeleted?: (itemId: string) => void;
 }
 
+function buildInitialFeedState(isDemoMode: boolean): ItemsFeedState {
+  return {
+    items: import.meta.env.DEV && isDemoMode ? readJson<CampusItem[]>('nilefound_demo_items_v1', []) : [],
+    olderItems: [],
+    itemsCursor: undefined,
+    hasMoreItems: false,
+    isLoadingMoreItems: false,
+    itemsError: null,
+    itemsRetryNonce: 0,
+  };
+}
+
+function dispatchMatchNotifications(
+  newItem: CampusItem,
+  finalItemId: string,
+  fromUid: string,
+  matchPool: CampusItem[],
+  dispatchNotification: DispatchNotificationFn
+): void {
+  const oppositeType = newItem.type === 'found' ? 'lost' : 'found';
+  const scoredMatches = matchPool
+    .filter((it) => it.id !== finalItemId && it.type === oppositeType && it.status === 'open')
+    .map((it) => ({
+      item: it,
+      result: calculateMatchScore(
+        newItem.type === 'lost' ? newItem : it,
+        newItem.type === 'found' ? newItem : it
+      ),
+    }))
+    .filter(({ result }) => result.isLikelyMatch)
+    .sort((a, b) => b.result.score - a.result.score)
+    .slice(0, 3);
+
+  if (newItem.type === 'found') {
+    scoredMatches.forEach(({ item: lostItem }) => {
+      if (lostItem.authorId && lostItem.authorId !== fromUid) {
+        dispatchNotification({
+          recipientUid: lostItem.authorId,
+          fromUid,
+          type: 'match_alert',
+          title: `Possible match: ${lostItem.title}`,
+          message: `A found item reported at ${newItem.location} matches your notice.`,
+          itemId: lostItem.id,
+          sourceItemId: finalItemId,
+        });
+      }
+    });
+    return;
+  }
+
+  if (scoredMatches.length > 0) {
+    const topFound = scoredMatches[0].item;
+    dispatchNotification({
+      recipientUid: fromUid,
+      fromUid,
+      type: 'match_alert',
+      title: `Possible match found: ${newItem.title}`,
+      message: `A matching ${newItem.category.replace(/_/g, ' ')} was reported at ${topFound.location}. Check the feed to claim it.`,
+      itemId: topFound.id,
+    });
+  }
+}
+
 export function useItemsFeed({
   isDemoMode,
   currentUser,
@@ -35,96 +97,97 @@ export function useItemsFeed({
   onItemSubmitted,
   onItemDeleted,
 }: UseItemsFeedOptions) {
-  const [items, setItemsState] = useState<CampusItem[]>(() =>
-    import.meta.env.DEV && isDemoMode ? readJson<CampusItem[]>('nilefound_demo_items_v1', []) : []
-  );
-  const [olderItems, setOlderItems] = useState<CampusItem[]>([]);
-  const [itemsCursor, setItemsCursor] = useState<QueryDocumentSnapshot<DocumentData> | undefined>(undefined);
-  const [hasMoreItems, setHasMoreItems] = useState(false);
-  const [isLoadingMoreItems, setIsLoadingMoreItems] = useState(false);
-  const [itemsError, setItemsError] = useState<string | null>(null);
-  const [itemsRetryNonce, setItemsRetryNonce] = useState(0);
+  const [state, dispatch] = useReducer(itemsFeedReducer, isDemoMode, buildInitialFeedState);
   const hasPaginatedRef = useRef(false);
   const hasSeededOrMutatedDemoRef = useRef(false);
 
   const setItems = useCallback<React.Dispatch<React.SetStateAction<CampusItem[]>>>((updater) => {
     hasSeededOrMutatedDemoRef.current = true;
-    setItemsState(updater);
+    dispatch({ type: 'SET_ITEMS', updater });
+  }, []);
+
+  const setOlderItems = useCallback<React.Dispatch<React.SetStateAction<CampusItem[]>>>((updater) => {
+    dispatch({ type: 'SET_OLDER_ITEMS', updater });
   }, []);
 
   const mergedItems = useMemo(() => {
-    if (olderItems.length === 0) return items;
-    const seen = new Set(items.map((it) => it.id));
-    return [...items, ...olderItems.filter((it) => !seen.has(it.id))];
-  }, [items, olderItems]);
+    if (state.olderItems.length === 0) return state.items;
+    const seen = new Set(state.items.map((it) => it.id));
+    return [...state.items, ...state.olderItems.filter((it) => !seen.has(it.id))];
+  }, [state.items, state.olderItems]);
 
   useEffect(() => {
     if (!import.meta.env.DEV || !isDemoMode) return;
-    if (items.length === 0 && !hasSeededOrMutatedDemoRef.current) return;
-    safeSetStorage('nilefound_demo_items_v1', JSON.stringify(items));
-  }, [items, isDemoMode]);
+    if (state.items.length === 0 && !hasSeededOrMutatedDemoRef.current) return;
+    safeSetStorage('nilefound_demo_items_v1', JSON.stringify(state.items));
+  }, [state.items, isDemoMode]);
 
   const userId = currentUser?.id;
 
   useEffect(() => {
     if (isDemoMode || !userId || !auth.currentUser?.emailVerified) return;
     let isMounted = true;
+    let unsubscribe: (() => void) | undefined;
     hasPaginatedRef.current = false;
-    setItemsError(null);
-    setOlderItems([]);
-    setItemsCursor(undefined);
-    const unsubscribe = subscribeToRealtimeItems(
-      20,
-      (liveItems, hasMore, lastDoc) => {
+    dispatch({ type: 'RESET_LISTENER' });
+    import('../services/firestoreService.ts')
+      .then(({ subscribeToRealtimeItems }) => {
         if (!isMounted) return;
-        setItems(liveItems);
-        if (!hasPaginatedRef.current) {
-          setItemsCursor(lastDoc);
-          setHasMoreItems(hasMore);
-        }
-        setIsLoadingMoreItems(false);
-        setItemsError(null);
-      },
-      (err) => {
+        unsubscribe = subscribeToRealtimeItems(
+          25,
+          (liveItems, hasMore, lastDoc) => {
+            if (!isMounted) return;
+            dispatch({
+              type: 'LIVE_ITEMS_RECEIVED',
+              items: liveItems,
+              hasMore,
+              cursor: lastDoc,
+              preservePagination: hasPaginatedRef.current,
+            });
+          },
+          (err) => {
+            if (!isMounted) return;
+            reportError('subscribeToRealtimeItems failed', err);
+            dispatch({ type: 'SET_ERROR', error: 'Could not load campus notices. Check your connection and try again.' });
+          }
+        );
+      })
+      .catch((err) => {
         if (!isMounted) return;
-        reportError('subscribeToRealtimeItems failed', err);
-        setIsLoadingMoreItems(false);
-        setItemsError('Could not load campus notices. Check your connection and try again.');
-      }
-    );
+        reportError('Load Firestore items module failed', err);
+        dispatch({ type: 'SET_ERROR', error: 'Could not load campus notices. Check your connection and try again.' });
+      });
     return () => {
       isMounted = false;
-      unsubscribe();
+      unsubscribe?.();
     };
-  }, [isDemoMode, userId, itemsRetryNonce]);
+  }, [isDemoMode, userId, state.itemsRetryNonce]);
 
   const handleLoadMoreItems = useCallback(async () => {
-    if (isDemoMode || isLoadingMoreItems || !hasMoreItems || !itemsCursor) return;
-    setIsLoadingMoreItems(true);
-    setItemsError(null);
+    if (isDemoMode || state.isLoadingMoreItems || !state.hasMoreItems || !state.itemsCursor) return;
+    dispatch({ type: 'START_LOAD_MORE' });
     try {
-      const page = await fetchItemsPage(itemsCursor);
+      const { fetchItemsPage } = await import('../services/firestoreService.ts');
+      const page = await fetchItemsPage(state.itemsCursor);
       hasPaginatedRef.current = true;
-      setOlderItems((prev) => {
-        const seen = new Set(prev.map((it) => it.id));
-        return [...prev, ...page.items.filter((it) => !seen.has(it.id))];
+      dispatch({
+        type: 'APPEND_OLDER_ITEMS',
+        items: page.items,
+        hasMore: page.hasMore,
+        cursor: page.nextCursor,
       });
-      setItemsCursor(page.nextCursor);
-      setHasMoreItems(page.hasMore);
     } catch (err: unknown) {
       reportError('handleLoadMoreItems failed', err);
-      setItemsError(err instanceof Error ? err.message : 'Could not load more notices.');
-    } finally {
-      setIsLoadingMoreItems(false);
+      dispatch({ type: 'SET_ERROR', error: err instanceof Error ? err.message : 'Could not load more notices.' });
     }
-  }, [isDemoMode, isLoadingMoreItems, hasMoreItems, itemsCursor]);
+  }, [isDemoMode, state.isLoadingMoreItems, state.hasMoreItems, state.itemsCursor]);
 
   const handleLoadAllItems = useCallback(async () => {
-    if (isDemoMode || isLoadingMoreItems || !hasMoreItems || !itemsCursor) return;
-    setIsLoadingMoreItems(true);
-    setItemsError(null);
+    if (isDemoMode || state.isLoadingMoreItems || !state.hasMoreItems || !state.itemsCursor) return;
+    dispatch({ type: 'START_LOAD_MORE' });
     try {
-      let cursor: QueryDocumentSnapshot<DocumentData> | undefined = itemsCursor;
+      const { fetchItemsPage } = await import('../services/firestoreService.ts');
+      let cursor: QueryDocumentSnapshot<DocumentData> | undefined = state.itemsCursor;
       let more = true;
       let pages = 0;
       const accumulated: CampusItem[] = [];
@@ -136,22 +199,18 @@ export function useItemsFeed({
         pages += 1;
       }
       hasPaginatedRef.current = true;
-      setOlderItems((prev) => {
-        const seen = new Set(prev.map((it) => it.id));
-        return [...prev, ...accumulated.filter((it) => !seen.has(it.id))];
-      });
-      setItemsCursor(cursor);
-      setHasMoreItems(more);
+      dispatch({ type: 'APPEND_OLDER_ITEMS', items: accumulated, hasMore: more, cursor });
     } catch (err: unknown) {
       reportError('handleLoadAllItems failed', err);
-      setItemsError(err instanceof Error ? err.message : 'Could not load remaining notices.');
-    } finally {
-      setIsLoadingMoreItems(false);
+      dispatch({ type: 'SET_ERROR', error: err instanceof Error ? err.message : 'Could not load remaining notices.' });
     }
-  }, [isDemoMode, isLoadingMoreItems, hasMoreItems, itemsCursor]);
+  }, [isDemoMode, state.isLoadingMoreItems, state.hasMoreItems, state.itemsCursor]);
 
   const handleFetchFullPhoto = useCallback(
-    async (itemId: string) => fetchItemFullPhoto(itemId, lowDataMode),
+    async (itemId: string) => {
+      const { fetchItemFullPhoto } = await import('../services/firestoreService.ts');
+      return fetchItemFullPhoto(itemId, lowDataMode);
+    },
     [lowDataMode]
   );
 
@@ -161,7 +220,7 @@ export function useItemsFeed({
       if (isDemoMode) {
         setItems((prev) => [newItem, ...prev]);
       } else {
-        // Never swallow failures silently or keep local state when Firestore write fails (#79).
+        const { saveItemToFirestore } = await import('../services/firestoreService.ts');
         finalItemId = await saveItemToFirestore(newItem, currentUser);
         setItems((prev) => [{ ...newItem, id: finalItemId }, ...prev]);
       }
@@ -169,59 +228,19 @@ export function useItemsFeed({
 
       const fromUid = auth.currentUser?.uid || currentUser?.id || 'student';
       const oppositeType = newItem.type === 'found' ? 'lost' : 'found';
-      const scoredMatches = items
-        .filter((it) => it.type === oppositeType && it.status === 'open')
-        .map((it) => ({
-          item: it,
-          result: calculateMatchScore(
-            newItem.type === 'lost' ? newItem : it,
-            newItem.type === 'found' ? newItem : it
-          ),
-        }))
-        .filter(({ result }) => result.isLikelyMatch)
-        .sort((a, b) => b.result.score - a.result.score)
-        .slice(0, 3);
-
-      if (newItem.type === 'found') {
-        scoredMatches.forEach(({ item: lostItem }) => {
-          if (lostItem.authorId && lostItem.authorId !== fromUid) {
-            dispatchNotification({
-              recipientUid: lostItem.authorId,
-              fromUid,
-              type: 'match_alert',
-              title: `Possible match: ${lostItem.title}`,
-              message: `A found item reported at ${newItem.location} matches your notice.`,
-              itemId: lostItem.id,
-              sourceItemId: finalItemId,
-            });
-          }
-        });
-      } else if (scoredMatches.length > 0) {
-        const topFound = scoredMatches[0].item;
-        dispatchNotification({
-          recipientUid: fromUid,
-          fromUid,
-          type: 'match_alert',
-          title: `Possible match found: ${newItem.title}`,
-          message: `A matching ${newItem.category.replace(/_/g, ' ')} was reported at ${topFound.location}. Check the feed to claim it.`,
-          itemId: topFound.id,
-        });
+      let matchPool = state.items.filter((it) => it.type === oppositeType && it.status === 'open');
+      if (!isDemoMode) {
+        try {
+          const { fetchMatchCandidatesFromFirestore } = await import('../services/firestoreService.ts');
+          matchPool = await fetchMatchCandidatesFromFirestore(oppositeType, newItem.category);
+        } catch (err) {
+          reportError('fetchMatchCandidatesFromFirestore failed', err);
+        }
       }
-
-      dispatchNotification(
-        {
-          recipientUid: 'admin',
-          fromUid,
-          type: 'admin_review',
-          title: `New ${newItem.type.toUpperCase()}: ${newItem.title}`,
-          message: `A new ${newItem.type} item was reported at ${newItem.location}.`,
-          itemId: finalItemId,
-        },
-        { toast: true, push: true }
-      );
+      dispatchMatchNotifications(newItem, finalItemId, fromUid, matchPool, dispatchNotification);
       return true;
     },
-    [isDemoMode, currentUser, items, dispatchNotification, onItemSubmitted]
+    [isDemoMode, currentUser, state.items, setItems, dispatchNotification, onItemSubmitted]
   );
 
   const handleUpdateItemStatus = useCallback(
@@ -229,6 +248,7 @@ export function useItemsFeed({
       try {
         const fromUid = auth.currentUser?.uid || currentUser?.id || 'admin';
         if (!isDemoMode) {
+          const { updateItemStatusInFirestore } = await import('../services/firestoreService.ts');
           await updateItemStatusInFirestore(itemId, status);
         }
         setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, status } : it)));
@@ -249,17 +269,49 @@ export function useItemsFeed({
         return true;
       } catch (err) {
         reportError('handleUpdateItemStatus failed', err);
-        setItemsError('Could not update item status. Check your connection and try again.');
+        dispatch({ type: 'SET_ERROR', error: 'Could not update item status. Check your connection and try again.' });
         return false;
       }
     },
-    [isDemoMode, currentUser, mergedItems, dispatchNotification]
+    [isDemoMode, currentUser, mergedItems, setItems, setOlderItems, dispatchNotification]
+  );
+
+  const handleConfirmCustody = useCallback(
+    async (itemId: string): Promise<boolean> => {
+      try {
+        const fromUid = auth.currentUser?.uid || currentUser?.id || 'security';
+        if (!isDemoMode) {
+          const { confirmItemCustodyInFirestore } = await import('../services/firestoreService.ts');
+          await confirmItemCustodyInFirestore(itemId);
+        }
+        setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, custodyStatus: 'confirmed' } : it)));
+        setOlderItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, custodyStatus: 'confirmed' } : it)));
+        const target = mergedItems.find((i) => i.id === itemId);
+        if (target?.authorId && target.authorId !== fromUid) {
+          dispatchNotification({
+            recipientUid: target.authorId,
+            fromUid,
+            type: 'custody_confirmed',
+            title: 'Drop-off confirmed',
+            message: 'Campus desk confirmed physical custody of your found item.',
+            itemId: target.id,
+          });
+        }
+        return true;
+      } catch (err) {
+        reportError('handleConfirmCustody failed', err);
+        dispatch({ type: 'SET_ERROR', error: 'Could not confirm drop-off custody. Check your permissions and connection.' });
+        return false;
+      }
+    },
+    [isDemoMode, currentUser, mergedItems, setItems, setOlderItems, dispatchNotification]
   );
 
   const handleDeleteItem = useCallback(
     async (itemId: string): Promise<boolean> => {
       try {
         if (!isDemoMode) {
+          const { deleteItemFromFirestore } = await import('../services/firestoreService.ts');
           await deleteItemFromFirestore(itemId);
         }
         setItems((prev) => prev.filter((it) => it.id !== itemId));
@@ -268,23 +320,23 @@ export function useItemsFeed({
         return true;
       } catch (err) {
         reportError('handleDeleteItem failed', err);
-        setItemsError('Could not delete item. Check your connection and try again.');
+        dispatch({ type: 'SET_ERROR', error: 'Could not delete item. Check your connection and try again.' });
         return false;
       }
     },
-    [isDemoMode, onItemDeleted]
+    [isDemoMode, setItems, setOlderItems, onItemDeleted]
   );
 
   const handleExpireOldItems = useCallback(async (): Promise<boolean> => {
     try {
-      const nextItems = expireOldItems(items, ITEM_EXPIRY_DAYS);
-      const nextOlder = expireOldItems(olderItems, ITEM_EXPIRY_DAYS);
+      const nextItems = expireOldItems(state.items, ITEM_EXPIRY_DAYS);
+      const nextOlder = expireOldItems(state.olderItems, ITEM_EXPIRY_DAYS);
       const expiredIds = [
-        ...nextItems.filter((it, idx) => it.status === 'expired' && items[idx]?.status !== 'expired'),
-        ...nextOlder.filter((it, idx) => it.status === 'expired' && olderItems[idx]?.status !== 'expired'),
+        ...nextItems.filter((it, idx) => it.status === 'expired' && state.items[idx]?.status !== 'expired'),
+        ...nextOlder.filter((it, idx) => it.status === 'expired' && state.olderItems[idx]?.status !== 'expired'),
       ].map((it) => it.id);
-
       if (!isDemoMode && expiredIds.length > 0) {
+        const { expireItemsInFirestore } = await import('../services/firestoreService.ts');
         await expireItemsInFirestore(expiredIds);
       }
       setItems(nextItems);
@@ -294,29 +346,26 @@ export function useItemsFeed({
       reportError('handleExpireOldItems failed', err);
       return false;
     }
-  }, [items, olderItems, isDemoMode]);
+  }, [state.items, state.olderItems, isDemoMode, setItems, setOlderItems]);
 
-  const clearItems = useCallback(() => {
-    setItems([]);
-    setOlderItems([]);
-    setItemsCursor(undefined);
-    setHasMoreItems(false);
-  }, []);
+  const clearItems = useCallback(() => dispatch({ type: 'CLEAR_ITEMS' }), []);
+  const retryLoadItems = useCallback(() => dispatch({ type: 'RETRY_ITEMS' }), []);
 
   return {
-    items,
+    items: state.items,
     setItems,
     setOlderItems,
     mergedItems,
-    hasMoreItems,
-    isLoadingMoreItems,
-    itemsError,
-    retryLoadItems: () => setItemsRetryNonce((n) => n + 1),
+    hasMoreItems: state.hasMoreItems,
+    isLoadingMoreItems: state.isLoadingMoreItems,
+    itemsError: state.itemsError,
+    retryLoadItems,
     handleLoadMoreItems,
     handleLoadAllItems,
     handleFetchFullPhoto,
     handleAddItem,
     handleUpdateItemStatus,
+    handleConfirmCustody,
     handleDeleteItem,
     handleExpireOldItems,
     clearItems,

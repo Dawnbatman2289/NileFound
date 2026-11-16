@@ -19,6 +19,8 @@ interface LoginPageProps {
   onLogin: (user: User) => void;
   onLogout: () => void;
   onNavigateToFeed: () => void;
+  sessionAuthError?: string | null;
+  onClearSessionAuthError?: () => void;
   devPersonas?: DemoPersonaOption[];
   onSwitchDemoPersona?: (user: User) => void;
 }
@@ -31,10 +33,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onLogin,
   onLogout,
   onNavigateToFeed,
+  sessionAuthError,
+  onClearSessionAuthError,
   devPersonas = [],
   onSwitchDemoPersona,
 }) => {
-  const authState = useLoginAuth({ onLogin, onLogout, onNavigateToFeed });
+  const authState = useLoginAuth({
+    onLogin,
+    onLogout,
+    onNavigateToFeed,
+    onClearSessionAuthError,
+  });
+  const displayError = authState.errorMessage || sessionAuthError;
 
   return (
     <div className="max-w-xl mx-auto py-6 space-y-6">
@@ -62,10 +72,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               </p>
             </div>
 
-            {authState.errorMessage && (
+            {displayError && (
               <div role="alert" className="bg-[#FDF2F2] dark:bg-[#2B0E0E] border border-[#F87171]/50 text-[#9B1C1C] dark:text-[#F87171] text-sm p-3.5 rounded-[10px] flex items-center gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{authState.errorMessage}</span>
+                <span>{displayError}</span>
               </div>
             )}
 

@@ -64,6 +64,30 @@ const FeedEmptyState: React.FC<{
   </div>
 );
 
+const FeedHeroBanner: React.FC<{
+  showSignIn: boolean;
+  onNavigateToLogin?: () => void;
+  onOpenReportModal: () => void;
+}> = ({ showSignIn, onNavigateToLogin, onOpenReportModal }) => (
+  <div className="bg-white dark:bg-[#1E1C18] border border-[#C4BBAF] dark:border-[#3E3931] rounded-[12px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_1px_2px_rgba(31,27,22,0.03),0_8px_24px_rgba(31,27,22,0.035)]">
+    <div className="space-y-1">
+      <p className="font-serif font-bold text-base text-[#1F1B16] dark:text-[#F5F1EA]">Lost your calculator? Someone may have handed it in.</p>
+      <p className="text-sm text-[#4A443C] dark:text-[#CEC7BB] leading-relaxed">Found something? Hand it to Student Affairs or Main Gate Security, then post it here.</p>
+    </div>
+    <div className="flex items-center gap-2.5 shrink-0">
+      {showSignIn && onNavigateToLogin && (
+        <button type="button" onClick={onNavigateToLogin} className="inline-flex items-center gap-1.5 bg-white dark:bg-[#28241F] hover:bg-[#F5EFE4] dark:hover:bg-[#332E27] text-[#1F1B16] dark:text-[#F5F1EA] text-sm font-medium px-3.5 py-2 rounded-[10px] border border-[#857C70] dark:border-[#787065] transition-colors min-h-[44px] cursor-pointer btn-campus">
+          <LogIn className="w-4 h-4 text-[#4A443C] dark:text-[#CEC7BB]" />
+          <span>Sign In</span>
+        </button>
+      )}
+      <button type="button" onClick={onOpenReportModal} className="inline-flex items-center gap-1.5 bg-[#0F6E6E] hover:bg-[#0C5656] text-white text-sm font-medium px-4 py-2 rounded-[10px] transition-colors min-h-[44px] cursor-pointer btn-campus shadow-xs">
+        <span>Post a Notice</span>
+      </button>
+    </div>
+  </div>
+);
+
 function getItemClaimContext(claims: ClaimRecord[], item: CampusItem, currentUserId?: string) {
   if (!currentUserId) {
     return {
@@ -218,23 +242,11 @@ export const FeedView: React.FC<FeedViewProps> = ({
 
   return (
     <div className="space-y-7">
-      <div className="bg-white dark:bg-[#1E1C18] border border-[#C4BBAF] dark:border-[#3E3931] rounded-[12px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_1px_2px_rgba(31,27,22,0.03),0_8px_24px_rgba(31,27,22,0.035)]">
-        <div className="space-y-1">
-          <p className="font-serif font-bold text-base text-[#1F1B16] dark:text-[#F5F1EA]">Lost your calculator? Someone may have handed it in.</p>
-          <p className="text-sm text-[#4A443C] dark:text-[#CEC7BB] leading-relaxed">Found something? Hand it to Student Affairs or Main Gate Security, then post it here.</p>
-        </div>
-        <div className="flex items-center gap-2.5 shrink-0">
-          {!currentUser && onNavigateToLogin && (
-            <button type="button" onClick={onNavigateToLogin} className="inline-flex items-center gap-1.5 bg-white dark:bg-[#28241F] hover:bg-[#F5EFE4] dark:hover:bg-[#332E27] text-[#1F1B16] dark:text-[#F5F1EA] text-sm font-medium px-3.5 py-2 rounded-[10px] border border-[#857C70] dark:border-[#787065] transition-colors min-h-[44px] cursor-pointer btn-campus">
-              <LogIn className="w-4 h-4 text-[#4A443C] dark:text-[#CEC7BB]" />
-              <span>Sign In</span>
-            </button>
-          )}
-          <button type="button" onClick={onOpenReportModal} className="inline-flex items-center gap-1.5 bg-[#0F6E6E] hover:bg-[#0C5656] text-white text-sm font-medium px-4 py-2 rounded-[10px] transition-colors min-h-[44px] cursor-pointer btn-campus shadow-xs">
-            <span>Post a Notice</span>
-          </button>
-        </div>
-      </div>
+      <FeedHeroBanner
+        showSignIn={!currentUser}
+        onNavigateToLogin={onNavigateToLogin}
+        onOpenReportModal={onOpenReportModal}
+      />
 
       {itemsError && (
         <div role="alert" className="bg-[#FDF2F2] dark:bg-[#2B0E0E] border border-[#F87171]/50 text-[#9B1C1C] dark:text-[#F87171] p-4 rounded-[12px] flex flex-wrap items-center justify-between gap-3">

@@ -5,8 +5,7 @@
  * Firebase SDK and Firestore initialization for NileFound
  */
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, signOut } from 'firebase/auth';
+import { signOut } from 'firebase/auth';
 import {
   getFirestore,
   initializeFirestore,
@@ -19,8 +18,9 @@ import {
 } from 'firebase/firestore';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { app, auth, OperationType, handleFirestoreError, type FirestoreErrorInfo } from './firebaseAuth.ts';
 
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+export { app, auth, OperationType, handleFirestoreError, type FirestoreErrorInfo };
 
 const appCheckSiteKey = import.meta.env?.VITE_FIREBASE_APPCHECK_SITE_KEY;
 if (appCheckSiteKey) {
@@ -46,57 +46,6 @@ try {
 }
 
 export const db = firestore;
-
-export const auth = getAuth(app);
-
-export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-export interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  };
-}
-
-export function handleFirestoreError(
-  error: unknown,
-  operationType: OperationType,
-  path: string | null
-): never {
-  const errMsg = error instanceof Error ? error.message : String(error);
-  console.warn(`[NileFound] Firestore ${operationType} failed at ${path || 'unknown'}:`, error);
-  if (errMsg.includes('token-service-api-has-not-been-used') || errMsg.includes('securetoken.googleapis.com')) {
-    signOut(auth).catch((signOutErr) => {
-      console.warn('[NileFound] Sign out after token error failed:', signOutErr);
-    });
-  }
-
-  let userFacingMessage = 'Action could not be completed. Please check your connection and try again.';
-  if (errMsg.toLowerCase().includes('missing or insufficient permissions') || errMsg.toLowerCase().includes('permission-denied')) {
-    userFacingMessage = 'Access denied. You do not have permission for this campus record.';
-  } else if (errMsg.toLowerCase().includes('not-found')) {
-    userFacingMessage = 'The requested campus item or record could not be found.';
-  }
-
-  throw new Error(userFacingMessage);
-}
 
 export async function clearOfflinePersistence(): Promise<{ cleared: boolean }> {
   try {

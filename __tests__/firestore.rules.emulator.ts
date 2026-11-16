@@ -66,10 +66,41 @@ test('unauthenticated users and unverified or non-Nile accounts are denied', asy
   const unauth = testEnv.unauthenticatedContext().firestore();
   const unverified = testEnv.authenticatedContext('u1', { email: FINDER_EMAIL, email_verified: false }).firestore();
   const externalGmail = testEnv.authenticatedContext('u2', verifiedToken('outsider@example.com')).firestore();
+  const mixedCaseNile = testEnv.authenticatedContext('u3', verifiedToken('Student@NileUniversity.edu.ng')).firestore();
 
   await assertFails(getDoc(doc(unauth, 'items/item1')));
   await assertFails(getDoc(doc(unverified, 'items/item1')));
   await assertFails(getDoc(doc(externalGmail, 'items/item1')));
+  await assertFails(
+    setDoc(doc(externalGmail, 'users/u2'), {
+      name: 'Outsider',
+      email: 'outsider@example.com',
+      role: 'student',
+      createdAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    setDoc(doc(externalGmail, 'items/extItem1'), {
+      title: 'External Lost Item',
+      type: 'lost',
+      category: 'other',
+      description: 'Should be blocked.',
+      location: 'Main Gate',
+      status: 'open',
+      holdingLocation: 'finder_holding',
+      authorId: 'u2',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(
+    setDoc(doc(mixedCaseNile, 'users/u3'), {
+      name: 'Verified Student',
+      email: 'Student@NileUniversity.edu.ng',
+      role: 'student',
+      createdAt: serverTimestamp(),
+    })
+  );
 });
 
 test('master admin unverified token is rejected', async () => {
@@ -723,7 +754,7 @@ test('student_id blocks thumbUrl, users block self-role escalation, and UID-mism
   await assertSucceeds(getDoc(doc(delegatedDb, 'items/deskCheck/private/details')));
 });
 
-test('notification rules allow valid claim_received/match_alert/item_returned/admin_review and block spoofing', async () => {
+test('notification rules allow valid claim_received/match_alert/item_returned and block spoofing or deprecated admin_review', async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const adminDb = ctx.firestore();
     await setDoc(doc(adminDb, 'items/foundBag'), {
@@ -807,7 +838,7 @@ test('notification rules allow valid claim_received/match_alert/item_returned/ad
     })
   );
 
-  // Finder can send valid match_alert backed by sourceItemId + item_returned + admin_review
+  // Finder can send valid match_alert backed by sourceItemId + item_returned, but deprecated admin_review is denied
   await assertSucceeds(
     setDoc(doc(finderDb, 'notifications/nMatchOk'), {
       recipientUid: CLAIMANT_UID,
@@ -833,8 +864,8 @@ test('notification rules allow valid claim_received/match_alert/item_returned/ad
       createdAt: serverTimestamp(),
     })
   );
-  await assertSucceeds(
-    setDoc(doc(finderDb, 'notifications/nAdminOk'), {
+  await assertFails(
+    setDoc(doc(finderDb, 'notifications/nAdminDenied'), {
       recipientUid: 'admin',
       fromUid: FINDER_UID,
       type: 'admin_review',
@@ -1272,6 +1303,214 @@ test('staff role cannot be self-assigned in /users and comes only from /roles or
     })
   );
 });
+
+test('Item 9 & 10: desk drop-offs start awaiting_dropoff, block claims until security confirms, and restrict security item updates', async () => {
+  const SEC_UID = 'securityGate01';
+  const SEC_EMAIL = 'gate.security@nileuniversity.edu.ng';
+
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `roles/${SEC_UID}`), {
+      email: SEC_EMAIL,
+      role: 'security',
+      assignedAt: new Date(),
+    });
+    await setDoc(doc(ctx.firestore(), 'items/finderOnlyItem'), {
+      title: 'Black Earbuds Case',
+      type: 'found',
+      category: 'phone_tech',
+      description: 'Found in Block A.',
+      location: 'Block A',
+      status: 'verified',
+      holdingLocation: 'finder_holding',
+      custodyStatus: 'confirmed',
+      authorId: FINDER_UID,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  });
+
+  const finderDb = testEnv.authenticatedContext(FINDER_UID, verifiedToken(FINDER_EMAIL)).firestore();
+  const claimantDb = testEnv.authenticatedContext(CLAIMANT_UID, verifiedToken(CLAIMANT_EMAIL)).firestore();
+  const secDb = testEnv.authenticatedContext(SEC_UID, verifiedToken(SEC_EMAIL)).firestore();
+
+  // Denied: regular student cannot self-confirm desk custody
+  await assertFails(
+    setDoc(doc(finderDb, 'items/deskBottleSelf'), {
+      title: 'Green Water Bottle',
+      type: 'found',
+      category: 'other',
+      description: 'Found outside Library.',
+      location: 'Nile Main Library',
+      status: 'open',
+      holdingLocation: 'security_main_gate',
+      custodyStatus: 'confirmed',
+      authorId: FINDER_UID,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  // Allowed: regular student creates desk item with custodyStatus: awaiting_dropoff
+  await assertSucceeds(
+    setDoc(doc(finderDb, 'items/deskBottle'), {
+      title: 'Green Water Bottle',
+      type: 'found',
+      category: 'other',
+      description: 'Found outside Library.',
+      location: 'Nile Main Library',
+      status: 'open',
+      holdingLocation: 'security_main_gate',
+      custodyStatus: 'awaiting_dropoff',
+      authorId: FINDER_UID,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  // Denied: claims are blocked while desk item is still awaiting_dropoff
+  const blockedClaimId = `deskBottle_${CLAIMANT_UID}`;
+  const blockedBatch = writeBatch(claimantDb);
+  blockedBatch.set(doc(claimantDb, `claims/${blockedClaimId}`), {
+    itemId: 'deskBottle',
+    itemTitle: 'Green Water Bottle',
+    claimantId: CLAIMANT_UID,
+    finderId: FINDER_UID,
+    status: 'pending',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  blockedBatch.set(doc(claimantDb, `items/deskBottle/privateClaims/${blockedClaimId}`), {
+    itemId: 'deskBottle',
+    claimId: blockedClaimId,
+    claimantId: CLAIMANT_UID,
+    claimantName: 'Aisha',
+    claimantEmail: CLAIMANT_EMAIL,
+    submittedAnswer: 'Sticker on base',
+    createdAt: serverTimestamp(),
+  });
+  blockedBatch.update(doc(claimantDb, 'items/deskBottle'), {
+    status: 'claim_requested',
+    updatedAt: serverTimestamp(),
+  });
+  await assertFails(blockedBatch.commit());
+
+  // Denied: claimant cannot confirm custodyStatus; Allowed: security confirms awaiting_dropoff -> confirmed
+  await assertFails(
+    updateDoc(doc(claimantDb, 'items/deskBottle'), {
+      custodyStatus: 'confirmed',
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(
+    updateDoc(doc(secDb, 'items/deskBottle'), {
+      custodyStatus: 'confirmed',
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  // Allowed: claim succeeds after security confirms custody
+  await assertSucceeds(blockedBatch.commit());
+
+  // Denied: security cannot mark an unverified desk item directly as returned or touch finder_holding items
+  await assertFails(
+    updateDoc(doc(secDb, 'items/deskBottle'), {
+      status: 'returned',
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(secDb, 'items/finderOnlyItem'), {
+      status: 'returned',
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  // Allowed: security approves desk claim -> verified, then marks desk item verified -> returned
+  const secApprove = writeBatch(secDb);
+  secApprove.update(doc(secDb, `claims/${blockedClaimId}`), { status: 'approved', updatedAt: serverTimestamp() });
+  secApprove.update(doc(secDb, 'items/deskBottle'), { status: 'verified', updatedAt: serverTimestamp() });
+  await assertSucceeds(secApprove.commit());
+
+  await assertSucceeds(
+    updateDoc(doc(secDb, 'items/deskBottle'), {
+      status: 'returned',
+      updatedAt: serverTimestamp(),
+    })
+  );
+});
+
+test('Item 11 & Task 8: items reject legacy imageUrl, enforce authorId/createdAt immutability, and lock nested claims reads', async () => {
+  const finderDb = testEnv.authenticatedContext(FINDER_UID, verifiedToken(FINDER_EMAIL)).firestore();
+  const intruderDb = testEnv.authenticatedContext(INTRUDER_UID, verifiedToken(INTRUDER_EMAIL)).firestore();
+
+  // Denied: legacy inline imageUrl on items is rejected
+  await assertFails(
+    setDoc(doc(finderDb, 'items/legacyPhotoItem'), {
+      title: 'Leather Wallet',
+      type: 'found',
+      category: 'other',
+      description: 'Found near Cafeteria.',
+      location: 'Central Cafeteria',
+      status: 'open',
+      holdingLocation: 'finder_holding',
+      custodyStatus: 'confirmed',
+      authorId: FINDER_UID,
+      imageUrl: 'data:image/jpeg;base64,AAAA',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  await assertSucceeds(
+    setDoc(doc(finderDb, 'items/immutableItem'), {
+      title: 'Casio fx-991EX',
+      type: 'found',
+      category: 'calculator',
+      description: 'Left on desk.',
+      location: 'Block C',
+      status: 'open',
+      holdingLocation: 'finder_holding',
+      custodyStatus: 'confirmed',
+      authorId: FINDER_UID,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  // Denied: author cannot mutate authorId or createdAt post-creation
+  await assertFails(
+    updateDoc(doc(finderDb, 'items/immutableItem'), {
+      authorId: INTRUDER_UID,
+      updatedAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(finderDb, 'items/immutableItem'), {
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  // Nested /items/{itemId}/claims/{claimId} is readable only by claimer or admin (writes always denied)
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `items/immutableItem/claims/${CLAIMANT_UID}`), {
+      claimantId: CLAIMANT_UID,
+      status: 'pending',
+    });
+  });
+  const claimantDb = testEnv.authenticatedContext(CLAIMANT_UID, verifiedToken(CLAIMANT_EMAIL)).firestore();
+  const masterDb = testEnv.authenticatedContext(MASTER_UID, verifiedToken(MASTER_EMAIL)).firestore();
+  await assertSucceeds(getDoc(doc(claimantDb, `items/immutableItem/claims/${CLAIMANT_UID}`)));
+  await assertSucceeds(getDoc(doc(masterDb, `items/immutableItem/claims/${CLAIMANT_UID}`)));
+  await assertFails(getDoc(doc(intruderDb, `items/immutableItem/claims/${CLAIMANT_UID}`)));
+  await assertFails(
+    setDoc(doc(claimantDb, `items/immutableItem/claims/${INTRUDER_UID}`), {
+      claimantId: CLAIMANT_UID,
+      status: 'pending',
+    })
+  );
+});
+
 
 
 

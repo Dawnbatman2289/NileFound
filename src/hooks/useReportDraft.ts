@@ -64,6 +64,7 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
   const [verificationAnswer, setVerificationAnswer] = useState('');
   const [compressionResult, setCompressionResult] = useState<CompressionResult | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState(0);
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   const [formError, setFormError] = useState<ReportFormError | null>(null);
 
@@ -181,8 +182,9 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
       }
       try {
         setIsCompressing(true);
+        setCompressionProgress(0);
         setFormError(null);
-        setCompressionResult(await compressImageFile(file, 800, 0.72));
+        setCompressionResult(await compressImageFile(file, 800, 0.72, setCompressionProgress));
       } catch (err: unknown) {
         setFormError({
           heading: 'Photo too large',
@@ -190,6 +192,7 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
         });
       } finally {
         setIsCompressing(false);
+        setCompressionProgress(0);
       }
     },
     [isFoundStudentId]
@@ -225,6 +228,7 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
     verificationAnswer, setVerificationAnswer,
     compressionResult, setCompressionResult,
     isCompressing,
+    compressionProgress,
     hasRestoredDraft,
     formError, setFormError,
     isFoundStudentId,

@@ -39,6 +39,7 @@ interface AdminPanelProps {
   onFetchFullPhoto?: (itemId: string) => Promise<string | null>;
   onLoadAll?: () => Promise<void>;
   onUpdateItemStatus: (itemId: string, status: CampusItem['status']) => Promise<boolean> | void;
+  onConfirmCustody?: (itemId: string) => Promise<boolean> | void;
   onDeleteItem: (itemId: string) => Promise<boolean> | void;
   onApproveClaim: (claimId: string, itemId: string) => Promise<boolean> | void;
   onRejectClaim: (claimId: string) => Promise<boolean> | void;
@@ -112,19 +113,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
             <Download className="w-4 h-4 text-[#0F6E6E] dark:text-[#199595]" />
             <span>{desk.isExportingCsv ? 'Exporting…' : 'Export CSV'}</span>
           </button>
-          <button
-            type="button"
-            onClick={async () => {
-              const ok = await onExpireOldItems();
-              if (ok === false) return desk.showError('Could not update expired items. Check your permissions and connection.');
-              desk.showNotification(`Evaluated open notices: items older than ${ITEM_EXPIRY_DAYS} days marked expired.`);
-              desk.refreshAuditCounts();
-            }}
-            className="flex items-center gap-1.5 bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] dark:hover:bg-[#332E27] text-[#4A443C] dark:text-[#CEC7BB] text-sm font-medium px-3.5 py-2 rounded-[10px] border border-[#857C70] dark:border-[#787065] transition-colors min-h-[44px] cursor-pointer btn-campus"
-          >
-            <Archive className="w-4 h-4 text-[#5C554C] dark:text-[#A8A095]" />
-            <span>Auto-Expire (&gt;{ITEM_EXPIRY_DAYS}d)</span>
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={async () => {
+                const ok = await onExpireOldItems();
+                if (ok === false) return desk.showError('Could not update expired items. Check your permissions and connection.');
+                desk.showNotification(`Evaluated open notices: items older than ${ITEM_EXPIRY_DAYS} days marked expired.`);
+                desk.refreshAuditCounts();
+              }}
+              className="flex items-center gap-1.5 bg-white dark:bg-[#28241F] hover:bg-[#FAF6EF] dark:hover:bg-[#332E27] text-[#4A443C] dark:text-[#CEC7BB] text-sm font-medium px-3.5 py-2 rounded-[10px] border border-[#857C70] dark:border-[#787065] transition-colors min-h-[44px] cursor-pointer btn-campus"
+            >
+              <Archive className="w-4 h-4 text-[#5C554C] dark:text-[#A8A095]" />
+              <span>Auto-Expire (&gt;{ITEM_EXPIRY_DAYS}d)</span>
+            </button>
+          )}
         </div>
       </div>
 

@@ -18,17 +18,22 @@ export function getClaimButtonState(
   myRejectedClaim?: ClaimRecord
 ): { disabled: boolean; label: string } {
   const isOwner = item.authorId === currentUserId;
+  const awaitingDropoff =
+    item.type === 'found' &&
+    item.holdingLocation !== 'finder_holding' &&
+    item.custodyStatus === 'awaiting_dropoff';
   const canRetryRejected = Boolean(
-    myRejectedClaim && !myRejectedClaim.resubmitted && (item.status === 'open' || item.status === 'claim_requested')
+    myRejectedClaim && !myRejectedClaim.resubmitted && !awaitingDropoff && (item.status === 'open' || item.status === 'claim_requested')
   );
   const blockedRejected = Boolean(myRejectedClaim) && !canRetryRejected;
 
   const disabled = item.status === 'returned' || item.status === 'verified' || item.status === 'expired'
-    || Boolean(myPendingClaim) || Boolean(myApprovedClaim) || blockedRejected || isOwner;
+    || awaitingDropoff || Boolean(myPendingClaim) || Boolean(myApprovedClaim) || blockedRejected || isOwner;
 
   if (item.status === 'returned') return { disabled, label: 'Item Reunited' };
-  if (item.status === 'verified') return { disabled, label: 'Verified — Awaiting Handover' };
+  if (item.status === 'verified') return { disabled, label: 'Verified, Awaiting Handover' };
   if (item.status === 'expired') return { disabled, label: 'Notice Expired' };
+  if (awaitingDropoff) return { disabled, label: 'Awaiting Desk Drop-off' };
   if (myApprovedClaim) return { disabled, label: 'Claim Approved' };
   if (myPendingClaim) return { disabled, label: 'Claim Submitted' };
   if (canRetryRejected) return { disabled: false, label: 'Retry Claim (1 left)' };

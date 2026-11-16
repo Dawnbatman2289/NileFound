@@ -14,10 +14,21 @@ export default defineConfig(() => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: (id) =>
-            id.includes('/node_modules/firebase/') || id.includes('/node_modules/@firebase/')
-              ? 'firebase'
-              : undefined,
+          manualChunks: (id) => {
+            if (
+              id.includes('/@firebase/firestore') ||
+              id.includes('/firebase/firestore') ||
+              id.includes('/@firebase/webchannel-wrapper') ||
+              id.includes('/@firebase/app-check') ||
+              id.includes('/firebase/app-check')
+            ) {
+              return 'firebase-firestore';
+            }
+            if (id.includes('/node_modules/firebase/') || id.includes('/node_modules/@firebase/')) {
+              return 'firebase-auth';
+            }
+            return undefined;
+          },
         },
       },
     },

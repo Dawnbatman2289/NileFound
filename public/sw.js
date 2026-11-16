@@ -1,8 +1,10 @@
-const CACHE = 'nilefound-static-v4';
+const CACHE = 'nilefound-static-v5';
 const OFFLINE = '/offline.html';
+const NAVIGATION_TIMEOUT_MS = 4000;
 const MAX_CACHE_ENTRIES = 60;
 const PRECACHE = [
   OFFLINE,
+  '/index.html',
   '/manifest.webmanifest',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -17,8 +19,34 @@ async function trimCache(cache, maxEntries) {
   await Promise.all(evictable.slice(0, excess).map((req) => cache.delete(req)));
 }
 
+async function networkFirstNavigation(request) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), NAVIGATION_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(request, { signal: controller.signal });
+    if (response && response.ok) {
+      const cache = await caches.open(CACHE);
+      await cache.put('/index.html', response.clone());
+      return response;
+    }
+    throw new Error('Non-OK navigation response');
+  } catch {
+    const cachedShell = await caches.match('/index.html');
+    if (cachedShell) return cachedShell;
+    const offlineFallback = await caches.match(OFFLINE);
+    return offlineFallback || new Response('Offline', { status: 503, statusText: 'Offline' });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)));
+  event.waitUntil(
+    caches.open(CACHE).then((cache) =>
+      Promise.allSettled(PRECACHE.map((url) => cache.add(url)))
+    )
+  );
   self.skipWaiting();
 });
 
@@ -30,6 +58,23 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow('/');
+      }
+      return undefined;
+    })
+  );
+});
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
@@ -37,8 +82,8 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/__/') || url.pathname.startsWith('/api/')) return;
 
-  if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).catch(() => caches.match(OFFLINE)));
+  if (request.mode === 'navigate' || url.pathname === '/index.html') {
+    event.respondWith(networkFirstNavigation(request));
     return;
   }
 

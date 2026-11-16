@@ -262,7 +262,10 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               onSuccessNotice(`Confirmed handover and marked "${selectedItem.title}" as Returned.`);
               onRefreshAudit();
             }}
-            disabled={selectedItem.status === 'returned'}
+            disabled={
+              selectedItem.status === 'returned' ||
+              (!isAdmin && (selectedItem.holdingLocation === 'finder_holding' || selectedItem.status !== 'verified'))
+            }
             className="bg-[#0F6E6E] hover:bg-[#0C5656] disabled:opacity-50 text-white font-medium px-4 py-2.5 rounded-[10px] text-sm flex items-center gap-2 cursor-pointer min-h-[44px] btn-campus shadow-xs"
           >
             <CheckCircle className="w-4 h-4" />

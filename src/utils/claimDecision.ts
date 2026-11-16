@@ -33,10 +33,10 @@ export async function decideClaimWithFreshPending(deps: {
   itemId: string;
   decision: 'approved' | 'rejected';
   queryPendingClaimIds: (itemId: string) => Promise<string[]>;
-  commitDecisionBatch: (plan: ClaimDecisionBatchPlan) => Promise<void>;
+  commitDecisionBatch: (plan: ClaimDecisionBatchPlan) => Promise<ClaimDecisionBatchPlan | void>;
 }): Promise<ClaimDecisionBatchPlan> {
   const freshPendingIds = await deps.queryPendingClaimIds(deps.itemId);
   const plan = computeClaimDecisionBatchPlan(deps.claimId, deps.decision, freshPendingIds);
-  await deps.commitDecisionBatch(plan);
-  return plan;
+  const committedPlan = await deps.commitDecisionBatch(plan);
+  return committedPlan ?? plan;
 }

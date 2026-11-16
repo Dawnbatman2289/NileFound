@@ -11,5 +11,6 @@ coverage/
 service-account*.json
 *serviceAccountKey*.json
 .aistudio/
+public/assets/aistudio/
 .playwright-cli/
 functions/lib/

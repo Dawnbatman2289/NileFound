@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  calculateScaledDimensions,
   isSupportedImageFile,
+  MAX_CANVAS_BOUND,
   MAX_FIRESTORE_DATA_URL_CHARS,
   MAX_THUMB_DATA_URL_CHARS,
 } from './imageCompressor.ts';
@@ -15,7 +17,15 @@ test('imageCompressor validates allowed image formats and size bounds', () => {
   assert.equal(isSupportedImageFile({ type: 'image/jpeg', size: 6 * 1024 * 1024 }), false);
 });
 
-test('inline thumbnail cap guarantees 20 photo items transfer well under 150 KB', () => {
+test('calculateScaledDimensions clamps large photos to <= 1280px before canvas allocation', () => {
+  assert.equal(MAX_CANVAS_BOUND, 1280);
+  assert.deepEqual(calculateScaledDimensions(4000, 3000), { width: 1280, height: 960 });
+  assert.deepEqual(calculateScaledDimensions(3000, 4000), { width: 960, height: 1280 });
+  assert.deepEqual(calculateScaledDimensions(4000, 3000, 800), { width: 800, height: 600 });
+  assert.deepEqual(calculateScaledDimensions(800, 600, 2000), { width: 800, height: 600 });
+});
+
+test('inline thumbnail cap guarantees 25 photo items transfer under 150 KB', () => {
   assert.ok(MAX_THUMB_DATA_URL_CHARS <= 4096);
   assert.ok(MAX_FIRESTORE_DATA_URL_CHARS <= 135000);
 
@@ -35,9 +45,12 @@ test('inline thumbnail cap guarantees 20 photo items transfer well under 150 KB'
     createdAt: '2026-11-10T10:00:00.000Z',
   });
 
-  const twentyItemsBytes = Buffer.byteLength(JSON.stringify(Array.from({ length: 20 }, () => JSON.parse(sampleItemPayload))), 'utf8');
+  const twentyFiveItemsBytes = Buffer.byteLength(
+    JSON.stringify(Array.from({ length: 25 }, () => JSON.parse(sampleItemPayload))),
+    'utf8'
+  );
   assert.ok(
-    twentyItemsBytes < 150 * 1024,
-    `Expected 20 photo items feed payload to be under 150 KB, got ${twentyItemsBytes} bytes`
+    twentyFiveItemsBytes < 150 * 1024,
+    `Expected 25 photo items feed payload to be under 150 KB, got ${twentyFiveItemsBytes} bytes`
   );
 });

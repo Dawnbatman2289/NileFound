@@ -2,11 +2,10 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  *
- * Client-side image compression utility for NileFound.
- * Generates both a <= 3 KB inline thumbnail and a compressed full photo on-device.
+ * Client-side single-decode Canvas image compression utility for NileFound.
+ * Bounds target dimensions (<= 1280px) before allocating canvas memory and
+ * generates both a <= 3 KB inline feed thumbnail and compressed full photo on-device.
  */
-
-import imageCompression from 'browser-image-compression';
 
 export interface CompressionResult {
   file: File;
@@ -20,6 +19,7 @@ export interface CompressionResult {
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MAX_CANVAS_BOUND = 1280;
 export const MAX_FIRESTORE_DATA_URL_CHARS = 135000;
 export const MAX_THUMB_DATA_URL_CHARS = 4096;
 
@@ -27,106 +27,201 @@ export function isSupportedImageFile(file: { type: string; size: number }): bool
   return ALLOWED_IMAGE_TYPES.has(file.type.toLowerCase()) && file.size > 0 && file.size <= MAX_UPLOAD_BYTES;
 }
 
-function readFileAsDataUrl(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result === 'string') resolve(reader.result);
-      else reject(new Error('Could not read compressed image.'));
+/**
+ * Computes scaled width and height BEFORE creating a <canvas> so mobile browsers
+ * never allocate full 12MP–48MP backing stores in memory.
+ */
+export function calculateScaledDimensions(
+  origWidth: number,
+  origHeight: number,
+  maxBound = MAX_CANVAS_BOUND
+): { width: number; height: number } {
+  const safeW = Math.max(1, Math.round(origWidth));
+  const safeH = Math.max(1, Math.round(origHeight));
+  const clampedBound = Math.max(1, Math.min(Math.round(maxBound), MAX_CANVAS_BOUND));
+
+  if (safeW <= clampedBound && safeH <= clampedBound) {
+    return { width: safeW, height: safeH };
+  }
+  const scale = clampedBound / Math.max(safeW, safeH);
+  return {
+    width: Math.max(1, Math.round(safeW * scale)),
+    height: Math.max(1, Math.round(safeH * scale)),
+  };
+}
+
+interface DecodedImageHandle {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  release: () => void;
+}
+
+async function decodeImageOnce(file: File): Promise<DecodedImageHandle> {
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(file);
+    return {
+      source: bitmap,
+      width: bitmap.width,
+      height: bitmap.height,
+      release: () => bitmap.close(),
     };
-    reader.onerror = () => reject(new Error('Could not read compressed image.'));
-    reader.readAsDataURL(file);
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Could not decode image file.'));
+      el.src = objectUrl;
+    });
+    return {
+      source: img,
+      width: img.naturalWidth || img.width,
+      height: img.naturalHeight || img.height,
+      release: () => URL.revokeObjectURL(objectUrl),
+    };
+  } catch (err) {
+    URL.revokeObjectURL(objectUrl);
+    throw err;
+  }
+}
+
+function renderCanvasToJpeg(
+  source: CanvasImageSource,
+  targetWidth: number,
+  targetHeight: number,
+  quality: number
+): { canvas: HTMLCanvasElement; dataUrl: string } {
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Could not initialize image compressor on this browser.');
+  }
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.drawImage(source, 0, 0, targetWidth, targetHeight);
+  const dataUrl = canvas.toDataURL('image/jpeg', quality);
+  return { canvas, dataUrl };
+}
+
+function canvasToFile(canvas: HTMLCanvasElement, dataUrl: string, fileName: string, quality: number): Promise<File> {
+  return new Promise((resolve) => {
+    if (typeof canvas.toBlob === 'function') {
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(new File([blob], fileName, { type: 'image/jpeg' }));
+            return;
+          }
+          resolve(dataUrlToFileFallback(dataUrl, fileName));
+        },
+        'image/jpeg',
+        quality
+      );
+      return;
+    }
+    resolve(dataUrlToFileFallback(dataUrl, fileName));
   });
 }
 
-async function createInlineThumbnailDataUrl(sourceFile: File): Promise<string> {
-  const attempts = [
-    { maxSizeMB: 0.0028, maxWidthOrHeight: 200, initialQuality: 0.52 },
-    { maxSizeMB: 0.0022, maxWidthOrHeight: 144, initialQuality: 0.4 },
-    { maxSizeMB: 0.0018, maxWidthOrHeight: 112, initialQuality: 0.32 },
-  ];
-
-  let thumbDataUrl = '';
-  for (const opts of attempts) {
-    const thumbFile = await imageCompression(sourceFile, {
-      ...opts,
-      useWebWorker: false,
-      fileType: 'image/jpeg',
-    });
-    thumbDataUrl = await readFileAsDataUrl(thumbFile);
-    if (thumbDataUrl.length <= MAX_THUMB_DATA_URL_CHARS) {
-      return thumbDataUrl;
-    }
+function dataUrlToFileFallback(dataUrl: string, fileName: string): File {
+  const base64 = dataUrl.split(',')[1] || '';
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
   }
-
-  throw new Error('Could not generate a compact feed thumbnail under 3 KB. Try a simpler image.');
+  return new File([bytes], fileName, { type: 'image/jpeg' });
 }
 
 export async function compressImageFile(
   file: File,
   maxWidth = 800,
   initialQuality = 0.72,
+  onProgress?: (percent: number) => void
 ): Promise<CompressionResult> {
   if (!isSupportedImageFile(file)) {
     throw new Error('Choose a JPEG, PNG, or WebP photo under 5MB.');
   }
 
+  onProgress?.(10);
   const originalSizeKb = Math.round(file.size / 1024);
+  const decoded = await decodeImageOnce(file);
 
-  // Target <= 85KB binary so Base64 dataUrl stays comfortably below Firestore's 140,000 char cap
-  let compressedFile = await imageCompression(file, {
-    maxSizeMB: 0.085,
-    maxWidthOrHeight: maxWidth,
-    useWebWorker: false,
-    initialQuality,
-    fileType: 'image/jpeg',
-  });
+  try {
+    onProgress?.(35);
 
-  let dataUrl = await readFileAsDataUrl(compressedFile);
+    const boundedMax = Math.min(maxWidth, MAX_CANVAS_BOUND);
+    const fullAttempts = [
+      { maxDim: boundedMax, quality: initialQuality },
+      { maxDim: Math.min(boundedMax, 640), quality: 0.56 },
+      { maxDim: Math.min(boundedMax, 460), quality: 0.45 },
+    ];
 
-  if (dataUrl.length > MAX_FIRESTORE_DATA_URL_CHARS) {
-    compressedFile = await imageCompression(file, {
-      maxSizeMB: 0.06,
-      maxWidthOrHeight: 600,
-      useWebWorker: false,
-      initialQuality: 0.55,
-      fileType: 'image/jpeg',
-    });
-    dataUrl = await readFileAsDataUrl(compressedFile);
+    let fullRender: { canvas: HTMLCanvasElement; dataUrl: string; quality: number } | null = null;
+    for (const attempt of fullAttempts) {
+      const { width, height } = calculateScaledDimensions(decoded.width, decoded.height, attempt.maxDim);
+      const rendered = renderCanvasToJpeg(decoded.source, width, height, attempt.quality);
+      fullRender = { ...rendered, quality: attempt.quality };
+      if (rendered.dataUrl.length <= MAX_FIRESTORE_DATA_URL_CHARS) {
+        break;
+      }
+    }
+
+    if (!fullRender || fullRender.dataUrl.length > MAX_FIRESTORE_DATA_URL_CHARS) {
+      throw new Error('Photo is still too large after compression. Try a smaller image.');
+    }
+
+    onProgress?.(65);
+    const baseName = file.name.replace(/\.[^.]+$/, '') || 'photo';
+    const compressedFile = await canvasToFile(
+      fullRender.canvas,
+      fullRender.dataUrl,
+      `${baseName}.jpg`,
+      fullRender.quality
+    );
+
+    const thumbAttempts = [
+      { maxDim: 180, quality: 0.5 },
+      { maxDim: 136, quality: 0.38 },
+      { maxDim: 104, quality: 0.3 },
+    ];
+    let thumbDataUrl = '';
+    for (const attempt of thumbAttempts) {
+      const { width, height } = calculateScaledDimensions(decoded.width, decoded.height, attempt.maxDim);
+      const { dataUrl: candidateThumb } = renderCanvasToJpeg(decoded.source, width, height, attempt.quality);
+      thumbDataUrl = candidateThumb;
+      if (thumbDataUrl.length <= MAX_THUMB_DATA_URL_CHARS) {
+        break;
+      }
+    }
+
+    if (!thumbDataUrl || thumbDataUrl.length > MAX_THUMB_DATA_URL_CHARS) {
+      throw new Error('Could not generate a compact feed thumbnail under 3 KB. Try a simpler image.');
+    }
+
+    onProgress?.(100);
+
+    const compressedSizeKb = Math.max(1, Math.round(compressedFile.size / 1024));
+    const reductionPercentage =
+      originalSizeKb > 0
+        ? Math.max(0, Math.round(((originalSizeKb - compressedSizeKb) / originalSizeKb) * 100))
+        : 0;
+
+    return {
+      file: compressedFile,
+      dataUrl: fullRender.dataUrl,
+      thumbDataUrl,
+      originalSizeKb,
+      compressedSizeKb,
+      thumbSizeBytes: thumbDataUrl.length,
+      reductionPercentage,
+    };
+  } finally {
+    decoded.release();
   }
-
-  if (dataUrl.length > MAX_FIRESTORE_DATA_URL_CHARS) {
-    compressedFile = await imageCompression(file, {
-      maxSizeMB: 0.045,
-      maxWidthOrHeight: 420,
-      useWebWorker: false,
-      initialQuality: 0.45,
-      fileType: 'image/jpeg',
-    });
-    dataUrl = await readFileAsDataUrl(compressedFile);
-  }
-
-  if (dataUrl.length > MAX_FIRESTORE_DATA_URL_CHARS) {
-    throw new Error('Photo is still too large after compression. Try a smaller image.');
-  }
-
-  const thumbSource = new File([compressedFile], 'thumb.jpg', { type: 'image/jpeg' });
-  const thumbDataUrl = await createInlineThumbnailDataUrl(thumbSource);
-  const thumbSizeBytes = thumbDataUrl.length;
-
-  const compressedSizeKb = Math.max(1, Math.round(compressedFile.size / 1024));
-  const reductionPercentage =
-    originalSizeKb > 0
-      ? Math.max(0, Math.round(((originalSizeKb - compressedSizeKb) / originalSizeKb) * 100))
-      : 0;
-
-  return {
-    file: compressedFile,
-    dataUrl,
-    thumbDataUrl,
-    originalSizeKb,
-    compressedSizeKb,
-    thumbSizeBytes,
-    reductionPercentage,
-  };
 }

@@ -43,7 +43,7 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
         <div className="flex-1 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-sans font-medium px-2 py-0.5 rounded-[10px] border bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border-[#0F6E6E]/25">
-              {notification.type === 'admin_review' ? 'Staff Notice' : notification.type === 'chat_message' ? 'Handover Chat' : 'Campus Update'}
+              {notification.type === 'chat_message' ? 'Handover Chat' : 'Campus Update'}
             </span>
             <button
               type="button"

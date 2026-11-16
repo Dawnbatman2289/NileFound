@@ -42,6 +42,7 @@ export interface CampusItem {
   dateLostOrFound: string; // ISO date string
   status: ItemStatus;
   holdingLocation: HoldingLocation;
+  custodyStatus?: 'awaiting_dropoff' | 'confirmed';
   authorId?: string;
   thumbUrl?: string; // <= 3 KB inline feed thumbnail
   imageUrl?: string; // legacy inline image or preview fetched from items/{id}/media/full
@@ -111,7 +112,7 @@ export type NotificationType =
   | 'chat_message'
   | 'match_alert'
   | 'item_returned'
-  | 'admin_review';
+  | 'custody_confirmed';
 
 export interface CampusNotification {
   id: string;

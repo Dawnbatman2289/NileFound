@@ -99,6 +99,10 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       : draft.reportType === 'found'
       ? draft.holdingLocation
       : 'finder_holding';
+    const effectiveCustodyStatus: CampusItem['custodyStatus'] =
+      draft.reportType === 'found' && effectiveHoldingLocation !== 'finder_holding' && !isOfficer
+        ? 'awaiting_dropoff'
+        : 'confirmed';
 
     const newItem: CampusItem = {
       id: `item-${Date.now()}`,
@@ -111,6 +115,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       dateLostOrFound: draft.dateLostOrFound,
       status: 'open',
       holdingLocation: effectiveHoldingLocation,
+      custodyStatus: effectiveCustodyStatus,
       thumbUrl: draft.isFoundStudentId ? undefined : draft.compressionResult?.thumbDataUrl,
       imageUrl: draft.isFoundStudentId ? undefined : draft.compressionResult?.dataUrl,
       isSensitiveId: draft.category === 'student_id',
@@ -215,7 +220,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2 bg-[#FAF6EF] dark:bg-[#141311] p-1.5 rounded-[10px] border border-[#C4BBAF] dark:border-[#3E3931]">
+          <div className="grid grid-cols-2 gap-2 bg-[#FAF6EF] dark:bg-[#141311] p-1.5 rounded-[10px] border border-[#857C70] dark:border-[#787065]">
             <button
               type="button"
               onClick={() => {
@@ -340,6 +345,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           <PhotoUploadSection
             isFoundStudentId={draft.isFoundStudentId}
             isCompressing={draft.isCompressing}
+            compressionProgress={draft.compressionProgress}
             compressionResult={draft.compressionResult}
             fileInputRef={fileInputRef}
             onImageChange={draft.handleImageChange}

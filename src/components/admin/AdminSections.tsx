@@ -17,6 +17,7 @@ export type DeskTab = 'claims' | 'custody' | 'all_items' | 'roles' | 'personas';
 export interface ServerCounts {
   pendingClaimsCount: number;
   custodyCount: number;
+  awaitingCustodyCount?: number;
   totalReturned: number;
   totalFound: number;
   foundReturned: number;
@@ -33,6 +34,7 @@ export interface AdminTabHandlers {
   onLoadMoreClaims?: () => Promise<void> | void;
   onFetchClaimPrivateDetails?: (itemId: string, claimId: string) => Promise<void>;
   onUpdateItemStatus: (itemId: string, status: CampusItem['status']) => Promise<boolean> | void;
+  onConfirmCustody?: (itemId: string) => Promise<boolean> | void;
   onApproveClaim: (claimId: string, itemId: string) => Promise<boolean> | void;
   onRejectClaim: (claimId: string) => Promise<boolean> | void;
   onOpenClaimChat?: (claim: ClaimRecord, item?: CampusItem) => void;
@@ -52,6 +54,7 @@ export function buildDeskKpis(
   const stats = generateCampusAuditReport(items, claims);
   const pendingTotal = sc ? sc.pendingClaimsCount : pendingLen;
   const custodyTotal = sc ? sc.custodyCount : custodyLen;
+  const awaitingCustody = sc?.awaitingCustodyCount ?? items.filter((i) => i.type === 'found' && i.custodyStatus === 'awaiting_dropoff').length;
   const returnedTotal = sc ? sc.totalReturned : stats.totalReturned;
   const totalTracked = sc ? sc.totalItems : items.length;
   const returnRate = sc
@@ -60,7 +63,7 @@ export function buildDeskKpis(
 
   return [
     { label: 'Pending Claims', value: pendingTotal, color: 'text-[#7A5000] dark:text-[#F9CF7C]', sub: pendingTotal === 0 ? 'Queue clear' : 'Awaiting review' },
-    { label: 'Physical Custody', value: custodyTotal, color: 'text-[#0F6E6E] dark:text-[#199595]', sub: 'At Gate & Desks' },
+    { label: 'Physical Custody', value: custodyTotal, color: 'text-[#0F6E6E] dark:text-[#199595]', sub: awaitingCustody > 0 ? `${awaitingCustody} awaiting drop-off` : 'At Gate & Desks' },
     { label: 'Reunited Items', value: returnedTotal, color: 'text-[#2F7D4F] dark:text-[#75CE9A]', sub: `${returnRate}% of found returned` },
     { label: 'Total Tracked', value: totalTracked, color: 'text-[#1F1B16] dark:text-[#F5F1EA]', sub: sc ? 'Campus notices' : 'Loaded notices' },
   ];
@@ -168,6 +171,7 @@ export const AdminTabContent: React.FC<{
         <CustodyTab
           physicalCustodyItems={physicalCustodyItems}
           onUpdateItemStatus={handlers.onUpdateItemStatus}
+          onConfirmCustody={handlers.onConfirmCustody}
           onOpenAddFoundItem={handlers.onOpenAddFoundItem}
           onSuccessNotice={desk.showNotification}
           onErrorNotice={desk.showError}

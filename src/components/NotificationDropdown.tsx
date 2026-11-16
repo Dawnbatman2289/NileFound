@@ -80,8 +80,8 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         return 'Match Found';
       case 'item_returned':
         return 'Returned';
-      case 'admin_review':
-        return 'Staff Review';
+      case 'custody_confirmed':
+        return 'Drop-off Confirmed';
       default:
         return 'Campus Alert';
     }
@@ -91,13 +91,13 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
     switch (type) {
       case 'claim_approved':
       case 'item_returned':
+      case 'custody_confirmed':
         return 'bg-[#EDF7F1] dark:bg-[#0E2417] text-[#1B5633] dark:text-[#75CE9A] border-[#2F7D4F]/30';
       case 'claim_rejected':
         return 'bg-[#FDF2F2] dark:bg-[#2B0E0E] text-[#9B1C1C] dark:text-[#F87171] border-[#F87171]/40';
       case 'match_alert':
         return 'bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C] border-[#E8A317]/40';
       case 'chat_message':
-      case 'admin_review':
         return 'bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border-[#0F6E6E]/30';
       default:
         return 'bg-[#FAF6EF] dark:bg-[#1E1C18] text-[#4A443C] dark:text-[#CEC7BB] border-[#C4BBAF] dark:border-[#3E3931]';

@@ -5,6 +5,7 @@ import type { CompressionResult } from '../../utils/imageCompressor.ts';
 interface PhotoUploadSectionProps {
   isFoundStudentId: boolean;
   isCompressing: boolean;
+  compressionProgress?: number;
   compressionResult: CompressionResult | null;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onImageChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -14,6 +15,7 @@ interface PhotoUploadSectionProps {
 export const PhotoUploadSection: React.FC<PhotoUploadSectionProps> = ({
   isFoundStudentId,
   isCompressing,
+  compressionProgress = 0,
   compressionResult,
   fileInputRef,
   onImageChange,
@@ -55,7 +57,7 @@ export const PhotoUploadSection: React.FC<PhotoUploadSectionProps> = ({
 
       {isCompressing && (
         <p className="text-sm text-[#0F6E6E] dark:text-[#199595] font-medium mt-2">
-          Compressing photo in device memory...
+          Compressing photo in device memory{compressionProgress > 0 ? ` (${compressionProgress}%)` : ''}...
         </p>
       )}
 

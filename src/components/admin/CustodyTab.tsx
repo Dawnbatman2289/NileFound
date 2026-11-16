@@ -7,6 +7,7 @@ import { ADMIN_CARD } from './adminStyles.ts';
 interface CustodyTabProps {
   physicalCustodyItems: CampusItem[];
   onUpdateItemStatus: (itemId: string, status: CampusItem['status']) => Promise<boolean> | void;
+  onConfirmCustody?: (itemId: string) => Promise<boolean> | void;
   onOpenAddFoundItem?: () => void;
   onSuccessNotice: (msg: string) => void;
   onErrorNotice: (msg: string) => void;
@@ -16,6 +17,7 @@ interface CustodyTabProps {
 export const CustodyTab: React.FC<CustodyTabProps> = ({
   physicalCustodyItems,
   onUpdateItemStatus,
+  onConfirmCustody,
   onOpenAddFoundItem,
   onSuccessNotice,
   onErrorNotice,
@@ -66,38 +68,66 @@ export const CustodyTab: React.FC<CustodyTabProps> = ({
       </div>
     ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {physicalCustodyItems.map((item) => (
-          <div key={item.id} className={`${ADMIN_CARD} p-5 space-y-3 hover:border-[#0F6E6E]/40 transition-colors`}>
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-serif font-bold text-sm">{item.title}</span>
-              <span className="text-xs font-mono uppercase bg-[#FAF6EF] dark:bg-[#141311] text-[#0F6E6E] dark:text-[#199595] border border-[#0F6E6E]/30 px-2.5 py-0.5 rounded-full font-bold shrink-0">
-                {item.holdingLocation.replace(/_/g, ' ')}
-              </span>
+        {physicalCustodyItems.map((item) => {
+          const awaitingDropoff = item.type === 'found' && item.custodyStatus === 'awaiting_dropoff';
+          return (
+            <div key={item.id} className={`${ADMIN_CARD} p-5 space-y-3 hover:border-[#0F6E6E]/40 transition-colors`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-serif font-bold text-sm">{item.title}</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {awaitingDropoff ? (
+                    <span className="text-xs bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C] border border-[#E8A317]/40 px-2.5 py-0.5 rounded-[8px] font-semibold">
+                      Awaiting Drop-off
+                    </span>
+                  ) : (
+                    <span className="text-xs bg-[#EDF7F1] dark:bg-[#0E2417] text-[#1B5633] dark:text-[#75CE9A] border border-[#2F7D4F]/30 px-2.5 py-0.5 rounded-[8px] font-semibold">
+                      Confirmed
+                    </span>
+                  )}
+                  <span className="text-xs font-mono uppercase bg-[#FAF6EF] dark:bg-[#141311] text-[#0F6E6E] dark:text-[#199595] border border-[#0F6E6E]/30 px-2.5 py-0.5 rounded-[8px] font-bold">
+                    {item.holdingLocation.replace(/_/g, ' ')}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-[#4A443C] dark:text-[#CEC7BB] line-clamp-2 leading-relaxed">{item.description}</p>
+              <div className="flex items-center justify-between text-xs text-[#5C554C] dark:text-[#A8A095] pt-2 border-t border-[#C4BBAF] dark:border-[#3E3931]">
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-[#0F6E6E] dark:text-[#199595]" />
+                  <span>{item.location}</span>
+                </span>
+                <span>Logged: {formatDateDDMMYYYY(item.dateLostOrFound)}</span>
+              </div>
+              {awaitingDropoff && onConfirmCustody && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = await onConfirmCustody(item.id);
+                    if (ok === false) return onErrorNotice('Could not confirm drop-off custody. Check permissions and connection.');
+                    onSuccessNotice(`Confirmed physical custody for "${item.title}". Claims are now open.`);
+                    onRefreshAudit();
+                  }}
+                  className="w-full min-h-[44px] bg-[#E8A317] hover:bg-[#d69310] text-[#1F1B16] text-sm font-semibold rounded-[10px] cursor-pointer"
+                >
+                  Confirm Drop-off Received
+                </button>
+              )}
+              {item.status === 'verified' && !awaitingDropoff && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = await onUpdateItemStatus(item.id, 'returned');
+                    if (ok === false) return onErrorNotice('Could not mark handover returned. Check permissions and connection.');
+                    onSuccessNotice(`Confirmed physical handover for "${item.title}".`);
+                    onRefreshAudit();
+                  }}
+                  className="w-full min-h-[44px] bg-[#0F6E6E] hover:bg-[#0C5656] text-white text-sm font-medium rounded-[10px] cursor-pointer"
+                >
+                  Confirm Handover (Mark Returned)
+                </button>
+              )}
             </div>
-            <p className="text-sm text-[#4A443C] dark:text-[#CEC7BB] line-clamp-2 leading-relaxed">{item.description}</p>
-            <div className="flex items-center justify-between text-xs text-[#5C554C] dark:text-[#A8A095] pt-2 border-t border-[#C4BBAF] dark:border-[#3E3931]">
-              <span className="flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-[#0F6E6E] dark:text-[#199595]" />
-                <span>{item.location}</span>
-              </span>
-              <span>Logged: {formatDateDDMMYYYY(item.dateLostOrFound)}</span>
-            </div>
-            {item.status === 'verified' && (
-              <button
-                type="button"
-                onClick={async () => {
-                  const ok = await onUpdateItemStatus(item.id, 'returned');
-                  if (ok === false) return onErrorNotice('Could not mark handover returned. Check permissions and connection.');
-                  onSuccessNotice(`Confirmed physical handover for "${item.title}".`);
-                  onRefreshAudit();
-                }}
-                className="w-full min-h-[44px] bg-[#0F6E6E] hover:bg-[#0C5656] text-white text-sm font-medium rounded-[10px] cursor-pointer"
-              >
-                Confirm Handover (Mark Returned)
-              </button>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     )}
   </div>

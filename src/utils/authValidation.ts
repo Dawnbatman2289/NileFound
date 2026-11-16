@@ -19,3 +19,14 @@ export function validateFullName(name: string): boolean {
     && name.trim().length >= 2
     && name.trim().length <= 100;
 }
+
+export function isCampusAccountAllowed(params: {
+  email?: string | null;
+  emailVerified?: boolean;
+  isMasterAdmin?: boolean;
+  isDelegatedAdmin?: boolean;
+}): boolean {
+  if (!params.email || !params.emailVerified) return false;
+  if (params.isMasterAdmin || params.isDelegatedAdmin) return true;
+  return validateNileEmail(params.email);
+}

@@ -112,9 +112,14 @@ export const ItemCard: React.FC<ItemCardProps> = memo(({
           </div>
 
           {isFound && (
-            <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#C4BBAF] dark:border-[#3E3931] rounded-[10px] px-3 py-2 text-sm flex items-center justify-between text-[#4A443C] dark:text-[#CEC7BB]">
+            <div className="bg-[#FAF6EF] dark:bg-[#141311] border border-[#C4BBAF] dark:border-[#3E3931] rounded-[10px] px-3 py-2 text-sm flex items-center justify-between gap-2 text-[#4A443C] dark:text-[#CEC7BB]">
               <span className="text-[#5C554C] dark:text-[#A8A095]">Held at:</span>
-              <span className="font-medium text-[#1F1B16] dark:text-[#F5F1EA]">{holdingLocationLabel(item.holdingLocation, isFoundIdCard)}</span>
+              <span className="font-medium text-[#1F1B16] dark:text-[#F5F1EA] text-right">
+                {holdingLocationLabel(item.holdingLocation, isFoundIdCard)}
+                {item.holdingLocation !== 'finder_holding' && item.custodyStatus === 'awaiting_dropoff' && (
+                  <span className="block text-xs font-semibold text-[#7A5000] dark:text-[#F9CF7C]">Awaiting Desk Drop-off</span>
+                )}
+              </span>
             </div>
           )}
 

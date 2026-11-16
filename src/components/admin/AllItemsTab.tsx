@@ -65,24 +65,43 @@ export const AllItemsTab: React.FC<AllItemsTabProps> = ({
             </div>
 
             <div className="flex items-center gap-2.5 w-full sm:w-auto" onClick={(e) => e.stopPropagation()}>
-              <select
-                aria-label={`Status for ${item.title}`}
-                value={item.status}
-                onChange={async (e) => {
-                  const nextStatus = e.target.value as CampusItem['status'];
-                  const ok = await onUpdateItemStatus(item.id, nextStatus);
-                  if (ok === false) return onErrorNotice(`Could not update status for "${item.title}".`);
-                  onSuccessNotice(`Updated status for "${item.title}" to ${nextStatus}.`);
-                  onRefreshAudit();
-                }}
-                className="flex-1 sm:flex-initial bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] border border-[#857C70] dark:border-[#787065] rounded-[10px] px-3 py-2 text-base sm:text-sm focus:border-[#0F6E6E] min-h-[44px] cursor-pointer"
-              >
-                <option value="open">Open</option>
-                <option value="claim_requested">Claim Pending</option>
-                <option value="verified">Verified (Handover Pending)</option>
-                <option value="returned">Returned / Reunited</option>
-                <option value="expired">Expired</option>
-              </select>
+              {isAdmin ? (
+                <select
+                  aria-label={`Status for ${item.title}`}
+                  value={item.status}
+                  onChange={async (e) => {
+                    const nextStatus = e.target.value as CampusItem['status'];
+                    const ok = await onUpdateItemStatus(item.id, nextStatus);
+                    if (ok === false) return onErrorNotice(`Could not update status for "${item.title}".`);
+                    onSuccessNotice(`Updated status for "${item.title}" to ${nextStatus}.`);
+                    onRefreshAudit();
+                  }}
+                  className="flex-1 sm:flex-initial bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] border border-[#857C70] dark:border-[#787065] rounded-[10px] px-3 py-2 text-base sm:text-sm focus:border-[#0F6E6E] min-h-[44px] cursor-pointer"
+                >
+                  <option value="open">Open</option>
+                  <option value="claim_requested">Claim Pending</option>
+                  <option value="verified">Verified (Handover Pending)</option>
+                  <option value="returned">Returned / Reunited</option>
+                  <option value="expired">Expired</option>
+                </select>
+              ) : item.holdingLocation !== 'finder_holding' && item.status === 'verified' ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = await onUpdateItemStatus(item.id, 'returned');
+                    if (ok === false) return onErrorNotice(`Could not confirm handover for "${item.title}".`);
+                    onSuccessNotice(`Confirmed handover for "${item.title}".`);
+                    onRefreshAudit();
+                  }}
+                  className="min-h-[44px] px-3.5 py-2 rounded-[10px] bg-[#0F6E6E] hover:bg-[#0C5656] text-white text-xs font-semibold cursor-pointer"
+                >
+                  Mark Returned
+                </button>
+              ) : (
+                <span className="text-xs font-medium text-[#5C554C] dark:text-[#A8A095] px-2.5 py-1.5 border border-[#C4BBAF] dark:border-[#3E3931] rounded-[8px] capitalize">
+                  {item.status.replace(/_/g, ' ')}
+                </span>
+              )}
 
               {isAdmin && (
                 <button

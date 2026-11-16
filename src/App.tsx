@@ -15,7 +15,6 @@ import { useAuthSession } from './hooks/useAuthSession.ts';
 import { useNotifications } from './hooks/useNotifications.ts';
 import { useItemsFeed } from './hooks/useItemsFeed.ts';
 import { useClaims } from './hooks/useClaims.ts';
-import { fetchApprovedHandoverContact } from './services/firestoreService.ts';
 import { safeSetStorage } from './utils/storage.ts';
 import {
   getAppTabTransitionClass,
@@ -162,7 +161,7 @@ export default function App() {
         return;
       }
     }
-    if (type === 'admin_review' && authSession.isPrivileged) return setActiveTab('admin');
+    if (type === 'claim_received' && authSession.isPrivileged) return setActiveTab('admin');
     if (!itemId) return;
     setActiveTab('feed');
     setTimeout(() => {
@@ -247,6 +246,12 @@ export default function App() {
           )}
 
           <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto p-4 sm:p-6 lg:p-8 pb-24 sm:pb-6 overflow-x-clip">
+            {authSession.initializing ? (
+              <div role="status" aria-live="polite" className="min-h-[45vh] flex flex-col items-center justify-center gap-3 text-center">
+                <div className="w-8 h-8 rounded-full border-2 border-[#C4BBAF] dark:border-[#3E3931] border-t-[#0F6E6E] dark:border-t-[#199595] animate-spin" />
+                <p className="text-sm text-[#4A443C] dark:text-[#CEC7BB]">Checking campus sign-in…</p>
+              </div>
+            ) : (
             <div key={activeTab} className={getAppTabTransitionClass(prevTabRef.current, activeTab)}>
               {activeTab === 'feed' && (
                 <FeedView
@@ -255,7 +260,7 @@ export default function App() {
                   onClaimItem={(item) => (authSession.currentUser ? setSelectedItemForClaim(item) : setActiveTab('login'))}
                   onOpenReportModal={() => { setReportPrefill(null); setIsReportModalOpen(true); }}
                   onFoundMatch={(lostItem) => { setReportPrefill({ type: 'found', category: lostItem.category, location: lostItem.location, title: lostItem.title }); setIsReportModalOpen(true); }}
-                  onFetchHandoverContact={(itemId) => (authSession.isDemoMode ? Promise.resolve({ authorName: 'Finder', authorEmail: 'finder@nileuniversity.edu.ng' }) : fetchApprovedHandoverContact(itemId))}
+                  onFetchHandoverContact={(itemId) => (authSession.isDemoMode ? Promise.resolve({ authorName: 'Finder', authorEmail: 'finder@nileuniversity.edu.ng' }) : import('./services/firestoreService.ts').then((m) => m.fetchApprovedHandoverContact(itemId)))}
                   onFetchFullPhoto={itemsFeed.handleFetchFullPhoto}
                   onFetchClaimPrivateDetails={claimsState.handleFetchClaimPrivateDetails}
                   onApproveClaim={claimsState.handleApproveClaim} onRejectClaim={claimsState.handleRejectClaim}
@@ -279,7 +284,7 @@ export default function App() {
                     onLoadMoreClaims={claimsState.handleLoadMoreClaims}
                     onFetchClaimPrivateDetails={claimsState.handleFetchClaimPrivateDetails}
                     onFetchFullPhoto={itemsFeed.handleFetchFullPhoto} onLoadAll={itemsFeed.handleLoadAllItems}
-                    onUpdateItemStatus={itemsFeed.handleUpdateItemStatus} onDeleteItem={itemsFeed.handleDeleteItem}
+                    onUpdateItemStatus={itemsFeed.handleUpdateItemStatus} onConfirmCustody={itemsFeed.handleConfirmCustody} onDeleteItem={itemsFeed.handleDeleteItem}
                     onApproveClaim={claimsState.handleApproveClaim} onRejectClaim={claimsState.handleRejectClaim}
                     onExpireOldItems={itemsFeed.handleExpireOldItems}
                     onOpenClaimChat={(claim, item) => setActiveChatTarget({ claim, item })}
@@ -306,12 +311,15 @@ export default function App() {
                     }}
                     onLogout={handleAppLogout}
                     onNavigateToFeed={() => setActiveTab('feed')}
+                    sessionAuthError={authSession.authError}
+                    onClearSessionAuthError={authSession.clearAuthError}
                     devPersonas={authSession.devPersonas}
                     onSwitchDemoPersona={import.meta.env.DEV ? authSession.handleSwitchPersona : undefined}
                   />
                 </Suspense>
               )}
             </div>
+            )}
           </main>
 
           {isReportModalOpen && (
