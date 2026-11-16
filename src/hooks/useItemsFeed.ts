@@ -68,13 +68,15 @@ export function useItemsFeed({
 
   useEffect(() => {
     if (isDemoMode || !userId || !auth.currentUser?.emailVerified) return;
+    let isMounted = true;
     hasPaginatedRef.current = false;
     setItemsError(null);
     setOlderItems([]);
     setItemsCursor(undefined);
-    return subscribeToRealtimeItems(
+    const unsubscribe = subscribeToRealtimeItems(
       20,
       (liveItems, hasMore, lastDoc) => {
+        if (!isMounted) return;
         setItems(liveItems);
         if (!hasPaginatedRef.current) {
           setItemsCursor(lastDoc);
@@ -84,11 +86,16 @@ export function useItemsFeed({
         setItemsError(null);
       },
       (err) => {
+        if (!isMounted) return;
         reportError('subscribeToRealtimeItems failed', err);
         setIsLoadingMoreItems(false);
         setItemsError('Could not load campus notices. Check your connection and try again.');
       }
     );
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [isDemoMode, userId, itemsRetryNonce]);
 
   const handleLoadMoreItems = useCallback(async () => {

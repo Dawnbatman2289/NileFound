@@ -114,7 +114,9 @@ export function useAuthSession({
   }, [currentUser, activeTab, isPrivileged, setActiveTab]);
 
   useEffect(() => {
+    let isActive = true;
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (!isActive) return;
       if (fbUser?.email) {
         const email = fbUser.email.trim().toLowerCase();
         if (!fbUser.emailVerified) {
@@ -125,21 +127,27 @@ export function useAuthSession({
         try {
           await fbUser.getIdToken(false);
         } catch (tokenErr) {
+          if (!isActive) return;
           reportError('Auth token check failed', tokenErr);
           await signOut(auth);
+          if (!isActive) return;
           setRealUser(null);
           if (!isSimulatingRef.current) setCurrentUser(null);
           return;
         }
+        if (!isActive) return;
         let role: UserRole = lastConfirmedRoleRef.current[fbUser.uid] || 'student';
         try {
           role = await fetchUserRole(fbUser.uid, email);
+          if (!isActive) return;
           lastConfirmedRoleRef.current[fbUser.uid] = role;
           setRoleError(null);
         } catch (roleErr) {
+          if (!isActive) return;
           reportError('Role check failed cleanly without demoting user', roleErr);
           setRoleError('Could not confirm your staff permissions. Check your connection and retry.');
         }
+        if (!isActive) return;
         const user: User = {
           id: fbUser.uid,
           name: (fbUser.displayName || email.split('@')[0]).split(' ')[0],
@@ -170,7 +178,10 @@ export function useAuthSession({
         setActiveTabRef.current('login');
       }
     });
-    return () => unsubscribe();
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
   }, [roleRetryNonce]);
 
   const handleSwitchPersona = useCallback(async (user: User) => {

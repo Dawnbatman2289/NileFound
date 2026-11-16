@@ -56,9 +56,11 @@ export function useNotifications({
       setLiveNotifications([]);
       return;
     }
-    return subscribeToRealtimeNotifications(
+    let isMounted = true;
+    const unsubscribe = subscribeToRealtimeNotifications(
       currentUser,
       (realtimeNotifs) => {
+        if (!isMounted) return;
         setLiveNotifications((prev) => {
           if (!hasLoadedInitialRef.current) {
             hasLoadedInitialRef.current = true;
@@ -74,8 +76,14 @@ export function useNotifications({
           return realtimeNotifs;
         });
       },
-      (err) => reportError('subscribeToRealtimeNotifications failed', err)
+      (err) => {
+        if (isMounted) reportError('subscribeToRealtimeNotifications failed', err);
+      }
     );
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [isDemoMode, userId, userRole, userIsAdmin]);
 
   const notifications = useMemo(() => {

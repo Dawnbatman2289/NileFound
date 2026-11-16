@@ -4,14 +4,24 @@
  * Item 5 (single rejected-claim retry), and Item 6 (global error handlers & reportError).
  */
 
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { computeClaimDecisionBatchPlan, decideClaimWithFreshPending } from '../src/utils/claimDecision.ts';
 import { getClaimButtonState } from '../src/components/ItemCardSections.tsx';
 import { reportError, installGlobalErrorHandlers } from '../src/components/ErrorBoundary.tsx';
+import { terminate } from 'firebase/firestore';
+import { db } from '../src/lib/firebase.ts';
 import type { CampusItem, ClaimRecord, User } from '../src/types/index.ts';
+
+after(async () => {
+  try {
+    await terminate(db);
+  } catch (err) {
+    void err;
+  }
+});
 
 class MockTextNode {
   nodeType = 3;

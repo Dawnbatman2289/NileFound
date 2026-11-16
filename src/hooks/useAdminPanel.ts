@@ -49,6 +49,7 @@ export function useAdminPanel({
   const deleteDialogRef = useRef<HTMLDivElement>(null);
   const detailDialogRef = useRef<HTMLDivElement>(null);
   const noticeTimerRef = useRef<number | null>(null);
+  const isMountedRef = useRef(true);
 
   const clearNoticeTimer = () => {
     if (noticeTimerRef.current) {
@@ -56,7 +57,13 @@ export function useAdminPanel({
       noticeTimerRef.current = null;
     }
   };
-  useEffect(() => () => clearNoticeTimer(), []);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      clearNoticeTimer();
+    };
+  }, []);
 
   const showNotification = useCallback((msg: string) => {
     clearNoticeTimer();
@@ -77,7 +84,13 @@ export function useAdminPanel({
       setServerCounts(null);
       return;
     }
-    fetchCampusAuditCounts().then(setServerCounts).catch((err) => reportError('fetchCampusAuditCounts failed', err));
+    fetchCampusAuditCounts()
+      .then((counts) => {
+        if (isMountedRef.current) setServerCounts(counts);
+      })
+      .catch((err) => {
+        if (isMountedRef.current) reportError('fetchCampusAuditCounts failed', err);
+      });
   }, [isDemoMode, currentUser, isAdmin, isSecurity]);
 
   useEffect(() => { refreshAuditCounts(); }, [refreshAuditCounts]);

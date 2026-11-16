@@ -33,6 +33,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
+  if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') return;
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/__/') || url.pathname.startsWith('/api/')) return;
 

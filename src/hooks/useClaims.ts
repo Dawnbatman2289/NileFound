@@ -72,10 +72,12 @@ export function useClaims({
 
   useEffect(() => {
     if (isDemoMode || !userId || !auth.currentUser?.emailVerified) return;
+    let isMounted = true;
     setClaimsError(null);
-    return subscribeToRealtimeClaims(
+    const unsubscribe = subscribeToRealtimeClaims(
       currentUser,
       (liveClaims, moreClaims, nextCursor) => {
+        if (!isMounted) return;
         setClaims((prev) => {
           const prevPrivate = new Map(prev.filter((c) => c.privateLoaded).map((c) => [c.id, c]));
           return liveClaims.map((c) => {
@@ -88,10 +90,15 @@ export function useClaims({
         setClaimsError(null);
       },
       (err) => {
+        if (!isMounted) return;
         reportError('subscribeToRealtimeClaims failed', err);
         setClaimsError('Could not load claims. Check your connection and try again.');
       }
     );
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [isDemoMode, userId, userRole, userIsAdmin, claimsRetryNonce]);
 
   const handleLoadMoreClaims = useCallback(async () => {

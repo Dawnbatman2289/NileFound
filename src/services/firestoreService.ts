@@ -104,6 +104,43 @@ const NOTIF_TEMPLATES: Record<CampusNotification['type'], { title: string; messa
   admin_review: { title: 'Review needed', message: 'A campus record needs administrator review.' },
 };
 
+function assertFirestoreReady(): void {
+  if (!db) {
+    throw new Error('Firestore service is not initialized yet. Reload and try again.');
+  }
+}
+
+function isTransientOfflineError(error: unknown): boolean {
+  const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: unknown }).code || '').toLowerCase()
+      : '';
+  return (
+    code.includes('unavailable') ||
+    code.includes('deadline-exceeded') ||
+    msg.includes('client is offline') ||
+    msg.includes('failed to get document because the client is offline') ||
+    msg.includes('network-request-failed')
+  );
+}
+
+async function withOfflineRetry<T>(operation: () => Promise<T>, maxRetries = 1): Promise<T> {
+  assertFirestoreReady();
+  let attempt = 0;
+  while (true) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (attempt >= maxRetries || !isTransientOfflineError(error)) {
+        throw error;
+      }
+      attempt += 1;
+      await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+    }
+  }
+}
+
 function toIsoString(value: unknown): string {
   if (value instanceof Timestamp) return value.toDate().toISOString();
   if (value && typeof value === 'object' && 'toDate' in value && typeof (value as { toDate: () => Date }).toDate === 'function') {
@@ -170,26 +207,28 @@ export async function fetchUserRole(uid: string, email?: string | null): Promise
   const normalizedEmail = (email || auth.currentUser?.email || '').trim().toLowerCase();
 
   try {
-    if (uid) {
-      if (isMasterAdminUser(uid) || (await isConfiguredAdmin(uid))) {
-        return 'admin';
+    return await withOfflineRetry(async () => {
+      if (uid) {
+        if (isMasterAdminUser(uid) || (await isConfiguredAdmin(uid))) {
+          return 'admin';
+        }
+        const snap = await getDoc(doc(db, ROLES, uid));
+        if (snap.exists()) {
+          const role = snap.data().role;
+          return role === 'admin' || role === 'security' || role === 'staff' ? role : 'student';
+        }
       }
-      const snap = await getDoc(doc(db, ROLES, uid));
-      if (snap.exists()) {
-        const role = snap.data().role;
-        return role === 'admin' || role === 'security' || role === 'staff' ? role : 'student';
-      }
-    }
 
-    if (normalizedEmail) {
-      const inviteSnap = await getDoc(doc(db, STAFF_INVITES, normalizedEmail));
-      if (inviteSnap.exists()) {
-        const role = inviteSnap.data().role;
-        if (role === 'admin' || role === 'security' || role === 'staff') return role;
+      if (normalizedEmail) {
+        const inviteSnap = await getDoc(doc(db, STAFF_INVITES, normalizedEmail));
+        if (inviteSnap.exists()) {
+          const role = inviteSnap.data().role;
+          if (role === 'admin' || role === 'security' || role === 'staff') return role;
+        }
       }
-    }
 
-    return 'student';
+      return 'student';
+    });
   } catch (error) {
     reportError('fetchUserRole', error);
     throw new Error('Could not verify your campus role. Check your connection and retry.');
@@ -380,9 +419,9 @@ export async function fetchRolesPage(
 }
 
 export async function isConfiguredAdmin(uid?: string): Promise<boolean> {
-  if (!uid) return false;
+  if (!uid || !db) return false;
   try {
-    const snapshot = await getDoc(doc(db, 'admins', uid));
+    const snapshot = await withOfflineRetry(() => getDoc(doc(db, 'admins', uid)));
     return snapshot.exists() && snapshot.data().enabled === true;
   } catch (error) {
     reportError('isConfiguredAdmin', error);
@@ -395,31 +434,42 @@ export function subscribeToRealtimeItems(
   onSuccess: (items: CampusItem[], hasMore: boolean, lastDoc?: QueryDocumentSnapshot<DocumentData>) => void,
   onError?: (err: Error) => void
 ): Unsubscribe {
+  if (!db) {
+    onError?.(new Error('Firestore service is unavailable right now.'));
+    return () => {};
+  }
   const safeLimit = Math.min(Math.max(1, pageLimit), 49);
-  const q = query(collection(db, ITEMS), orderBy('createdAt', 'desc'), limit(safeLimit + 1));
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const hasMore = snapshot.docs.length > safeLimit;
-      const pageDocs = snapshot.docs.slice(0, safeLimit);
-      onSuccess(pageDocs.map(mapDocToCampusItem), hasMore, hasMore ? pageDocs.at(-1) : undefined);
-    },
-    (error) => {
-      reportError('subscribeToRealtimeItems', error);
-      onError?.(error);
-    }
-  );
+  try {
+    const q = query(collection(db, ITEMS), orderBy('createdAt', 'desc'), limit(safeLimit + 1));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const hasMore = snapshot.docs.length > safeLimit;
+        const pageDocs = snapshot.docs.slice(0, safeLimit);
+        onSuccess(pageDocs.map(mapDocToCampusItem), hasMore, hasMore ? pageDocs.at(-1) : undefined);
+      },
+      (error) => {
+        reportError('subscribeToRealtimeItems', error);
+        onError?.(error);
+      }
+    );
+  } catch (error) {
+    reportError('subscribeToRealtimeItems(init)', error);
+    onError?.(error instanceof Error ? error : new Error('Could not start items feed listener.'));
+    return () => {};
+  }
 }
 
 export async function fetchItemsPage(cursor?: QueryDocumentSnapshot<DocumentData>): Promise<ItemPage> {
-  const q = query(
-    collection(db, ITEMS),
-    orderBy('createdAt', 'desc'),
-    limit(ITEMS_PAGE_SIZE + 1),
-    ...(cursor ? [startAfter(cursor)] : [])
-  );
   try {
-    const snapshot = await getDocs(q);
+    assertFirestoreReady();
+    const q = query(
+      collection(db, ITEMS),
+      orderBy('createdAt', 'desc'),
+      limit(ITEMS_PAGE_SIZE + 1),
+      ...(cursor ? [startAfter(cursor)] : [])
+    );
+    const snapshot = await withOfflineRetry(() => getDocs(q));
     const hasMore = snapshot.docs.length > ITEMS_PAGE_SIZE;
     const pageDocs = snapshot.docs.slice(0, ITEMS_PAGE_SIZE);
     return {
@@ -435,7 +485,7 @@ export async function fetchItemsPage(cursor?: QueryDocumentSnapshot<DocumentData
 export async function fetchItemFullPhoto(itemId: string, lowDataMode = false): Promise<string | null> {
   if (lowDataMode) return null;
   try {
-    const snap = await getDoc(doc(db, ITEMS, itemId, 'media', 'full'));
+    const snap = await withOfflineRetry(() => getDoc(doc(db, ITEMS, itemId, 'media', 'full')));
     return snap.exists() ? (snap.data().dataUrl || null) : null;
   } catch (error) {
     reportError(`fetchItemFullPhoto(${itemId})`, error);
@@ -505,20 +555,26 @@ export async function saveItemToFirestore(item: CampusItem, _user?: User | null)
 }
 
 export async function fetchItemPrivateDetails(itemId: string): Promise<ItemPrivateDetails> {
-  const [privateSnap, secretSnap] = await Promise.all([
-    getDoc(doc(db, ITEMS, itemId, 'private', 'details')),
-    getDoc(doc(db, ITEMS, itemId, 'secrets', 'verification')),
-  ]);
-  return {
-    authorName: privateSnap.exists() ? privateSnap.data().authorName : undefined,
-    authorEmail: privateSnap.exists() ? privateSnap.data().authorEmail : undefined,
-    expectedAnswer: secretSnap.exists() ? secretSnap.data().expectedAnswer : undefined,
-  };
+  try {
+    const [privateSnap, secretSnap] = await withOfflineRetry(() =>
+      Promise.all([
+        getDoc(doc(db, ITEMS, itemId, 'private', 'details')),
+        getDoc(doc(db, ITEMS, itemId, 'secrets', 'verification')),
+      ])
+    );
+    return {
+      authorName: privateSnap.exists() ? privateSnap.data().authorName : undefined,
+      authorEmail: privateSnap.exists() ? privateSnap.data().authorEmail : undefined,
+      expectedAnswer: secretSnap.exists() ? secretSnap.data().expectedAnswer : undefined,
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `${ITEMS}/${itemId}/private`);
+  }
 }
 
 export async function fetchClaimPrivateDetails(itemId: string, claimId: string): Promise<ClaimPrivateDetails> {
   try {
-    const snap = await getDoc(doc(db, ITEMS, itemId, 'privateClaims', claimId));
+    const snap = await withOfflineRetry(() => getDoc(doc(db, ITEMS, itemId, 'privateClaims', claimId)));
     if (!snap.exists()) {
       return { claimantName: 'Claimant', claimantEmail: '', submittedAnswer: 'No private claim details recorded.' };
     }
@@ -535,7 +591,7 @@ export async function fetchClaimPrivateDetails(itemId: string, claimId: string):
 
 export async function fetchApprovedHandoverContact(itemId: string): Promise<{ authorName?: string; authorEmail?: string } | null> {
   try {
-    const snap = await getDoc(doc(db, ITEMS, itemId, 'private', 'details'));
+    const snap = await withOfflineRetry(() => getDoc(doc(db, ITEMS, itemId, 'private', 'details')));
     if (!snap.exists()) return null;
     return {
       authorName: snap.data().authorName,
@@ -548,6 +604,7 @@ export async function fetchApprovedHandoverContact(itemId: string): Promise<{ au
 
 export async function updateItemStatusInFirestore(itemId: string, status: CampusItem['status']): Promise<void> {
   try {
+    assertFirestoreReady();
     await updateDoc(doc(db, ITEMS, itemId), { status, updatedAt: serverTimestamp() });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${ITEMS}/${itemId}`);
@@ -557,6 +614,7 @@ export async function updateItemStatusInFirestore(itemId: string, status: Campus
 export async function expireItemsInFirestore(itemIds: string[]): Promise<void> {
   if (itemIds.length === 0) return;
   try {
+    assertFirestoreReady();
     for (let i = 0; i < itemIds.length; i += 450) {
       const batch = writeBatch(db);
       itemIds.slice(i, i + 450).forEach((id) => {
@@ -570,27 +628,33 @@ export async function expireItemsInFirestore(itemIds: string[]): Promise<void> {
 }
 
 export async function fetchCampusAuditCounts(): Promise<CampusAuditCounts> {
-  const [totalSnap, foundSnap, foundRetSnap, totalRetSnap, custodySnap, pendingSnap] = await Promise.all([
-    getCountFromServer(collection(db, ITEMS)),
-    getCountFromServer(query(collection(db, ITEMS), where('type', '==', 'found'))),
-    getCountFromServer(query(collection(db, ITEMS), where('type', '==', 'found'), where('status', '==', 'returned'))),
-    getCountFromServer(query(collection(db, ITEMS), where('status', '==', 'returned'))),
-    getCountFromServer(
-      query(
-        collection(db, ITEMS),
-        where('holdingLocation', 'in', ['security_main_gate', 'student_affairs_office', 'library_desk', 'faculty_officer'])
-      )
-    ),
-    getCountFromServer(query(collection(db, CLAIMS), where('status', '==', 'pending'))),
-  ]);
-  return {
-    totalItems: totalSnap.data().count,
-    totalFound: foundSnap.data().count,
-    foundReturned: foundRetSnap.data().count,
-    totalReturned: totalRetSnap.data().count,
-    custodyCount: custodySnap.data().count,
-    pendingClaimsCount: pendingSnap.data().count,
-  };
+  try {
+    const [totalSnap, foundSnap, foundRetSnap, totalRetSnap, custodySnap, pendingSnap] = await withOfflineRetry(() =>
+      Promise.all([
+        getCountFromServer(collection(db, ITEMS)),
+        getCountFromServer(query(collection(db, ITEMS), where('type', '==', 'found'))),
+        getCountFromServer(query(collection(db, ITEMS), where('type', '==', 'found'), where('status', '==', 'returned'))),
+        getCountFromServer(query(collection(db, ITEMS), where('status', '==', 'returned'))),
+        getCountFromServer(
+          query(
+            collection(db, ITEMS),
+            where('holdingLocation', 'in', ['security_main_gate', 'student_affairs_office', 'library_desk', 'faculty_officer'])
+          )
+        ),
+        getCountFromServer(query(collection(db, CLAIMS), where('status', '==', 'pending'))),
+      ])
+    );
+    return {
+      totalItems: totalSnap.data().count,
+      totalFound: foundSnap.data().count,
+      foundReturned: foundRetSnap.data().count,
+      totalReturned: totalRetSnap.data().count,
+      custodyCount: custodySnap.data().count,
+      pendingClaimsCount: pendingSnap.data().count,
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, ITEMS);
+  }
 }
 
 export async function deleteItemFromFirestore(itemId: string): Promise<void> {
@@ -644,77 +708,91 @@ export function subscribeToRealtimeClaims(
   pageSize = CLAIMS_PAGE_SIZE
 ): Unsubscribe {
   const uid = auth.currentUser?.uid;
-  if (!uid) {
-    onSuccess([], false, undefined);
+  if (!uid || !db) {
+    if (!db) onError?.(new Error('Firestore service is unavailable right now.'));
+    else onSuccess([], false, undefined);
     return () => {};
   }
 
-  if (canUserModerate(user)) {
-    const q = query(collection(db, CLAIMS), orderBy('createdAt', 'desc'), limit(pageSize + 1));
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const hasMore = snapshot.docs.length > pageSize;
-        const pageDocs = snapshot.docs.slice(0, pageSize);
-        onSuccess(pageDocs.map(mapDocToClaimRecord), hasMore, hasMore ? { main: pageDocs.at(-1) } : undefined);
+  try {
+    if (canUserModerate(user)) {
+      const q = query(collection(db, CLAIMS), orderBy('createdAt', 'desc'), limit(pageSize + 1));
+      return onSnapshot(
+        q,
+        (snapshot) => {
+          const hasMore = snapshot.docs.length > pageSize;
+          const pageDocs = snapshot.docs.slice(0, pageSize);
+          onSuccess(pageDocs.map(mapDocToClaimRecord), hasMore, hasMore ? { main: pageDocs.at(-1) } : undefined);
+        },
+        (error) => {
+          reportError('subscribeToRealtimeClaims(privileged)', error);
+          onError?.(error);
+        }
+      );
+    }
+
+    let claimantDocs: QueryDocumentSnapshot<DocumentData>[] = [];
+    let finderDocs: QueryDocumentSnapshot<DocumentData>[] = [];
+    let hasMoreClaimant = false;
+    let hasMoreFinder = false;
+
+    const emitMerged = () => {
+      const byId = new Map<string, ClaimRecord>();
+      [...claimantDocs, ...finderDocs].forEach((d) => byId.set(d.id, mapDocToClaimRecord(d)));
+      const sorted = [...byId.values()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      onSuccess(
+        sorted,
+        hasMoreClaimant || hasMoreFinder,
+        hasMoreClaimant || hasMoreFinder
+          ? {
+              claimant: hasMoreClaimant ? claimantDocs.at(-1) : undefined,
+              finder: hasMoreFinder ? finderDocs.at(-1) : undefined,
+            }
+          : undefined
+      );
+    };
+
+    const unsubClaimant = onSnapshot(
+      query(collection(db, CLAIMS), where('claimantId', '==', uid), orderBy('createdAt', 'desc'), limit(pageSize + 1)),
+      (snap) => {
+        hasMoreClaimant = snap.docs.length > pageSize;
+        claimantDocs = snap.docs.slice(0, pageSize);
+        emitMerged();
       },
       (error) => {
-        reportError('subscribeToRealtimeClaims(privileged)', error);
+        reportError('subscribeToRealtimeClaims(claimant)', error);
         onError?.(error);
       }
     );
+
+    let unsubFinder: Unsubscribe = () => {};
+    try {
+      unsubFinder = onSnapshot(
+        query(collection(db, CLAIMS), where('finderId', '==', uid), orderBy('createdAt', 'desc'), limit(pageSize + 1)),
+        (snap) => {
+          hasMoreFinder = snap.docs.length > pageSize;
+          finderDocs = snap.docs.slice(0, pageSize);
+          emitMerged();
+        },
+        (error) => {
+          reportError('subscribeToRealtimeClaims(finder)', error);
+          onError?.(error);
+        }
+      );
+    } catch (finderInitErr) {
+      unsubClaimant();
+      throw finderInitErr;
+    }
+
+    return () => {
+      unsubClaimant();
+      unsubFinder();
+    };
+  } catch (error) {
+    reportError('subscribeToRealtimeClaims(init)', error);
+    onError?.(error instanceof Error ? error : new Error('Could not start claims listener.'));
+    return () => {};
   }
-
-  let claimantDocs: QueryDocumentSnapshot<DocumentData>[] = [];
-  let finderDocs: QueryDocumentSnapshot<DocumentData>[] = [];
-  let hasMoreClaimant = false;
-  let hasMoreFinder = false;
-
-  const emitMerged = () => {
-    const byId = new Map<string, ClaimRecord>();
-    [...claimantDocs, ...finderDocs].forEach((d) => byId.set(d.id, mapDocToClaimRecord(d)));
-    const sorted = [...byId.values()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    onSuccess(
-      sorted,
-      hasMoreClaimant || hasMoreFinder,
-      hasMoreClaimant || hasMoreFinder
-        ? {
-            claimant: hasMoreClaimant ? claimantDocs.at(-1) : undefined,
-            finder: hasMoreFinder ? finderDocs.at(-1) : undefined,
-          }
-        : undefined
-    );
-  };
-
-  const unsubClaimant = onSnapshot(
-    query(collection(db, CLAIMS), where('claimantId', '==', uid), orderBy('createdAt', 'desc'), limit(pageSize + 1)),
-    (snap) => {
-      hasMoreClaimant = snap.docs.length > pageSize;
-      claimantDocs = snap.docs.slice(0, pageSize);
-      emitMerged();
-    },
-    (error) => {
-      reportError('subscribeToRealtimeClaims(claimant)', error);
-      onError?.(error);
-    }
-  );
-  const unsubFinder = onSnapshot(
-    query(collection(db, CLAIMS), where('finderId', '==', uid), orderBy('createdAt', 'desc'), limit(pageSize + 1)),
-    (snap) => {
-      hasMoreFinder = snap.docs.length > pageSize;
-      finderDocs = snap.docs.slice(0, pageSize);
-      emitMerged();
-    },
-    (error) => {
-      reportError('subscribeToRealtimeClaims(finder)', error);
-      onError?.(error);
-    }
-  );
-
-  return () => {
-    unsubClaimant();
-    unsubFinder();
-  };
 }
 
 export async function fetchMoreClaimsPage(
@@ -936,39 +1014,46 @@ export function subscribeToRealtimeNotifications(
   onSuccess: (notifications: CampusNotification[]) => void,
   onError?: (err: Error) => void
 ): Unsubscribe {
-  if (!auth.currentUser || !currentUser) {
-    onSuccess([]);
+  if (!auth.currentUser || !currentUser || !db) {
+    if (!db) onError?.(new Error('Firestore service is unavailable right now.'));
+    else onSuccess([]);
     return () => {};
   }
-  const q = canUserModerate(currentUser)
-    ? query(collection(db, NOTIFICATIONS), where('recipientUid', 'in', [currentUser.id, 'admin']), orderBy('createdAt', 'desc'), limit(25))
-    : query(collection(db, NOTIFICATIONS), where('recipientUid', '==', currentUser.id), orderBy('createdAt', 'desc'), limit(25));
+  try {
+    const q = canUserModerate(currentUser)
+      ? query(collection(db, NOTIFICATIONS), where('recipientUid', 'in', [currentUser.id, 'admin']), orderBy('createdAt', 'desc'), limit(25))
+      : query(collection(db, NOTIFICATIONS), where('recipientUid', '==', currentUser.id), orderBy('createdAt', 'desc'), limit(25));
 
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const notifications = snapshot.docs.map((docSnap) => {
-        const d = docSnap.data();
-        return {
-          id: docSnap.id,
-          recipientUid: d.recipientUid || '',
-          fromUid: d.fromUid || '',
-          type: d.type || 'admin_review',
-          title: d.title || 'Campus Notification',
-          message: d.message || '',
-          read: Boolean(d.read),
-          createdAt: toIsoString(d.createdAt),
-          itemId: d.itemId || undefined,
-          claimId: d.claimId || undefined,
-        };
-      });
-      onSuccess(notifications);
-    },
-    (error) => {
-      reportError('subscribeToRealtimeNotifications', error);
-      onError?.(error);
-    }
-  );
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const notifications = snapshot.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            id: docSnap.id,
+            recipientUid: d.recipientUid || '',
+            fromUid: d.fromUid || '',
+            type: d.type || 'admin_review',
+            title: d.title || 'Campus Notification',
+            message: d.message || '',
+            read: Boolean(d.read),
+            createdAt: toIsoString(d.createdAt),
+            itemId: d.itemId || undefined,
+            claimId: d.claimId || undefined,
+          };
+        });
+        onSuccess(notifications);
+      },
+      (error) => {
+        reportError('subscribeToRealtimeNotifications', error);
+        onError?.(error);
+      }
+    );
+  } catch (error) {
+    reportError('subscribeToRealtimeNotifications(init)', error);
+    onError?.(error instanceof Error ? error : new Error('Could not start notifications listener.'));
+    return () => {};
+  }
 }
 
 export async function saveNotificationToFirestore(notification: {
@@ -1056,30 +1141,37 @@ export function subscribeToClaimMessages(
   onError?: (err: Error) => void,
   pageSize = 49
 ): Unsubscribe {
-  if (!auth.currentUser || !claimId) {
-    onSuccess([], false, undefined);
+  if (!auth.currentUser || !claimId || !db) {
+    if (!db) onError?.(new Error('Firestore service is unavailable right now.'));
+    else onSuccess([], false, undefined);
     return () => {};
   }
   const safeLimit = Math.min(Math.max(1, pageSize), 49);
-  const q = query(
-    collection(db, CLAIMS, claimId, 'messages'),
-    orderBy('createdAt', 'desc'),
-    limit(safeLimit + 1)
-  );
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const hasMore = snapshot.docs.length > safeLimit;
-      const pageDocs = snapshot.docs.slice(0, safeLimit);
-      const oldestDoc = pageDocs.at(-1);
-      const messages = [...pageDocs].reverse().map((docSnap) => mapDocToClaimMessage(docSnap, claimId));
-      onSuccess(messages, hasMore, hasMore ? oldestDoc : undefined);
-    },
-    (error) => {
-      reportError(`subscribeToClaimMessages(${claimId})`, error);
-      onError?.(error);
-    }
-  );
+  try {
+    const q = query(
+      collection(db, CLAIMS, claimId, 'messages'),
+      orderBy('createdAt', 'desc'),
+      limit(safeLimit + 1)
+    );
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const hasMore = snapshot.docs.length > safeLimit;
+        const pageDocs = snapshot.docs.slice(0, safeLimit);
+        const oldestDoc = pageDocs.at(-1);
+        const messages = [...pageDocs].reverse().map((docSnap) => mapDocToClaimMessage(docSnap, claimId));
+        onSuccess(messages, hasMore, hasMore ? oldestDoc : undefined);
+      },
+      (error) => {
+        reportError(`subscribeToClaimMessages(${claimId})`, error);
+        onError?.(error);
+      }
+    );
+  } catch (error) {
+    reportError(`subscribeToClaimMessages(${claimId})(init)`, error);
+    onError?.(error instanceof Error ? error : new Error('Could not connect to handover chat.'));
+    return () => {};
+  }
 }
 
 export async function fetchOlderClaimMessages(
@@ -1088,14 +1180,15 @@ export async function fetchOlderClaimMessages(
   pageSize = 49
 ): Promise<ClaimMessagesPage> {
   const safeLimit = Math.min(Math.max(1, pageSize), 49);
-  const q = query(
-    collection(db, CLAIMS, claimId, 'messages'),
-    orderBy('createdAt', 'desc'),
-    startAfter(cursor),
-    limit(safeLimit + 1)
-  );
   try {
-    const snapshot = await getDocs(q);
+    assertFirestoreReady();
+    const q = query(
+      collection(db, CLAIMS, claimId, 'messages'),
+      orderBy('createdAt', 'desc'),
+      startAfter(cursor),
+      limit(safeLimit + 1)
+    );
+    const snapshot = await withOfflineRetry(() => getDocs(q));
     const hasMore = snapshot.docs.length > safeLimit;
     const pageDocs = snapshot.docs.slice(0, safeLimit);
     const oldestDoc = pageDocs.at(-1);
