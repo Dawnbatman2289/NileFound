@@ -88,23 +88,56 @@ const FeedHeroBanner: React.FC<{
   </div>
 );
 
-function getItemClaimContext(claims: ClaimRecord[], item: CampusItem, currentUserId?: string) {
-  if (!currentUserId) {
-    return {
-      myApprovedClaim: undefined,
-      myPendingClaim: undefined,
-      myRejectedClaim: undefined,
-      approvedFinderClaim: undefined,
-      pendingFinderClaims: [],
-    };
+interface ItemClaimContext {
+  myApprovedClaim?: ClaimRecord;
+  myPendingClaim?: ClaimRecord;
+  myRejectedClaim?: ClaimRecord;
+  approvedFinderClaim?: ClaimRecord;
+  pendingFinderClaims: ClaimRecord[];
+}
+
+const EMPTY_CLAIMS: ClaimRecord[] = [];
+const EMPTY_ITEM_CLAIM_CONTEXT: ItemClaimContext = { pendingFinderClaims: EMPTY_CLAIMS };
+
+function buildClaimContextMap(
+  claims: ClaimRecord[],
+  items: CampusItem[],
+  currentUserId?: string
+): Map<string, ItemClaimContext> {
+  const map = new Map<string, ItemClaimContext>();
+  if (!currentUserId || claims.length === 0) return map;
+
+  const authoredItemIds = new Set<string>();
+  for (const item of items) {
+    if (item.authorId === currentUserId) authoredItemIds.add(item.id);
   }
-  return {
-    myApprovedClaim: claims.find((c) => c.itemId === item.id && c.claimantId === currentUserId && c.status === 'approved'),
-    myPendingClaim: claims.find((c) => c.itemId === item.id && c.claimantId === currentUserId && c.status === 'pending'),
-    myRejectedClaim: claims.find((c) => c.itemId === item.id && c.claimantId === currentUserId && c.status === 'rejected'),
-    approvedFinderClaim: item.authorId === currentUserId ? claims.find((c) => c.itemId === item.id && c.status === 'approved') : undefined,
-    pendingFinderClaims: item.authorId === currentUserId ? claims.filter((c) => c.itemId === item.id && c.status === 'pending') : [],
-  };
+
+  for (const claim of claims) {
+    const isClaimant = claim.claimantId === currentUserId;
+    const isAuthor = authoredItemIds.has(claim.itemId);
+    if (!isClaimant && !isAuthor) continue;
+
+    let ctx = map.get(claim.itemId);
+    if (!ctx) {
+      ctx = { pendingFinderClaims: EMPTY_CLAIMS };
+      map.set(claim.itemId, ctx);
+    }
+
+    if (isClaimant) {
+      if (claim.status === 'approved' && !ctx.myApprovedClaim) ctx.myApprovedClaim = claim;
+      else if (claim.status === 'pending' && !ctx.myPendingClaim) ctx.myPendingClaim = claim;
+      else if (claim.status === 'rejected' && !ctx.myRejectedClaim) ctx.myRejectedClaim = claim;
+    }
+
+    if (isAuthor) {
+      if (claim.status === 'approved' && !ctx.approvedFinderClaim) ctx.approvedFinderClaim = claim;
+      else if (claim.status === 'pending') {
+        if (ctx.pendingFinderClaims === EMPTY_CLAIMS) ctx.pendingFinderClaims = [claim];
+        else ctx.pendingFinderClaims.push(claim);
+      }
+    }
+  }
+  return map;
 }
 
 export const FeedView: React.FC<FeedViewProps> = ({
@@ -236,8 +269,21 @@ export const FeedView: React.FC<FeedViewProps> = ({
     [displayableItems, selectedType, selectedCategory, selectedLocation, selectedStatus, selectedDateRange, debouncedSearch]
   );
 
-  const lostCount = useMemo(() => displayableItems.filter((i) => i.type === 'lost').length, [displayableItems]);
-  const foundCount = useMemo(() => displayableItems.filter((i) => i.type === 'found').length, [displayableItems]);
+  const { lostCount, foundCount } = useMemo(() => {
+    let lost = 0;
+    let found = 0;
+    for (const it of displayableItems) {
+      if (it.type === 'lost') lost += 1;
+      else if (it.type === 'found') found += 1;
+    }
+    return { lostCount: lost, foundCount: found };
+  }, [displayableItems]);
+
+  const claimContextByItem = useMemo(
+    () => buildClaimContextMap(claims, filteredItems, currentUser?.id),
+    [claims, filteredItems, currentUser?.id]
+  );
+
   const hasActiveFilters = [searchTerm, selectedCategory !== 'all', selectedLocation !== 'all', selectedType !== 'all', selectedStatus !== 'all', selectedDateRange !== 'all'].some(Boolean);
 
   return (
@@ -302,7 +348,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredItems.map((item) => {
-              const claimCtx = getItemClaimContext(claims, item, currentUser?.id);
+              const claimCtx = claimContextByItem.get(item.id) ?? EMPTY_ITEM_CLAIM_CONTEXT;
               return (
                 <ItemCard
                   key={item.id}

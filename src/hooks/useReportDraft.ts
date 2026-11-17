@@ -5,6 +5,7 @@ import { compressImageFile, CompressionResult, isSupportedImageFile } from '../u
 import { getTodayWatIsoDate } from '../utils/dateFormatter.ts';
 import { buildInitialReportFields, OfficerIntakePreset, resolveDefaultHoldingLocation } from '../utils/reportPresets.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
+import { isListedLocation, MIN_CUSTOM_LOCATION_LENGTH, normalizeCustomLocation } from '../config/locations.ts';
 
 const DRAFT_STORAGE_KEY = 'nilefound_report_draft_v1';
 
@@ -28,14 +29,25 @@ export function validateReportInputs(fields: {
   locationDetails: string;
   description: string;
   verificationQuestion: string;
+  /** True when the reporter chose "Other place" and typed the location. */
+  locationIsOther?: boolean;
 }): ReportFormError | null {
   if (!fields.category) {
     return { heading: 'Missing item category', detail: 'Select an item category before continuing.' };
   }
-  if (!fields.location) {
+  const customLocation = normalizeCustomLocation(fields.location);
+  const isCustom = Boolean(fields.locationIsOther) || (customLocation.length > 0 && !isListedLocation(fields.location));
+  if (!fields.location.trim() && !isCustom) {
     return { heading: 'Missing campus location', detail: 'Select where the item was lost or found.' };
   }
+  if (isCustom && customLocation.length < MIN_CUSTOM_LOCATION_LENGTH) {
+    return {
+      heading: 'Tell us where it was',
+      detail: 'Type the building or place (at least 2 characters), or pick one from the list.',
+    };
+  }
   const piiChecks: Array<{ text: string; fallback: string }> = [
+    ...(isCustom ? [{ text: customLocation, fallback: 'Remove personal details from the place name.' }] : []),
     { text: fields.title, fallback: 'Remove personal details before submitting.' },
     { text: fields.locationDetails, fallback: 'Remove personal details from Specific Spot.' },
     { text: fields.description, fallback: 'Remove personal details before submitting.' },
@@ -56,6 +68,8 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<ItemCategory | ''>('');
   const [location, setLocation] = useState<string>('');
+  // True after the reporter picks "Other place". The text typed in `location` is the place name.
+  const [otherLocationChosen, setOtherLocationChosen] = useState(false);
   const [locationDetails, setLocationDetails] = useState('');
   const [description, setDescription] = useState('');
   const [dateLostOrFound, setDateLostOrFound] = useState(() => getTodayWatIsoDate());
@@ -85,6 +99,7 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
     setReportType(defaults.type);
     setCategory(defaults.category);
     setLocation(defaults.location);
+    setOtherLocationChosen(Boolean(defaults.location) && !isListedLocation(defaults.location));
     setTitle(defaults.title);
     setLocationDetails('');
     setDescription('');
@@ -125,6 +140,7 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
           setTitle(parsed.title || '');
           setCategory(parsed.category || '');
           setLocation(parsed.location || '');
+          setOtherLocationChosen(Boolean(parsed.location) && !isListedLocation(parsed.location));
           setLocationDetails(parsed.locationDetails || '');
           setDescription(parsed.description || '');
           setDateLostOrFound(parsed.dateLostOrFound || getTodayWatIsoDate());
@@ -216,12 +232,30 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
     [isFoundStudentId]
   );
 
+  const selectListedLocation = useCallback((value: string) => {
+    setOtherLocationChosen(false);
+    setLocation(value);
+  }, []);
+
+  const selectOtherLocation = useCallback(() => {
+    setOtherLocationChosen(true);
+    // Start empty so the reporter types the place; a listed value must not linger in the text box.
+    setLocation((prev) => (isListedLocation(prev) ? '' : prev));
+  }, []);
+
+  // Typing a listed place name by hand snaps back to the normal list entry.
+  const locationIsOther = otherLocationChosen && !isListedLocation(location);
+
   const applyOfficerPreset = useCallback((preset: OfficerIntakePreset) => {
     const defaultLoc = preset.holdingLocation === 'student_affairs_office' ? 'Nile House (Admin)' : 'Main Campus Gate';
     setReportType(preset.type);
     setCategory(preset.category);
     setTitle(preset.title);
-    setLocation((prev) => prev || defaultLoc);
+    setLocation((prev) => {
+      const next = prev || defaultLoc;
+      if (!prev) setOtherLocationChosen(false);
+      return next;
+    });
     setDescription((prev) => prev.trim() || preset.descriptionHint);
     setHoldingLocation(preset.holdingLocation);
     if (preset.verificationQuestion) {
@@ -241,7 +275,8 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
     verificationAnswer.trim() ||
     compressionResult !== null ||
     category !== '' ||
-    location !== ''
+    location !== '' ||
+    locationIsOther
   );
 
   return {
@@ -249,6 +284,7 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
     title, setTitle,
     category, setCategory,
     location, setLocation,
+    locationIsOther, selectListedLocation, selectOtherLocation,
     locationDetails, setLocationDetails,
     description, setDescription,
     dateLostOrFound, setDateLostOrFound,

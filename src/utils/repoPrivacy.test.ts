@@ -4,8 +4,10 @@ import { join, relative } from 'node:path';
 import { test } from 'node:test';
 
 const repoRoot = process.cwd();
-const ignoredDirectories = new Set(['.git', 'node_modules', 'dist', 'build', 'coverage', '.playwright-cli']);
-const ignoredFiles = new Set(['firebase-applet-config.json']);
+const ignoredDirectories = new Set(['.git', 'node_modules', 'dist', 'build', 'coverage', '.playwright-cli', '.aistudio', '.firebase']);
+// Lockfiles list third-party maintainer emails in package metadata; they are not first-party content.
+const ignoredFiles = new Set(['firebase-applet-config.json', 'package-lock.json', 'bun.lock']);
+const binaryExtensions = /\.(?:png|jpe?g|gif|webp|ico|woff2?|ttf|eot|pdf|mp3|mp4)$/i;
 const allowedEmail = /^[^@\s]+@(?:nileuniversity\.edu\.ng|(?:[A-Z0-9.-]+\.)?example\.com|(?:[A-Z0-9.-]+\.)?test\.invalid)$/i;
 const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const apiKeyPattern = /AIza[0-9A-Za-z_-]{35}/g;
@@ -18,7 +20,7 @@ function collectTextFiles(directory: string): string[] {
     const stats = statSync(path);
     if (stats.isDirectory()) {
       files.push(...collectTextFiles(path));
-    } else if (stats.isFile()) {
+    } else if (stats.isFile() && !binaryExtensions.test(entry)) {
       files.push(path);
     }
   }

@@ -81,17 +81,26 @@ export function calculateTemporalDecay(dateLostStr: string, dateFoundStr: string
  * 0.0 otherwise
  */
 export function calculateLocationProximity(locA: string, locB: string): number {
-  const normA = locA.trim().toLowerCase();
-  const normB = locB.trim().toLowerCase();
+  const normA = locA.trim().replace(/\s+/g, ' ').toLowerCase();
+  const normB = locB.trim().replace(/\s+/g, ' ').toLowerCase();
 
   if (!normA || !normB) return 0.0;
   if (normA === normB) return 1.0;
 
+  // Free-text places are allowed, so a short word ("hall", "gate") must not match every
+  // cluster entry that happens to contain it. A typed place matches a cluster entry when:
+  // - it is exactly that entry, or
+  // - it contains the whole entry ("behind block a" contains "block a"), or
+  // - it is a long enough part of a longer entry ("ubangi house" in "ubangi house (stem labs)").
+  const MIN_PARTIAL_MATCH_LENGTH = 8;
+  const clusterContains = (normCluster: string[], norm: string): boolean =>
+    normCluster.some(
+      (c) => c === norm || norm.includes(c) || (norm.length >= MIN_PARTIAL_MATCH_LENGTH && c.includes(norm))
+    );
+
   for (const clusterLocations of Object.values(CAMPUS_CLUSTERS)) {
     const normCluster = clusterLocations.map(l => l.toLowerCase());
-    const matchA = normCluster.some(c => normA.includes(c) || c.includes(normA));
-    const matchB = normCluster.some(c => normB.includes(c) || c.includes(normB));
-    if (matchA && matchB) return 0.5;
+    if (clusterContains(normCluster, normA) && clusterContains(normCluster, normB)) return 0.5;
   }
 
   return 0.0;

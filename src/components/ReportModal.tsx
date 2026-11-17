@@ -10,7 +10,14 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Save, AlertTriangle, Lock, CheckCircle } from 'lucide-react';
 import { CampusItem, HoldingLocation, ItemCategory, ReportPrefill, User } from '../types/index.ts';
 import { CATEGORIES } from '../config/catalog.ts';
-import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
+import {
+  isListedLocation,
+  MAX_CUSTOM_LOCATION_LENGTH,
+  NILE_LOCATION_GROUPS,
+  normalizeCustomLocation,
+  OTHER_LOCATION_LABEL,
+  OTHER_LOCATION_VALUE,
+} from '../config/locations.ts';
 import { getTodayWatIsoDate } from '../utils/dateFormatter.ts';
 import { getRoleDisplayLabel } from '../utils/admin.ts';
 import { OFFICER_INTAKE_PRESETS, resolveDefaultHoldingLocation } from '../utils/reportPresets.ts';
@@ -54,6 +61,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const customLocationRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<number | null>(null);
   const pointerDownOnBackdropRef = useRef(false);
   const pickerActiveRef = useRef(false);
@@ -137,6 +145,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       locationDetails: draft.locationDetails,
       description: draft.description,
       verificationQuestion: draft.verificationQuestion,
+      locationIsOther: draft.locationIsOther,
     });
     if (validationError) {
       draft.setFormError(validationError);
@@ -159,7 +168,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       title: draft.title.trim(),
       category: draft.category as ItemCategory,
       description: draft.description.trim(),
-      location: draft.location,
+      location: draft.locationIsOther || !isListedLocation(draft.location) ? normalizeCustomLocation(draft.location) : draft.location,
       locationDetails: draft.locationDetails.trim() || undefined,
       dateLostOrFound: draft.dateLostOrFound,
       status: 'open',
@@ -366,7 +375,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             <label htmlFor="report-category" className="block text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] mb-1.5">
               Item Category <span className="text-[#0F6E6E]">*</span>
             </label>
-            <select id="report-category" required value={draft.category} onChange={(e) => { const v = e.target.value as ItemCategory; draft.setCategory(v); draft.saveDraftLocally({ category: v }); }} className={`${FIELD_INPUT} cursor-pointer`}>
+            <select id="report-category" required value={draft.category} onChange={(e) => { const v = e.target.value as ItemCategory; draft.setCategory(v); draft.saveDraftLocally({ category: v }); }} className={`${FIELD_INPUT} pr-8 cursor-pointer`}>
               <option value="" disabled>Select an item category...</option>
               {CATEGORIES.map((cat) => <option key={cat.id} value={cat.id}>{cat.label}</option>)}
             </select>
@@ -396,10 +405,62 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               <label htmlFor="report-location" className="block text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] mb-1.5">
                 Campus Location <span className="text-[#0F6E6E]">*</span>
               </label>
-              <select id="report-location" required value={draft.location} onChange={(e) => { draft.setLocation(e.target.value); draft.saveDraftLocally({ location: e.target.value }); }} className={`${FIELD_INPUT} cursor-pointer`}>
+              <select
+                id="report-location"
+                required
+                value={draft.locationIsOther ? OTHER_LOCATION_VALUE : draft.location}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === OTHER_LOCATION_VALUE) {
+                    const wasListed = isListedLocation(draft.location);
+                    draft.selectOtherLocation();
+                    if (wasListed) {
+                      draft.saveDraftLocally({ location: '' });
+                    }
+                    window.setTimeout(() => customLocationRef.current?.focus(), 0);
+                    return;
+                  }
+                  draft.selectListedLocation(value);
+                  draft.saveDraftLocally({ location: value });
+                }}
+                className={`${FIELD_INPUT} pr-8 cursor-pointer`}
+              >
                 <option value="" disabled>Select campus location...</option>
-                {NILE_CAMPUS_LOCATIONS.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+                {NILE_LOCATION_GROUPS.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.locations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+                  </optgroup>
+                ))}
+                <option value={OTHER_LOCATION_VALUE}>{OTHER_LOCATION_LABEL}</option>
               </select>
+              {draft.locationIsOther && (
+                <div className="mt-2">
+                  <label htmlFor="report-location-custom" className="block text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] mb-1.5">
+                    Where was it? <span className="text-[#0F6E6E]">*</span>
+                  </label>
+                  <input
+                    ref={customLocationRef}
+                    id="report-location-custom"
+                    type="text"
+                    required
+                    maxLength={MAX_CUSTOM_LOCATION_LENGTH}
+                    value={draft.location}
+                    onChange={(e) => {
+                      const value = e.target.value.slice(0, MAX_CUSTOM_LOCATION_LENGTH);
+                      draft.setLocation(value);
+                      draft.setFormError(null);
+                      draft.saveDraftLocally({ location: value });
+                    }}
+                    autoComplete="off"
+                    placeholder="e.g. Faculty of Law corridor"
+                    aria-describedby="report-location-custom-help"
+                    className={FIELD_INPUT}
+                  />
+                  <p id="report-location-custom-help" className="mt-1 text-xs text-[#5C554C] dark:text-[#A8A095]">
+                    Type the building or place. Other students search by this name.
+                  </p>
+                </div>
+              )}
             </div>
             <div>
               <label htmlFor="report-date" className="block text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] mb-1.5">

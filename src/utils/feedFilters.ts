@@ -1,4 +1,5 @@
 import { CampusItem, ItemType } from '../types/index.ts';
+import { isCustomLocation, OTHER_LOCATION_FILTER_VALUE } from '../config/locations.ts';
 
 export type FeedStatusFilter = 'all' | 'active' | 'claimed' | 'resolved' | 'expired';
 export type FeedDateFilter = 'all' | '24h' | '7d';
@@ -55,11 +56,18 @@ export function filterCampusItems(items: CampusItem[], options: FeedFilterOption
   return items.filter((item) => {
     if (options.type && options.type !== 'all' && item.type !== options.type) return false;
     if (options.category && options.category !== 'all' && item.category !== options.category) return false;
-    if (options.location && options.location !== 'all' && item.location !== options.location) return false;
+    if (options.location && options.location !== 'all') {
+      if (options.location === OTHER_LOCATION_FILTER_VALUE) {
+        if (!isCustomLocation(item.location)) return false;
+      } else if (item.location !== options.location) {
+        return false;
+      }
+    }
     if (!matchesStatusFilter(item.status, options.status, Boolean(search))) return false;
     if (dateLimit !== null) {
-      const age = now - new Date(item.createdAt).getTime();
-      if (age < 0 || age > dateLimit) return false;
+      const createdMs = new Date(item.createdAt).getTime();
+      const age = now - createdMs;
+      if (Number.isNaN(createdMs) || age < 0 || age > dateLimit) return false;
     }
     return matchesSearchTerm(item, search);
   });

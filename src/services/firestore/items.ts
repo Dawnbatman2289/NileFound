@@ -14,6 +14,7 @@ import { db, auth, handleFirestoreError, OperationType } from '../../lib/firebas
 import { CampusItem, ItemCategory, ItemType, User } from '../../types/index.ts';
 import { canUserModerate, isMasterAdminUser } from '../../utils/admin.ts';
 import { normalizeNileEmail, resolveDisplayName } from '../../utils/authValidation.ts';
+import { normalizeCustomLocation } from '../../config/locations.ts';
 import { reportError } from '../../components/ErrorBoundary.tsx';
 import {
   ITEMS, CLAIMS, ITEMS_PAGE_SIZE, CampusAuditCounts, ItemPage, ItemPrivateDetails,
@@ -126,7 +127,7 @@ export async function saveItemToFirestore(item: CampusItem, user?: User | null):
     type: item.type,
     category: item.category,
     description: item.description.trim().slice(0, 1000),
-    location: item.location.slice(0, 100),
+    location: normalizeCustomLocation(item.location),
     dateLostOrFound: item.dateLostOrFound.slice(0, 40),
     status: 'open',
     holdingLocation: resolvedHoldingLocation,

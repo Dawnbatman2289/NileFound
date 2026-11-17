@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Trash2 } from 'lucide-react';
 import { CampusItem } from '../../types/index.ts';
 import { ADMIN_CARD } from './adminStyles.ts';
+import { getUnlistedLocationCounts } from '../../config/locations.ts';
 
 interface AllItemsTabProps {
   items: CampusItem[];
@@ -25,7 +26,10 @@ export const AllItemsTab: React.FC<AllItemsTabProps> = ({
   onSuccessNotice,
   onErrorNotice,
   onRefreshAudit,
-}) => (
+}) => {
+  // Places students typed under "Other place": add the popular ones to config/locations.ts.
+  const unlistedPlaces = useMemo(() => getUnlistedLocationCounts(items).slice(0, 10), [items]);
+  return (
   <div className={`${ADMIN_CARD} overflow-hidden`}>
     <div className="p-5 border-b border-[#C4BBAF] dark:border-[#3E3931] flex items-center justify-between">
       <div>
@@ -34,6 +38,24 @@ export const AllItemsTab: React.FC<AllItemsTabProps> = ({
       </div>
       <span className="text-xs text-[#5C554C] dark:text-[#A8A095] font-mono">Total: {items.length}</span>
     </div>
+
+    {unlistedPlaces.length > 0 && (
+      <div className="px-5 py-3 border-b border-[#C4BBAF] dark:border-[#3E3931] bg-[#FAF6EF] dark:bg-[#141311]">
+        <p className="text-xs font-semibold text-[#4A443C] dark:text-[#CEC7BB] mb-2">
+          Places typed under &quot;Other&quot; (add popular ones to the list)
+        </p>
+        <ul className="flex flex-wrap gap-2">
+          {unlistedPlaces.map((place) => (
+            <li
+              key={place.location}
+              className="text-xs px-2.5 py-1 rounded-full border border-[#857C70] dark:border-[#787065] text-[#1F1B16] dark:text-[#F5F1EA] max-w-full break-words"
+            >
+              {place.location} <span className="font-mono text-[#5C554C] dark:text-[#A8A095]">x{place.count}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
 
     <div className="divide-y divide-[#C4BBAF] dark:divide-[#3E3931] text-sm">
       {items.length === 0 ? (
@@ -144,4 +166,5 @@ export const AllItemsTab: React.FC<AllItemsTabProps> = ({
       )}
     </div>
   </div>
-);
+  );
+};

@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Search, X } from 'lucide-react';
 import { CampusItem, ItemType } from '../types/index.ts';
 import { CATEGORIES, ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
-import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
+import { NILE_LOCATION_GROUPS, OTHER_LOCATION_FILTER_VALUE } from '../config/locations.ts';
 import type { FeedStatusFilter } from '../utils/feedFilters.ts';
 
 interface FeedFiltersBarProps {
@@ -42,7 +42,16 @@ export const FeedFiltersBar: React.FC<FeedFiltersBarProps> = ({
   onStatusChange,
   onDateRangeChange,
   onLocationChange,
-}) => (
+}) => {
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of displayableItems) {
+      counts.set(item.category, (counts.get(item.category) ?? 0) + 1);
+    }
+    return counts;
+  }, [displayableItems]);
+
+  return (
   <div className="bg-white dark:bg-[#1E1C18] rounded-[12px] border border-[#C4BBAF] dark:border-[#3E3931] p-4 sm:p-5 space-y-4 shadow-[0_1px_2px_rgba(31,27,22,0.03),0_8px_24px_rgba(31,27,22,0.035)]">
     <div className="flex flex-col sm:flex-row gap-3">
       <div className="relative flex-1">
@@ -105,7 +114,7 @@ export const FeedFiltersBar: React.FC<FeedFiltersBarProps> = ({
         <select id="filter-category" value={selectedCategory} onChange={(e) => onCategoryChange(e.target.value)} className={FILTER_SELECT}>
           <option value="all">All Categories ({displayableItems.length})</option>
           {CATEGORIES.map((cat) => (
-            <option key={cat.id} value={cat.id}>{cat.label} ({displayableItems.filter((i) => i.category === cat.id).length})</option>
+            <option key={cat.id} value={cat.id}>{cat.label} ({categoryCounts.get(cat.id) ?? 0})</option>
           ))}
         </select>
       </div>
@@ -131,9 +140,15 @@ export const FeedFiltersBar: React.FC<FeedFiltersBarProps> = ({
         <label htmlFor="filter-location" className="block text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] mb-1">Campus Location</label>
         <select id="filter-location" value={selectedLocation} onChange={(e) => onLocationChange(e.target.value)} className={FILTER_SELECT}>
           <option value="all">All Campus Locations</option>
-          {NILE_CAMPUS_LOCATIONS.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+          {NILE_LOCATION_GROUPS.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.locations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+            </optgroup>
+          ))}
+          <option value={OTHER_LOCATION_FILTER_VALUE}>Other places (typed by reporter)</option>
         </select>
       </div>
     </div>
   </div>
-);
+  );
+};

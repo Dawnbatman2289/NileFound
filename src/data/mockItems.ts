@@ -9,42 +9,9 @@
 
 import { CampusItem, ClaimMessage, ClaimRecord } from '../types/index.ts';
 import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
+export { CAMPUS_CLUSTERS, CATEGORIES } from '../config/catalog.ts';
 
 export const NILE_LOCATIONS = NILE_CAMPUS_LOCATIONS;
-
-export const CAMPUS_CLUSTERS: Record<string, string[]> = {
-  'stem_cluster': [
-    'Ubangi House (STEM Laboratories & Environmental Sciences)',
-    'Volta Academic Building',
-    'Congo House'
-  ],
-  'admin_law_cluster': [
-    'Nile House (Administration & Security Office)',
-    'Limpopo Bay (Faculty of Law & Postgraduate Studies)',
-    'Niger House (Faculty of Arts & Social Sciences)',
-    'Nile Student Centre'
-  ],
-  'residential_cluster': [
-    'Male Hostel Block A',
-    'Male Hostel Block B',
-    'Female Hostel Block A',
-    'Female Hostel Block B',
-    'Sports Complex'
-  ]
-};
-
-export const CATEGORIES = [
-  { id: 'student_id', label: 'Student ID Card', icon: 'CreditCard', sensitive: true },
-  { id: 'phone_tech', label: 'Phone / Laptop / Charger / Earbuds', icon: 'Smartphone', sensitive: false },
-  { id: 'power_bank', label: 'Power Bank', icon: 'BatteryCharging', sensitive: false },
-  { id: 'calculator', label: 'Scientific Calculator (Casio)', icon: 'Calculator', sensitive: false },
-  { id: 'flash_drive', label: 'Flash Drive / Hard Drive', icon: 'HardDrive', sensitive: false },
-  { id: 'keys', label: 'Hostel / Padlock Keys', icon: 'Key', sensitive: false },
-  { id: 'bag_backpack', label: 'Bag / Backpack', icon: 'Briefcase', sensitive: false },
-  { id: 'lab_coat_clothing', label: 'Lab Coat / Jacket', icon: 'Shirt', sensitive: false },
-  { id: 'books_notes', label: 'Textbook / Lecture Notes', icon: 'BookOpen', sensitive: false },
-  { id: 'other', label: 'Other Item', icon: 'Package', sensitive: false }
-];
 
 export const DEMO_ITEMS: CampusItem[] = [
   {
@@ -53,7 +20,7 @@ export const DEMO_ITEMS: CampusItem[] = [
     title: 'Student ID Card',
     category: 'student_id',
     description: 'Found near Lab 3 entrance in Ubangi House. Attached to a green and gold Nile lanyard. Handed over to Main Gate security post.',
-    location: 'Ubangi House (STEM Laboratories & Environmental Sciences)',
+    location: 'Ubangi House (STEM Labs)',
     dateLostOrFound: '2026-11-12',
     status: 'open',
     holdingLocation: 'security_main_gate',
@@ -69,7 +36,7 @@ export const DEMO_ITEMS: CampusItem[] = [
     title: 'Oraimo 20000mAh Power Bank (Black)',
     category: 'power_bank',
     description: 'Black textured power bank with dual USB ports. Picked up from socket charging station outside Law Lecture Hall 2 in Limpopo Bay.',
-    location: 'Limpopo Bay (Faculty of Law & Postgraduate Studies)',
+    location: 'Limpopo Bay (Law & Postgrad)',
     dateLostOrFound: '2026-11-13',
     status: 'verified',
     holdingLocation: 'finder_holding',
@@ -85,7 +52,7 @@ export const DEMO_ITEMS: CampusItem[] = [
     title: 'Casio FX-991EX ClassWiz Calculator',
     category: 'calculator',
     description: 'Silver and black casing scientific calculator with masking tape on back. Left behind after MTH 101 tutorial in Ubangi House. Has initials inscribed inside battery cover.',
-    location: 'Ubangi House (STEM Laboratories & Environmental Sciences)',
+    location: 'Ubangi House (STEM Labs)',
     dateLostOrFound: '2026-11-13',
     status: 'open',
     holdingLocation: 'finder_holding',
@@ -99,8 +66,8 @@ export const DEMO_ITEMS: CampusItem[] = [
     type: 'found',
     title: 'Room 214 Brass Key with Green Lanyard',
     category: 'keys',
-    description: 'Single brass room door key with green fabric lanyard. Found on the concrete walkway towards Male Hostel Block A.',
-    location: 'Male Hostel Block A',
+    description: 'Single brass room door key with green fabric lanyard. Found on the concrete walkway towards Red Volta Hostel.',
+    location: 'Red Volta Hostel',
     dateLostOrFound: '2026-11-14',
     status: 'claim_requested',
     holdingLocation: 'security_main_gate',
@@ -116,7 +83,7 @@ export const DEMO_ITEMS: CampusItem[] = [
     title: 'Blue STEM Lab Coat (Size L)',
     category: 'lab_coat_clothing',
     description: 'Navy blue lab coat with Nile University crest patch on left chest pocket. Found draped over stool in Chemistry Lab 1.',
-    location: 'Ubangi House (STEM Laboratories & Environmental Sciences)',
+    location: 'Ubangi House (STEM Labs)',
     dateLostOrFound: '2026-11-10',
     status: 'returned',
     holdingLocation: 'student_affairs_office',
