@@ -60,6 +60,14 @@ export const ClaimsTab: React.FC<ClaimsTabProps> = ({
       setRevealedAnswers((prev) => ({ ...prev, [itemId]: { ...existing, open: true } }));
       return;
     }
+    if (isDemoMode) {
+      const matched = items.find((i) => i.id === itemId);
+      setRevealedAnswers((prev) => ({
+        ...prev,
+        [itemId]: { open: true, loading: false, answer: matched?.verificationAnswer || 'Demo verification answer.' },
+      }));
+      return;
+    }
     setRevealedAnswers((prev) => ({ ...prev, [itemId]: { open: true, loading: true } }));
     try {
       const details = await fetchItemPrivateDetails(itemId);
@@ -166,7 +174,7 @@ export const ClaimsTab: React.FC<ClaimsTabProps> = ({
                           <MessageSquare className="w-4 h-4" />
                           <span>Chat</span>
                           {unreadChatClaimIds?.has(claim.id) && (
-                            <span className="bg-[#0F6E6E] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-[6px] uppercase">
+                            <span className="bg-[#0F6E6E] text-white text-xs font-bold px-1.5 py-0.5 rounded-[6px] uppercase">
                               New
                             </span>
                           )}

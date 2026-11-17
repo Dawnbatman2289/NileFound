@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Shield, Mail, Image as ImageIcon, ShieldCheck, MessageSquare } from 'lucide-react';
 import { CampusItem, ClaimRecord } from '../types/index.ts';
+import { isValidImageDataUrl } from '../utils/imageCompressor.ts';
 
 const STATUS_LABELS: Record<CampusItem['status'], string> = {
   open: 'Open',
@@ -51,6 +52,18 @@ export const ItemCardMedia: React.FC<{
   lowDataMode: boolean;
   onSelectDetail: (item: CampusItem) => void;
 }> = ({ item, isFound, isFoundIdCard, displayTitle, previewPhoto, lowDataMode, onSelectDetail }) => {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [previewPhoto]);
+
+  const hasValidPreview = Boolean(
+    previewPhoto &&
+    !imgFailed &&
+    (isValidImageDataUrl(previewPhoto) || /^https?:\/\//i.test(previewPhoto))
+  );
+
   if (isFoundIdCard) {
     return (
       <div className="p-4 bg-[#FAF6EF] dark:bg-[#141311] border-b border-[#C4BBAF] dark:border-[#3E3931] flex items-center justify-between gap-3">
@@ -62,11 +75,23 @@ export const ItemCardMedia: React.FC<{
       </div>
     );
   }
-  if (previewPhoto && !lowDataMode) {
+  if (hasValidPreview && previewPhoto && !lowDataMode) {
     return (
       <div className="h-48 sm:h-52 w-full overflow-hidden bg-[#FAF6EF] dark:bg-[#141311] border-b border-[#C4BBAF] dark:border-[#3E3931] relative">
         <button type="button" onClick={() => onSelectDetail(item)} className="w-full h-full block cursor-pointer focus:outline-none" aria-label={`View full details and photo for ${displayTitle}`}>
-          <img src={previewPhoto} alt={item.title} className="w-full h-full object-cover transition-transform duration-200 hover:scale-[1.01]" loading="lazy" decoding="async" width={640} height={360} />
+          <img
+            src={previewPhoto}
+            alt={item.title}
+            className="w-full h-full object-cover transition-transform duration-200 hover:scale-[1.01]"
+            loading="lazy"
+            decoding="async"
+            width={640}
+            height={360}
+            onLoad={(e) => {
+              if (e.currentTarget.naturalWidth === 0) setImgFailed(true);
+            }}
+            onError={() => setImgFailed(true)}
+          />
         </button>
         <div className="absolute top-3 left-3 pointer-events-none">
           <span className={isFound ? 'stamp-found' : 'stamp-lost'}>{isFound ? 'Found' : 'Lost'}</span>
@@ -226,7 +251,7 @@ export const FinderClaimReviewCard: React.FC<{
               <MessageSquare className="w-3.5 h-3.5" />
               <span>Chat</span>
               {hasUnreadChat && (
-                <span className="bg-[#E8A317] text-[#1F1B16] text-[11px] font-bold px-1.5 py-0.5 rounded-full">
+                <span className="bg-[#E8A317] text-[#1F1B16] text-xs font-bold px-1.5 py-0.5 rounded-full">
                   New
                 </span>
               )}

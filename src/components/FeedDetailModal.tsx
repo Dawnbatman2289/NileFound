@@ -1,7 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { CampusItem } from '../types/index.ts';
 import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
+import { isValidImageDataUrl } from '../utils/imageCompressor.ts';
+import { shouldCloseBackdropClick, trapFocusOnTab } from '../utils/modalFocus.ts';
 
 interface FeedDetailModalProps {
   detailItem: CampusItem;
@@ -21,12 +24,27 @@ export const FeedDetailModal: React.FC<FeedDetailModalProps> = ({
   onClose,
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const pointerDownOnBackdropRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [detailPhotoUrl, detailItem.id]);
 
   useEffect(() => {
     const previousFocus = document.activeElement as HTMLElement | null;
     const focusTimer = window.setTimeout(() => dialogRef.current?.focus(), 0);
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+      trapFocusOnTab(e, dialogRef.current);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -34,10 +52,26 @@ export const FeedDetailModal: React.FC<FeedDetailModalProps> = ({
       document.removeEventListener('keydown', onKeyDown);
       previousFocus?.focus?.();
     };
-  }, [onClose]);
+  }, [detailItem.id]);
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 sm:p-5 overflow-y-auto modal-backdrop-enter" onClick={onClose}>
+  const hasValidPhoto = Boolean(
+    detailPhotoUrl &&
+    !imgFailed &&
+    (isValidImageDataUrl(detailPhotoUrl) || /^https?:\/\//i.test(detailPhotoUrl))
+  );
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 sm:p-5 overflow-y-auto modal-backdrop-enter"
+      onPointerDown={(e) => {
+        pointerDownOnBackdropRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        const shouldClose = shouldCloseBackdropClick(e, pointerDownOnBackdropRef.current);
+        pointerDownOnBackdropRef.current = false;
+        if (shouldClose) onCloseRef.current();
+      }}
+    >
       <div
         ref={dialogRef}
         tabIndex={-1}
@@ -53,7 +87,7 @@ export const FeedDetailModal: React.FC<FeedDetailModalProps> = ({
         </h3>
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => onCloseRef.current()}
           className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-[#5C554C] dark:text-[#A8A095] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] cursor-pointer"
           aria-label="Close item details"
         >
@@ -70,9 +104,17 @@ export const FeedDetailModal: React.FC<FeedDetailModalProps> = ({
           <div className="h-56 rounded-[10px] bg-[#FAF6EF] dark:bg-[#141311] border border-[#C4BBAF] dark:border-[#3E3931] flex items-center justify-center text-[#5C554C] dark:text-[#A8A095]">
             Loading full-resolution photo…
           </div>
-        ) : detailPhotoUrl ? (
+        ) : hasValidPhoto && detailPhotoUrl ? (
           <div className="rounded-[10px] overflow-hidden bg-[#FAF6EF] dark:bg-[#141311] border border-[#C4BBAF] dark:border-[#3E3931]">
-            <img src={detailPhotoUrl} alt={detailItem.title} className="w-full max-h-96 object-contain mx-auto" />
+            <img
+              src={detailPhotoUrl}
+              alt={detailItem.title}
+              className="w-full max-h-96 object-contain mx-auto"
+              onLoad={(e) => {
+                if (e.currentTarget.naturalWidth === 0) setImgFailed(true);
+              }}
+              onError={() => setImgFailed(true)}
+            />
           </div>
         ) : null}
 
@@ -92,6 +134,7 @@ export const FeedDetailModal: React.FC<FeedDetailModalProps> = ({
         </div>
       </div>
     </div>
-  </div>
+  </div>,
+  document.body
   );
 };

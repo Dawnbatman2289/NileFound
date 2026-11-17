@@ -30,3 +30,37 @@ export function isCampusAccountAllowed(params: {
   if (params.isMasterAdmin || params.isDelegatedAdmin) return true;
   return validateNileEmail(params.email);
 }
+
+export function resolveDisplayName(displayName?: string | null, email?: string | null): string {
+  const cleanDisplay = (displayName || '').trim();
+  if (cleanDisplay.length >= 2) {
+    const firstToken = cleanDisplay.split(/\s+/)[0] || cleanDisplay;
+    if (firstToken.length >= 2) return firstToken.slice(0, 100);
+    return cleanDisplay.slice(0, 100);
+  }
+  const localPart = (email || '').trim().split('@')[0] || '';
+  if (localPart.length >= 2) return localPart.slice(0, 100);
+  return 'Campus User';
+}
+
+export interface TokenRefreshableUser {
+  emailVerified: boolean;
+  getIdToken: (forceRefresh?: boolean) => Promise<string>;
+  getIdTokenResult?: (forceRefresh?: boolean) => Promise<{ claims?: Record<string, unknown> }>;
+}
+
+/**
+ * After reload() marks emailVerified = true, Firebase Auth's cached JWT can still
+ * carry email_verified: false for up to an hour unless force-refreshed.
+ */
+export async function ensureFreshVerifiedIdToken(fbUser: TokenRefreshableUser): Promise<string> {
+  if (fbUser.emailVerified && typeof fbUser.getIdTokenResult === 'function') {
+    const result = await fbUser.getIdTokenResult(false);
+    if (result?.claims?.email_verified !== true) {
+      return fbUser.getIdToken(true);
+    }
+    return fbUser.getIdToken(false);
+  }
+  return fbUser.getIdToken(Boolean(fbUser.emailVerified));
+}
+

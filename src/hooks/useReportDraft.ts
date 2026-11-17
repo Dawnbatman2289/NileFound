@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { HoldingLocation, ItemCategory, ItemType, ReportPrefill, UserRole } from '../types/index.ts';
 import { detectPii } from '../utils/piiDetector.ts';
 import { compressImageFile, CompressionResult, isSupportedImageFile } from '../utils/imageCompressor.ts';
@@ -68,10 +68,20 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   const [formError, setFormError] = useState<ReportFormError | null>(null);
 
+  const wasOpenRef = useRef(false);
+  const onDraftSavedRef = useRef(onDraftSaved);
+  const onDraftClearedRef = useRef(onDraftCleared);
+  const userRoleRef = useRef(userRole);
+  useEffect(() => {
+    onDraftSavedRef.current = onDraftSaved;
+    onDraftClearedRef.current = onDraftCleared;
+    userRoleRef.current = userRole;
+  }, [onDraftSaved, onDraftCleared, userRole]);
+
   const isFoundStudentId = reportType === 'found' && category === 'student_id';
 
   const resetEmptyFields = useCallback((prefill?: ReportPrefill | null) => {
-    const defaults = buildInitialReportFields(prefill, userRole);
+    const defaults = buildInitialReportFields(prefill, userRoleRef.current);
     setReportType(defaults.type);
     setCategory(defaults.category);
     setLocation(defaults.location);
@@ -83,7 +93,7 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
     setVerificationQuestion('');
     setVerificationAnswer('');
     setCompressionResult(null);
-  }, [userRole]);
+  }, []);
 
   useEffect(() => {
     if (isFoundStudentId) {
@@ -93,7 +103,13 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
   }, [isFoundStudentId]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
+    }
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
+
     setFormError(null);
     if (initialPrefill) {
       resetEmptyFields(initialPrefill);
@@ -104,18 +120,19 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
       const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.title || parsed.description) {
-          setReportType(parsed.reportType || (userRole === 'security' ? 'found' : 'lost'));
+        if (parsed.title || parsed.description || parsed.category || parsed.location) {
+          setReportType(parsed.reportType || (userRoleRef.current === 'security' ? 'found' : 'lost'));
           setTitle(parsed.title || '');
           setCategory(parsed.category || '');
           setLocation(parsed.location || '');
           setLocationDetails(parsed.locationDetails || '');
           setDescription(parsed.description || '');
           setDateLostOrFound(parsed.dateLostOrFound || getTodayWatIsoDate());
-          setHoldingLocation(parsed.holdingLocation || resolveDefaultHoldingLocation(parsed.reportType || 'lost', parsed.category || '', userRole));
+          setHoldingLocation(parsed.holdingLocation || resolveDefaultHoldingLocation(parsed.reportType || 'lost', parsed.category || '', userRoleRef.current));
           setVerificationQuestion(parsed.verificationQuestion || '');
           // Security rule: never persist or restore secret verification answers from localStorage.
           setVerificationAnswer('');
+          setCompressionResult(null);
           setHasRestoredDraft(true);
           return;
         }
@@ -125,7 +142,7 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
     }
     resetEmptyFields(null);
     setHasRestoredDraft(false);
-  }, [isOpen, initialPrefill, userRole, resetEmptyFields]);
+  }, [isOpen, initialPrefill, resetEmptyFields]);
 
   const saveDraftLocally = useCallback(
     (overrides?: Partial<{
@@ -152,12 +169,12 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
       };
       try {
         localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData));
-        onDraftSaved();
+        onDraftSavedRef.current();
       } catch (err) {
         reportError('Save report draft failed', err);
       }
     },
-    [reportType, title, category, location, locationDetails, description, dateLostOrFound, holdingLocation, verificationQuestion, onDraftSaved]
+    [reportType, title, category, location, locationDetails, description, dateLostOrFound, holdingLocation, verificationQuestion]
   );
 
   const clearDraft = useCallback((resetFields = false) => {
@@ -167,9 +184,9 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
       reportError('Clear draft storage failed', err);
     }
     setHasRestoredDraft(false);
-    onDraftCleared?.();
+    onDraftClearedRef.current?.();
     if (resetFields) resetEmptyFields();
-  }, [onDraftCleared, resetEmptyFields]);
+  }, [resetEmptyFields]);
 
   const handleImageChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -186,8 +203,9 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
         setFormError(null);
         setCompressionResult(await compressImageFile(file, 800, 0.72, setCompressionProgress));
       } catch (err: unknown) {
+        setCompressionResult(null);
         setFormError({
-          heading: 'Photo too large',
+          heading: 'Photo could not be attached',
           detail: err instanceof Error ? err.message : 'Photo too large. Try a smaller JPEG, PNG, or WebP file.',
         });
       } finally {
@@ -215,6 +233,17 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
     setFormError(null);
   }, []);
 
+  const isDirty = Boolean(
+    title.trim() ||
+    description.trim() ||
+    locationDetails.trim() ||
+    verificationQuestion.trim() ||
+    verificationAnswer.trim() ||
+    compressionResult !== null ||
+    category !== '' ||
+    location !== ''
+  );
+
   return {
     reportType, setReportType,
     title, setTitle,
@@ -232,6 +261,7 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
     hasRestoredDraft,
     formError, setFormError,
     isFoundStudentId,
+    isDirty,
     saveDraftLocally,
     clearDraft,
     handleImageChange,

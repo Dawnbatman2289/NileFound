@@ -42,29 +42,53 @@ export const AllItemsTab: React.FC<AllItemsTabProps> = ({
         items.map((item) => (
           <div
             key={item.id}
-            onClick={() => canInspect && onSelectItem(item)}
-            className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#FAF6EF] dark:hover:bg-[#141311]/70 transition-colors cursor-pointer"
+            className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#FAF6EF] dark:hover:bg-[#141311]/70 transition-colors"
           >
-            <div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`text-xs font-mono font-bold px-2 py-0.5 rounded uppercase ${
-                    item.type === 'found'
-                      ? 'bg-[#EDF7F1] dark:bg-[#0E2417] text-[#1B5633] dark:text-[#75CE9A]'
-                      : 'bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C]'
-                  }`}
-                >
-                  {item.type}
-                </span>
-                <span className="font-serif font-bold text-base">{item.title}</span>
+            {canInspect ? (
+              <button
+                type="button"
+                onClick={() => onSelectItem(item)}
+                className="text-left min-w-0 flex-1 cursor-pointer rounded-[8px] focus-visible:outline-2 focus-visible:outline-[#0F6E6E]"
+                aria-label={`Inspect details for ${item.title}`}
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    className={`text-xs font-mono font-bold px-2 py-0.5 rounded uppercase ${
+                      item.type === 'found'
+                        ? 'bg-[#EDF7F1] dark:bg-[#0E2417] text-[#1B5633] dark:text-[#75CE9A]'
+                        : 'bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C]'
+                    }`}
+                  >
+                    {item.type}
+                  </span>
+                  <span className="font-serif font-bold text-base">{item.title}</span>
+                </div>
+                <p className="text-sm text-[#4A443C] dark:text-[#CEC7BB] mt-1">
+                  {item.location} • Status: <strong className="text-[#1F1B16] dark:text-[#F5F1EA]">{item.status}</strong> •{' '}
+                  <span className="text-[#0F6E6E] dark:text-[#199595] underline">Inspect details</span>
+                </p>
+              </button>
+            ) : (
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    className={`text-xs font-mono font-bold px-2 py-0.5 rounded uppercase ${
+                      item.type === 'found'
+                        ? 'bg-[#EDF7F1] dark:bg-[#0E2417] text-[#1B5633] dark:text-[#75CE9A]'
+                        : 'bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C]'
+                    }`}
+                  >
+                    {item.type}
+                  </span>
+                  <span className="font-serif font-bold text-base">{item.title}</span>
+                </div>
+                <p className="text-sm text-[#4A443C] dark:text-[#CEC7BB] mt-1">
+                  {item.location} • Status: <strong className="text-[#1F1B16] dark:text-[#F5F1EA]">{item.status}</strong>
+                </p>
               </div>
-              <p className="text-sm text-[#4A443C] dark:text-[#CEC7BB] mt-1">
-                {item.location} • Status: <strong className="text-[#1F1B16] dark:text-[#F5F1EA]">{item.status}</strong> •{' '}
-                <span className="text-[#0F6E6E] dark:text-[#199595] underline">Inspect details</span>
-              </p>
-            </div>
+            )}
 
-            <div className="flex items-center gap-2.5 w-full sm:w-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
               {isAdmin ? (
                 <select
                   aria-label={`Status for ${item.title}`}

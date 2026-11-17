@@ -88,7 +88,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
             {authState.showInbox ? (
               <InboxVerificationCard
+                email={authState.email}
                 cooldown={authState.cooldown}
+                isCheckingVerification={authState.isCheckingVerification}
                 onResend={authState.resendVerification}
                 onConfirmVerified={authState.confirmVerified}
                 onSignOut={authState.handleSignOut}

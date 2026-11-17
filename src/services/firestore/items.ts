@@ -8,11 +8,12 @@
 import {
   collection, doc, getDoc, getDocs, getCountFromServer, updateDoc, onSnapshot,
   query, orderBy, where, limit, startAfter, writeBatch, serverTimestamp,
-  QueryDocumentSnapshot, DocumentData, Unsubscribe,
+  Query, QueryDocumentSnapshot, DocumentData, Unsubscribe,
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../../lib/firebase.ts';
 import { CampusItem, ItemCategory, ItemType, User } from '../../types/index.ts';
 import { canUserModerate, isMasterAdminUser } from '../../utils/admin.ts';
+import { normalizeNileEmail, resolveDisplayName } from '../../utils/authValidation.ts';
 import { reportError } from '../../components/ErrorBoundary.tsx';
 import {
   ITEMS, CLAIMS, ITEMS_PAGE_SIZE, CampusAuditCounts, ItemPage, ItemPrivateDetails,
@@ -110,9 +111,8 @@ export async function saveItemToFirestore(item: CampusItem, user?: User | null):
   if (!auth.currentUser) throw new Error('You must be signed in with a verified Nile account to report an item.');
 
   const uid = auth.currentUser.uid;
-  const email = auth.currentUser.email || 'student@nileuniversity.edu.ng';
-  const rawName = auth.currentUser.displayName || email.split('@')[0] || 'Student';
-  const name = rawName.trim().length >= 2 ? rawName.trim() : 'Student';
+  const email = normalizeNileEmail(auth.currentUser.email || 'student@nileuniversity.edu.ng');
+  const name = resolveDisplayName(auth.currentUser.displayName, email);
   const isStudentId = item.category === 'student_id';
   const resolvedHoldingLocation = isStudentId && item.type === 'found' ? 'security_main_gate' : item.holdingLocation;
   const isDeskFound = item.type === 'found' && resolvedHoldingLocation !== 'finder_holding';
@@ -276,26 +276,42 @@ export async function fetchCampusAuditCounts(): Promise<CampusAuditCounts> {
   }
 }
 
+async function fetchAllPaginatedDocs(baseQuery: Query<DocumentData>): Promise<QueryDocumentSnapshot<DocumentData>[]> {
+  const docs: QueryDocumentSnapshot<DocumentData>[] = [];
+  let cursor: QueryDocumentSnapshot<DocumentData> | undefined;
+  while (true) {
+    const snap = await getDocs(
+      cursor ? query(baseQuery, startAfter(cursor), limit(50)) : query(baseQuery, limit(50))
+    );
+    if (snap.empty) break;
+    docs.push(...snap.docs);
+    if (snap.docs.length < 50) break;
+    cursor = snap.docs[snap.docs.length - 1];
+  }
+  return docs;
+}
+
 export async function deleteItemFromFirestore(itemId: string): Promise<void> {
   try {
+    assertFirestoreReady();
     const uid = auth.currentUser?.uid;
     const isAdminUser = Boolean(
       uid && (isMasterAdminUser(uid) || (await isConfiguredAdmin(uid)) || (await fetchUserRole(uid)) === 'admin')
     );
 
-    const [privateClaimsSnap, claimsSnap] = await Promise.all([
-      getDocs(query(collection(db, ITEMS, itemId, 'privateClaims'), limit(50))),
-      getDocs(query(collection(db, CLAIMS), where('itemId', '==', itemId), limit(50))),
+    const [privateClaimsDocs, claimsDocs] = await Promise.all([
+      fetchAllPaginatedDocs(query(collection(db, ITEMS, itemId, 'privateClaims'))),
+      fetchAllPaginatedDocs(query(collection(db, CLAIMS), where('itemId', '==', itemId))),
     ]);
 
-    const messageSnaps = await Promise.all(
-      claimsSnap.docs.map((claimDoc) =>
-        getDocs(query(collection(db, CLAIMS, claimDoc.id, 'messages'), limit(50)))
+    const messageDocsPerClaim = await Promise.all(
+      claimsDocs.map((claimDoc) =>
+        fetchAllPaginatedDocs(query(collection(db, CLAIMS, claimDoc.id, 'messages')))
       )
     );
 
-    const messageRefsToDelete = messageSnaps.flatMap((snap) =>
-      snap.docs
+    const messageRefsToDelete = messageDocsPerClaim.flatMap((docs) =>
+      docs
         .filter((d) => isAdminUser || (uid && d.data().senderId === uid))
         .map((d) => d.ref)
     );
@@ -305,8 +321,8 @@ export async function deleteItemFromFirestore(itemId: string): Promise<void> {
       doc(db, ITEMS, itemId, 'media', 'full'),
       doc(db, ITEMS, itemId, 'private', 'details'),
       doc(db, ITEMS, itemId, 'secrets', 'verification'),
-      ...privateClaimsSnap.docs.map((d) => d.ref),
-      ...claimsSnap.docs.map((d) => d.ref),
+      ...privateClaimsDocs.map((d) => d.ref),
+      ...claimsDocs.map((d) => d.ref),
       doc(db, ITEMS, itemId),
     ];
 

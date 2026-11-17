@@ -1511,6 +1511,41 @@ test('Item 11 & Task 8: items reject legacy imageUrl, enforce authorId/createdAt
   );
 });
 
+test('mixed-case alphanumeric Nile student and invited staff emails work seamlessly in /users and /staffInvites', async () => {
+  const MIXED_UID = 'alphanumStudent01';
+  const MIXED_TOKEN_EMAIL = '201203014.Bello@NileUniversity.edu.ng';
+  const LOWER_EMAIL = MIXED_TOKEN_EMAIL.toLowerCase();
 
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `staffInvites/${LOWER_EMAIL}`), {
+      email: LOWER_EMAIL,
+      role: 'security',
+      assignedAt: new Date(),
+    });
+  });
 
+  const mixedDb = testEnv.authenticatedContext(MIXED_UID, verifiedToken(MIXED_TOKEN_EMAIL)).firestore();
+  const intruderDb = testEnv.authenticatedContext(INTRUDER_UID, verifiedToken(INTRUDER_EMAIL)).firestore();
 
+  // Allowed: lowercase email in /users doc matches mixed-case token email, and reading own lowercase staffInvite succeeds
+  await assertSucceeds(
+    setDoc(doc(mixedDb, `users/${MIXED_UID}`), {
+      name: '201203014.Bello',
+      email: LOWER_EMAIL,
+      role: 'student',
+      createdAt: serverTimestamp(),
+    })
+  );
+  await assertSucceeds(getDoc(doc(mixedDb, `staffInvites/${LOWER_EMAIL}`)));
+
+  // Denied: another student cannot read mixed-case staffer's invite, and spoofed email on /users fails
+  await assertFails(getDoc(doc(intruderDb, `staffInvites/${LOWER_EMAIL}`)));
+  await assertFails(
+    setDoc(doc(mixedDb, `users/${MIXED_UID}`), {
+      name: '201203014.Bello',
+      email: 'someone.else@nileuniversity.edu.ng',
+      role: 'student',
+      createdAt: serverTimestamp(),
+    })
+  );
+});

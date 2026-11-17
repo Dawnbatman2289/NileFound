@@ -59,8 +59,8 @@ service cloud.firestore {
           ? get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == roleName
           : (
             request.auth.token.email is string
-            && exists(/databases/$(database)/documents/staffInvites/$(request.auth.token.email))
-            && get(/databases/$(database)/documents/staffInvites/$(request.auth.token.email)).data.role == roleName
+            && exists(/databases/$(database)/documents/staffInvites/$(request.auth.token.email.lower()))
+            && get(/databases/$(database)/documents/staffInvites/$(request.auth.token.email.lower())).data.role == roleName
           )
       );
     }
@@ -167,7 +167,7 @@ service cloud.firestore {
         && data.keys().hasOnly(['name', 'email', 'role', 'department', 'matricNumber', 'createdAt', 'updatedAt'])
         && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
         && data.email is string && data.email.size() <= 100
-        && request.auth.token.email is string && data.email == request.auth.token.email
+        && request.auth.token.email is string && (data.email == request.auth.token.email || data.email == request.auth.token.email.lower())
         && data.role == 'student'
         && data.createdAt is timestamp
         && (!('updatedAt' in data) || (data.updatedAt is timestamp))
@@ -521,7 +521,7 @@ service cloud.firestore {
 
     // Email-keyed pending staff role assignments (/staffInvites/{inviteEmail})
     match /staffInvites/{inviteEmail} {
-      allow get: if isVerifiedUser() && (isAdmin() || request.auth.token.email == inviteEmail);
+      allow get: if isVerifiedUser() && (isAdmin() || (request.auth.token.email is string && request.auth.token.email.lower() == inviteEmail));
       allow list: if isAdmin() && request.query.limit <= 50;
       allow create, update: if isMasterAdmin()
         && inviteEmail.size() <= 128

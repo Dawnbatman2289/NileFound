@@ -13,7 +13,12 @@ import { reportError } from '../components/ErrorBoundary.tsx';
 import { auth } from '../lib/firebaseAuth.ts';
 import { clearNotificationStorage } from '../services/notificationService.ts';
 import { canUserModerate, getDefaultDepartmentForRole, isMasterAdminUser } from '../utils/admin.ts';
-import { isCampusAccountAllowed, validateNileEmail } from '../utils/authValidation.ts';
+import {
+  ensureFreshVerifiedIdToken,
+  isCampusAccountAllowed,
+  resolveDisplayName,
+  validateNileEmail,
+} from '../utils/authValidation.ts';
 import { readJson, safeSetStorage, safeRemoveStorage } from '../utils/storage.ts';
 import { authSessionReducer, type AuthSessionState } from './reducers.ts';
 
@@ -49,7 +54,7 @@ function buildInitialAuthState(): AuthSessionState {
 function buildUserObject(uid: string, email: string, displayName: string | null, role: UserRole): User {
   return {
     id: uid,
-    name: (displayName || email.split('@')[0]).split(' ')[0],
+    name: resolveDisplayName(displayName, email),
     email,
     role,
     isAdmin: role === 'admin',
@@ -163,7 +168,7 @@ export function useAuthSession({
     const handleVerifiedUser = async (fbUser: FirebaseUser) => {
       const email = (fbUser.email || '').trim().toLowerCase();
       try {
-        await fbUser.getIdToken(false);
+        await ensureFreshVerifiedIdToken(fbUser);
       } catch (tokenErr) {
         if (!isActive) return;
         reportError('Auth token check failed', tokenErr);

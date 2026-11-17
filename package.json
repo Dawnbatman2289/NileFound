@@ -14,7 +14,7 @@
     "test": "tsx --test src/utils/*.test.ts __tests__/*.test.ts",
     "test:emulator": "firebase emulators:exec --only firestore --project demo-nilefound \"tsx --test __tests__/firestore.rules.emulator.ts\"",
     "clean": "node -e \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
-    "lint": "eslint firestore.rules && tsc --noEmit"
+    "lint": "eslint firestore.rules public/sw.js && tsc --noEmit"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",
@@ -25,6 +25,7 @@
     "react-dom": "^19.0.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@firebase/eslint-plugin-security-rules": "^0.0.2",
     "@firebase/rules-unit-testing": "^6.0.0",
     "@tailwindcss/vite": "^4.3.3",
@@ -33,11 +34,13 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "firebase-admin": "^14.5.1",
     "firebase-tools": "^15.36.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2",
+    "typescript-eslint": "^8.73.0",
     "vite": "^8.3.0"
   }
 }

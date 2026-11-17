@@ -53,7 +53,7 @@ const NavbarNotifications: React.FC<{
         ref={bellButtonRef}
         type="button"
         onClick={() => setIsNotifOpen((prev) => !prev)}
-        className="relative p-2.5 bg-white dark:bg-[#1E1C18] text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#0F6E6E] dark:hover:text-[#199595] rounded-[10px] border border-[#857C70] dark:border-[#787065] transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center btn-campus"
+        className="relative p-2 sm:p-2.5 bg-white dark:bg-[#1E1C18] text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#0F6E6E] dark:hover:text-[#199595] rounded-[10px] border border-[#857C70] dark:border-[#787065] transition-colors cursor-pointer min-h-[44px] min-w-[40px] sm:min-w-[44px] flex items-center justify-center btn-campus"
         title="Campus Notifications"
         aria-label={`Campus Notifications (${unreadCount} unread)`}
         aria-expanded={isNotifOpen}
@@ -100,11 +100,11 @@ const NavbarAccountMenu: React.FC<{
     );
   }
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1 sm:gap-1.5">
       <button
         type="button"
         onClick={() => setActiveTab(canAccessAdmin ? 'admin' : 'feed')}
-        className="flex items-center gap-2 bg-white dark:bg-[#1E1C18] hover:bg-[#F5EFE4] dark:hover:bg-[#28241F] text-[#1F1B16] dark:text-[#F5F1EA] px-2 sm:px-3 py-2 rounded-[10px] text-sm font-medium border border-[#857C70] dark:border-[#787065] transition-colors min-h-[44px] min-w-[44px] justify-center cursor-pointer btn-campus"
+        className="flex items-center gap-2 bg-white dark:bg-[#1E1C18] hover:bg-[#F5EFE4] dark:hover:bg-[#28241F] text-[#1F1B16] dark:text-[#F5F1EA] px-1.5 sm:px-3 py-2 rounded-[10px] text-sm font-medium border border-[#857C70] dark:border-[#787065] transition-colors min-h-[44px] min-w-[40px] sm:min-w-[44px] justify-center cursor-pointer btn-campus"
         title={canAccessAdmin ? 'Open Operations Desk' : 'Signed in account'}
       >
         <div className="w-6 h-6 rounded-full bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] font-bold flex items-center justify-center text-xs border border-[#0F6E6E]/20">
@@ -128,7 +128,7 @@ const NavbarAccountMenu: React.FC<{
         <button
           type="button"
           onClick={onLogout}
-          className="flex items-center gap-1.5 bg-white dark:bg-[#1E1C18] hover:bg-[#FDF2F2] dark:hover:bg-[#2B0E0E] text-[#4A443C] hover:text-[#9B1C1C] dark:text-[#CEC7BB] dark:hover:text-[#F87171] px-2 sm:px-3 py-2 rounded-[10px] text-sm font-medium border border-[#857C70] dark:border-[#787065] hover:border-[#F87171]/50 transition-colors min-h-[44px] min-w-[44px] justify-center cursor-pointer btn-campus"
+          className="flex items-center gap-1.5 bg-white dark:bg-[#1E1C18] hover:bg-[#FDF2F2] dark:hover:bg-[#2B0E0E] text-[#4A443C] hover:text-[#9B1C1C] dark:text-[#CEC7BB] dark:hover:text-[#F87171] px-1.5 sm:px-3 py-2 rounded-[10px] text-sm font-medium border border-[#857C70] dark:border-[#787065] hover:border-[#F87171]/50 transition-colors min-h-[44px] min-w-[40px] sm:min-w-[44px] justify-center cursor-pointer btn-campus"
           title="Sign out of your account"
           aria-label="Log Out"
         >
@@ -152,10 +152,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="sticky top-0 z-30 bg-[#FAF6EF]/95 dark:bg-[#141311]/95 backdrop-blur-sm border-b border-[#C4BBAF] dark:border-[#3E3931] text-[#1F1B16] dark:text-[#F5F1EA] shadow-[0_1px_0_rgba(31,27,22,0.03),0_8px_24px_rgba(31,27,22,0.04)] transition-colors">
-      <div className="max-w-7xl mx-auto px-2.5 sm:px-4 py-3 flex items-center justify-between gap-2 sm:gap-3 min-w-0">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-1.5 sm:gap-3 min-w-0">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <h1 className="font-serif font-bold text-lg sm:text-xl leading-none tracking-tight text-[#1F1B16] dark:text-[#F5F1EA] whitespace-nowrap">
+            <h1 className="font-serif font-bold text-base sm:text-xl leading-none tracking-tight text-[#1F1B16] dark:text-[#F5F1EA] whitespace-nowrap">
               NileFound
             </h1>
             <span className="hidden sm:inline bg-[#F5EFE4] dark:bg-[#28241F] text-[#4A443C] dark:text-[#CEC7BB] border border-[#857C70] dark:border-[#787065] text-xs font-sans font-medium px-2 py-0.5 rounded-[10px] tracking-wide">
@@ -172,7 +172,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               type="button"
               onClick={onToggleDarkMode}
-              className="p-2.5 bg-white dark:bg-[#1E1C18] text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#0F6E6E] dark:hover:text-[#199595] rounded-[10px] border border-[#857C70] dark:border-[#787065] transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center btn-campus"
+              className="p-2 sm:p-2.5 bg-white dark:bg-[#1E1C18] text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#0F6E6E] dark:hover:text-[#199595] rounded-[10px] border border-[#857C70] dark:border-[#787065] transition-colors cursor-pointer min-h-[44px] min-w-[40px] sm:min-w-[44px] flex items-center justify-center btn-campus"
               title={isDarkMode ? 'Switch to light theme' : 'Switch to dark theme'}
               aria-label={isDarkMode ? 'Switch to light theme' : 'Switch to dark theme'}
             >
@@ -195,7 +195,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => setLowDataMode(!lowDataMode)}
             aria-pressed={lowDataMode}
             aria-label={`Low-Data mode: ${lowDataMode ? 'ON' : 'OFF'}`}
-            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-[10px] text-sm font-medium border transition-colors cursor-pointer min-h-[44px] min-w-[44px] justify-center btn-campus ${
+            className={`flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-[10px] text-sm font-medium border transition-colors cursor-pointer min-h-[44px] min-w-[40px] sm:min-w-[44px] justify-center btn-campus ${
               lowDataMode
                 ? 'bg-[#E7F3F3] dark:bg-[#0D2D2D] text-[#0F6E6E] dark:text-[#199595] border-[#0F6E6E]/50'
                 : 'bg-white dark:bg-[#1E1C18] text-[#4A443C] dark:text-[#CEC7BB] border-[#857C70] dark:border-[#787065] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'

@@ -9,6 +9,7 @@ import {
   CampusAuditCounts,
 } from '../services/firestoreService.ts';
 import { isMasterAdminUser } from '../utils/admin.ts';
+import { trapFocusOnTab } from '../utils/modalFocus.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
 
 interface UseAdminPanelOptions {
@@ -97,16 +98,23 @@ export function useAdminPanel({
 
   useEffect(() => {
     if (!pendingDelete && !selectedItem) return;
-    if (pendingDelete) deleteDialogRef.current?.focus();
-    else if (selectedItem) detailDialogRef.current?.focus();
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const activeDialog = pendingDelete ? deleteDialogRef.current : detailDialogRef.current;
+    const focusTimer = window.setTimeout(() => activeDialog?.focus(), 0);
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (pendingDelete) setPendingDelete(null);
         else setSelectedItem(null);
+        return;
       }
+      trapFocusOnTab(e, pendingDelete ? deleteDialogRef.current : detailDialogRef.current);
     };
     document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener('keydown', onKeyDown);
+      previousFocus?.focus?.();
+    };
   }, [pendingDelete, selectedItem]);
 
   useEffect(() => {
@@ -117,14 +125,23 @@ export function useAdminPanel({
       return;
     }
     let cancelled = false;
-    setIsLoadingPrivate(true);
-    fetchItemPrivateDetails(selectedItem.id)
-      .then((d) => { if (!cancelled) setPrivateDetails(d); })
-      .catch((err) => {
-        reportError('fetchItemPrivateDetails failed', err);
-        if (!cancelled) setPrivateDetails({});
-      })
-      .finally(() => { if (!cancelled) setIsLoadingPrivate(false); });
+    if (isDemoMode) {
+      setIsLoadingPrivate(false);
+      setPrivateDetails({
+        authorName: 'Campus Demo Reporter',
+        authorEmail: 'Recorded in live campus account',
+        expectedAnswer: selectedItem.verificationAnswer || 'Demo verification answer',
+      });
+    } else {
+      setIsLoadingPrivate(true);
+      fetchItemPrivateDetails(selectedItem.id)
+        .then((d) => { if (!cancelled) setPrivateDetails(d); })
+        .catch((err) => {
+          reportError('fetchItemPrivateDetails failed', err);
+          if (!cancelled) setPrivateDetails({});
+        })
+        .finally(() => { if (!cancelled) setIsLoadingPrivate(false); });
+    }
 
     if (lowDataMode || selectedItem.category === 'student_id') {
       setSelectedItemPhoto(null);

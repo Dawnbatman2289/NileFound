@@ -109,6 +109,7 @@ export function useClaims({
 
   const handleFetchClaimPrivateDetails = useCallback(
     async (itemId: string, claimId: string) => {
+      if (isDemoMode) return;
       const { fetchClaimPrivateDetails } = await import('../services/firestoreService.ts');
       const priv = await fetchClaimPrivateDetails(itemId, claimId);
       setClaims((prev) =>
@@ -125,7 +126,7 @@ export function useClaims({
         )
       );
     },
-    [setClaims]
+    [isDemoMode, setClaims]
   );
 
   const handleClaimSuccess = useCallback(

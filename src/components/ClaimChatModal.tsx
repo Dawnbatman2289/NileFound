@@ -12,6 +12,7 @@ import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { X, Send, MessageSquare, Lock, AlertTriangle } from 'lucide-react';
 import { CampusItem, ClaimMessage, ClaimRecord, User } from '../types/index.ts';
 import { detectPii } from '../utils/piiDetector.ts';
+import { shouldCloseBackdropClick, trapFocusOnTab } from '../utils/modalFocus.ts';
 import { reportError } from './ErrorBoundary.tsx';
 import {
   isClaimChatWritable,
@@ -62,6 +63,7 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
   const dialogRef = useRef<HTMLDivElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const pointerDownOnBackdropRef = useRef(false);
   const onCloseRef = useRef(onClose);
   const lastLatestIdRef = useRef<string | null>(null);
 
@@ -77,7 +79,11 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     const focusTimer = window.setTimeout(() => dialogRef.current?.focus(), 0);
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCloseRef.current();
+      if (e.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+      trapFocusOnTab(e, dialogRef.current);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -230,7 +236,14 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/55 overflow-y-auto modal-backdrop-enter"
-      onClick={() => onCloseRef.current()}
+      onPointerDown={(e) => {
+        pointerDownOnBackdropRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        const shouldClose = shouldCloseBackdropClick(e, pointerDownOnBackdropRef.current);
+        pointerDownOnBackdropRef.current = false;
+        if (shouldClose) onCloseRef.current();
+      }}
     >
       <div
         ref={dialogRef}
@@ -321,7 +334,7 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
                         : 'bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] border-[#C4BBAF] dark:border-[#3E3931]'
                     }`}
                   >
-                    <div className={`text-[11px] font-semibold mb-0.5 ${isMine ? 'text-white/85' : 'text-[#0F6E6E] dark:text-[#199595]'}`}>
+                    <div className={`text-xs font-semibold mb-0.5 ${isMine ? 'text-white/90' : 'text-[#0F6E6E] dark:text-[#199595]'}`}>
                       {isMine ? 'You' : msg.senderRole} • {timeLabel}
                     </div>
                     <p className="whitespace-pre-wrap break-words">{msg.text}</p>

@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { CampusItem } from '../../types/index.ts';
+import { shouldCloseBackdropClick } from '../../utils/modalFocus.ts';
 import { ADMIN_CARD } from './adminStyles.ts';
 
 interface DeleteConfirmModalProps {
@@ -15,10 +17,21 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   onCancel,
   onConfirmDelete,
 }) => {
+  const pointerDownOnBackdropRef = useRef(false);
   if (!pendingDelete) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 modal-backdrop-enter" onClick={onCancel}>
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 modal-backdrop-enter"
+      onPointerDown={(e) => {
+        pointerDownOnBackdropRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        const shouldClose = shouldCloseBackdropClick(e, pointerDownOnBackdropRef.current);
+        pointerDownOnBackdropRef.current = false;
+        if (shouldClose) onCancel();
+      }}
+    >
       <div
         ref={dialogRef}
         tabIndex={-1}
@@ -49,6 +62,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

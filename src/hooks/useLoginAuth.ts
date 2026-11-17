@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
@@ -8,13 +8,23 @@ import {
   signInWithPopup,
   signInWithRedirect,
   GoogleAuthProvider,
+  onAuthStateChanged,
   signOut,
   updateProfile,
+  type User as FirebaseUser,
 } from 'firebase/auth';
 import { auth } from '../lib/firebaseAuth.ts';
 import { User, UserRole } from '../types/index.ts';
 import { canUserModerate, getDefaultDepartmentForRole, isMasterAdminUser } from '../utils/admin.ts';
-import { isCampusAccountAllowed, validateEmailFormat, validateFullName, validateNileEmail, validatePassword } from '../utils/authValidation.ts';
+import {
+  ensureFreshVerifiedIdToken,
+  isCampusAccountAllowed,
+  resolveDisplayName,
+  validateEmailFormat,
+  validateFullName,
+  validateNileEmail,
+  validatePassword,
+} from '../utils/authValidation.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
 
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
@@ -28,7 +38,7 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   'auth/operation-not-allowed': 'Email sign-in is unavailable right now. Use "Continue with Google".',
   'auth/popup-blocked': 'Pop-up was blocked by your browser. Allow pop-ups to complete Google sign-in.',
   'auth/popup-closed-by-user': 'Google sign-in popup was closed before completing. Please try again.',
-  'auth/too-many-requests': 'Too many sign-in attempts. Wait a moment and try again.',
+  'auth/too-many-requests': 'Too many attempts. Wait a moment and try again.',
   'auth/network-request-failed': 'Network connection error. Check your internet connection and try again.',
 };
 
@@ -56,13 +66,13 @@ async function isAllowedCampusAccount(
   });
 }
 
-async function buildUserFromFirebase(fbUser: import('firebase/auth').User): Promise<User> {
+async function buildUserFromFirebase(fbUser: FirebaseUser): Promise<User> {
   const userEmail = (fbUser.email || '').trim().toLowerCase();
   const { fetchUserRole } = await import('../services/firestore/roles.ts');
   const role: UserRole = await fetchUserRole(fbUser.uid, userEmail);
   return {
     id: fbUser.uid,
-    name: (fbUser.displayName || userEmail.split('@')[0] || 'Campus User').split(' ')[0],
+    name: resolveDisplayName(fbUser.displayName, userEmail),
     email: userEmail,
     role,
     isAdmin: role === 'admin',
@@ -84,6 +94,7 @@ export function useLoginAuth({
   onClearSessionAuthError,
 }: UseLoginAuthOptions) {
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isCheckingVerification, setIsCheckingVerification] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
@@ -96,6 +107,7 @@ export function useLoginAuth({
   const [cooldown, setCooldown] = useState(0);
 
   const cooldownTimer = useRef<number | null>(null);
+  const verificationCheckInFlightRef = useRef(false);
   const onLoginRef = useRef(onLogin);
   const onNavigateRef = useRef(onNavigateToFeed);
   const onClearSessionErrorRef = useRef(onClearSessionAuthError);
@@ -105,68 +117,133 @@ export function useLoginAuth({
     onClearSessionErrorRef.current = onClearSessionAuthError;
   }, [onLogin, onNavigateToFeed, onClearSessionAuthError]);
 
-  const clearFeedback = () => {
+  const clearFeedback = useCallback(() => {
     setErrorMessage(null);
     setSuccessMessage(null);
     onClearSessionErrorRef.current?.();
-  };
+  }, []);
+
+  const startResendCooldown = useCallback((seconds = 60) => {
+    if (cooldownTimer.current) window.clearInterval(cooldownTimer.current);
+    setCooldown(seconds);
+    cooldownTimer.current = window.setInterval(() => {
+      setCooldown((v) => {
+        if (v <= 1 && cooldownTimer.current) {
+          window.clearInterval(cooldownTimer.current);
+          cooldownTimer.current = null;
+        }
+        return Math.max(0, v - 1);
+      });
+    }, 1000);
+  }, []);
+
+  const completeVerifiedAuth = useCallback(async (fbUser: FirebaseUser): Promise<boolean> => {
+    await ensureFreshVerifiedIdToken(fbUser);
+    const userEmail = (fbUser.email || '').trim().toLowerCase();
+    if (!(await isAllowedCampusAccount(fbUser.uid, userEmail, fbUser.emailVerified))) {
+      await signOut(auth);
+      setShowInbox(false);
+      setErrorMessage('Please use your @nileuniversity.edu.ng email.');
+      return false;
+    }
+    setShowInbox(false);
+    const loggedUser = await buildUserFromFirebase(fbUser);
+    onLoginRef.current(loggedUser);
+    if (!canUserModerate(loggedUser)) onNavigateRef.current();
+    return true;
+  }, []);
 
   useEffect(() => {
     let active = true;
+
+    const syncPendingUser = (fbUser: FirebaseUser | null) => {
+      if (!active) return;
+      if (!fbUser) {
+        setShowInbox(false);
+        return;
+      }
+      const userEmail = (fbUser.email || '').trim().toLowerCase();
+      if (!fbUser.emailVerified && userEmail && (validateNileEmail(userEmail) || isMasterAdminUser(fbUser.uid))) {
+        setEmail((prev) => prev || userEmail);
+        setShowInbox(true);
+      }
+    };
+
+    syncPendingUser(auth.currentUser);
+    const unsubscribeAuth = onAuthStateChanged(auth, syncPendingUser);
+
     getRedirectResult(auth)
       .then(async (result) => {
         if (!active || !result?.user) return;
-        const userEmail = (result.user.email || '').trim().toLowerCase();
         if (!result.user.emailVerified) {
           await signOut(auth);
           setErrorMessage('Verify your Google email address before accessing NileFound.');
           return;
         }
-        if (!(await isAllowedCampusAccount(result.user.uid, userEmail, result.user.emailVerified))) {
-          await signOut(auth);
-          setErrorMessage('Please use your @nileuniversity.edu.ng email.');
-          return;
-        }
-        const loggedUser = await buildUserFromFirebase(result.user);
-        onLoginRef.current(loggedUser);
-        if (!canUserModerate(loggedUser)) onNavigateRef.current();
+        await completeVerifiedAuth(result.user);
       })
       .catch((err) => reportError('Google redirect sign-in check failed', err));
 
     return () => {
       active = false;
+      unsubscribeAuth();
       if (cooldownTimer.current) window.clearInterval(cooldownTimer.current);
     };
-  }, []);
+  }, [completeVerifiedAuth]);
 
-  useEffect(() => {
-    if (!showInbox) return;
-    let attempts = 0;
-    const timer = window.setInterval(async () => {
-      if (!auth.currentUser || !navigator.onLine || document.hidden) return;
-      attempts += 1;
-      if (attempts > 24) return window.clearInterval(timer);
+  const checkVerificationNow = useCallback(
+    async (manualTrigger = false) => {
+      if (!auth.currentUser || verificationCheckInFlightRef.current) return;
+      if (!manualTrigger && (!navigator.onLine || document.hidden)) return;
+      verificationCheckInFlightRef.current = true;
+      if (manualTrigger) {
+        clearFeedback();
+        setIsCheckingVerification(true);
+      }
       try {
         await auth.currentUser.reload();
         if (auth.currentUser.emailVerified) {
-          const userEmail = (auth.currentUser.email || '').trim().toLowerCase();
-          if (!(await isAllowedCampusAccount(auth.currentUser.uid, userEmail, auth.currentUser.emailVerified))) {
-            await signOut(auth);
-            setShowInbox(false);
-            setErrorMessage('Please use your @nileuniversity.edu.ng email.');
-            return;
-          }
-          setShowInbox(false);
-          const loggedUser = await buildUserFromFirebase(auth.currentUser);
-          onLoginRef.current(loggedUser);
-          onNavigateRef.current();
+          await completeVerifiedAuth(auth.currentUser);
+        } else if (manualTrigger) {
+          setErrorMessage(
+            'Your email is not verified yet. Open the verification link in your Nile inbox or spam folder, then tap "I have verified" again.'
+          );
         }
       } catch (err) {
-        reportError('Verification status poll failed', err);
+        reportError('Verification status check failed', err);
+        if (manualTrigger) {
+          setErrorMessage('Could not check verification status. Check your connection and try again.');
+        }
+      } finally {
+        verificationCheckInFlightRef.current = false;
+        if (manualTrigger) setIsCheckingVerification(false);
       }
+    },
+    [clearFeedback, completeVerifiedAuth]
+  );
+
+  useEffect(() => {
+    if (!showInbox) return;
+    let pollCount = 0;
+    const timer = window.setInterval(() => {
+      if (pollCount >= 60) return;
+      pollCount += 1;
+      void checkVerificationNow(false);
     }, 5000);
-    return () => window.clearInterval(timer);
-  }, [showInbox]);
+
+    const onReturnToApp = () => {
+      if (document.visibilityState === 'visible') {
+        void checkVerificationNow(false);
+      }
+    };
+    window.addEventListener('focus', onReturnToApp);
+    document.addEventListener('visibilitychange', onReturnToApp);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onReturnToApp);
+      document.removeEventListener('visibilitychange', onReturnToApp);
+    };
+  }, [showInbox, checkVerificationNow]);
 
   const validateCredentials = (normalizedEmail: string): string | null => {
     if (mode === 'sign-up' && !validateNileEmail(normalizedEmail)) return 'Please use your @nileuniversity.edu.ng email.';
@@ -188,10 +265,18 @@ export function useLoginAuth({
 
       if (mode === 'sign-up') {
         const result = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
-        await updateProfile(result.user, { displayName: fullName.trim() || 'Campus User' });
-        await sendEmailVerification(result.user);
+        await updateProfile(result.user, { displayName: fullName.trim() || 'Campus User' }).catch((err) =>
+          reportError('Update initial profile name failed cleanly', err)
+        );
         setShowInbox(true);
-        setSuccessMessage('Verification email sent. Check your inbox before continuing.');
+        try {
+          await sendEmailVerification(result.user);
+          startResendCooldown(60);
+          setSuccessMessage('Verification email sent. Check your inbox or spam folder before continuing.');
+        } catch (verifyErr) {
+          reportError('Initial sendEmailVerification failed', verifyErr);
+          setErrorMessage('Account created, but we could not send the verification email yet. Tap "Resend email" in a moment.');
+        }
         return;
       }
 
@@ -202,20 +287,15 @@ export function useLoginAuth({
           setErrorMessage('Please use your @nileuniversity.edu.ng email.');
           return;
         }
-        await sendEmailVerification(result.user).catch((err) => reportError('Send verification email failed', err));
         setShowInbox(true);
+        await sendEmailVerification(result.user)
+          .then(() => startResendCooldown(60))
+          .catch((err) => reportError('Send verification email failed', err));
         setSuccessMessage('Verify your email first, or sign in with Google if your institution uses Gmail.');
         return;
       }
-      if (!(await isAllowedCampusAccount(result.user.uid, normalizedEmail, result.user.emailVerified))) {
-        await signOut(auth);
-        setErrorMessage('Please use your @nileuniversity.edu.ng email.');
-        return;
-      }
 
-      const loggedUser = await buildUserFromFirebase(result.user);
-      onLogin(loggedUser);
-      if (!canUserModerate(loggedUser)) onNavigateToFeed();
+      await completeVerifiedAuth(result.user);
     } catch (err: unknown) {
       setErrorMessage(friendlyAuthError(err));
     } finally {
@@ -225,19 +305,14 @@ export function useLoginAuth({
 
   const resendVerification = async () => {
     if (!auth.currentUser || cooldown > 0) return;
+    clearFeedback();
     try {
       await sendEmailVerification(auth.currentUser);
-      setCooldown(60);
-      cooldownTimer.current = window.setInterval(() => {
-        setCooldown((v) => {
-          if (v <= 1 && cooldownTimer.current) window.clearInterval(cooldownTimer.current);
-          return Math.max(0, v - 1);
-        });
-      }, 1000);
+      startResendCooldown(60);
       setSuccessMessage('Verification email sent again.');
     } catch (err) {
       reportError('Resend verification email failed', err);
-      setErrorMessage('Could not resend the verification email. Try again in a minute.');
+      setErrorMessage('Could not resend the verification email. Wait a moment and try again.');
     }
   };
 
@@ -248,18 +323,11 @@ export function useLoginAuth({
     provider.setCustomParameters({ prompt: 'select_account' });
     try {
       const result = await signInWithPopup(auth, provider);
-      const userEmail = (result.user.email || '').trim().toLowerCase();
       if (!result.user.emailVerified) {
         await signOut(auth);
         return setErrorMessage('Verify your Google email address before accessing NileFound.');
       }
-      if (!(await isAllowedCampusAccount(result.user.uid, userEmail, result.user.emailVerified))) {
-        await signOut(auth);
-        return setErrorMessage('Please use your @nileuniversity.edu.ng email.');
-      }
-      const loggedUser = await buildUserFromFirebase(result.user);
-      onLogin(loggedUser);
-      if (!canUserModerate(loggedUser)) onNavigateToFeed();
+      await completeVerifiedAuth(result.user);
     } catch (error: unknown) {
       const code = (error as { code?: string })?.code;
       if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
@@ -273,25 +341,7 @@ export function useLoginAuth({
   };
 
   const confirmVerified = async () => {
-    if (!auth.currentUser) return;
-    try {
-      await auth.currentUser.reload();
-      if (!auth.currentUser.emailVerified) {
-        return setErrorMessage('Your email is not verified yet. Open the verification link, then try again.');
-      }
-      const userEmail = (auth.currentUser.email || '').trim().toLowerCase();
-      if (!(await isAllowedCampusAccount(auth.currentUser.uid, userEmail, auth.currentUser.emailVerified))) {
-        await signOut(auth);
-        setShowInbox(false);
-        return setErrorMessage('Please use your @nileuniversity.edu.ng email.');
-      }
-      const loggedUser = await buildUserFromFirebase(auth.currentUser);
-      onLogin(loggedUser);
-      if (!canUserModerate(loggedUser)) onNavigateToFeed();
-    } catch (err) {
-      reportError('Confirm email verification failed', err);
-      setErrorMessage('Could not check verification status. Check your connection and try again.');
-    }
+    await checkVerificationNow(true);
   };
 
   const handleForgotPassword = async () => {
@@ -310,15 +360,36 @@ export function useLoginAuth({
 
   const handleSignOut = async () => {
     clearFeedback();
+    setShowInbox(false);
     await signOut(auth).catch((err) => reportError('Sign out from login failed', err));
     onLogout();
   };
 
   return {
-    isSigningIn, errorMessage, successMessage, mode, setMode,
-    email, setEmail, password, setPassword, confirmPassword, setConfirmPassword,
-    fullName, setFullName, showPassword, setShowPassword, showInbox, cooldown,
-    clearFeedback, handleEmailAuth, resendVerification, handleGoogleSignIn, confirmVerified,
-    handleForgotPassword, handleSignOut,
+    isSigningIn,
+    isCheckingVerification,
+    errorMessage,
+    successMessage,
+    mode,
+    setMode,
+    email,
+    setEmail,
+    password,
+    setPassword,
+    confirmPassword,
+    setConfirmPassword,
+    fullName,
+    setFullName,
+    showPassword,
+    setShowPassword,
+    showInbox,
+    cooldown,
+    clearFeedback,
+    handleEmailAuth,
+    resendVerification,
+    handleGoogleSignIn,
+    confirmVerified,
+    handleForgotPassword,
+    handleSignOut,
   };
 }

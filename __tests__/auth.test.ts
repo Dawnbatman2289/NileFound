@@ -7,15 +7,21 @@ import {
   validatePassword,
   validateFullName,
   isCampusAccountAllowed,
+  resolveDisplayName,
+  ensureFreshVerifiedIdToken,
 } from '../src/utils/authValidation.ts';
 
-test('accepts and normalizes verified Nile addresses', () => {
+test('accepts and normalizes verified Nile addresses including alphanumeric and mixed-case formats', () => {
   assert.equal(normalizeNileEmail(' USER@NILEUNIVERSITY.EDU.NG '), 'user@nileuniversity.edu.ng');
   assert.equal(validateNileEmail('user@nileuniversity.edu.ng'), true);
+  assert.equal(validateNileEmail('student2025@nileuniversity.edu.ng'), true);
+  assert.equal(validateNileEmail('201203014@nileuniversity.edu.ng'), true);
+  assert.equal(validateNileEmail('A.Bello99@NileUniversity.edu.ng'), true);
 });
 
 test('validates general email syntax without embedding personal emails', () => {
   assert.equal(validateEmailFormat('student@nileuniversity.edu.ng'), true);
+  assert.equal(validateEmailFormat('201203014@nileuniversity.edu.ng'), true);
   assert.equal(validateEmailFormat('not-an-email'), false);
   assert.equal(validateEmailFormat(''), false);
 });
@@ -34,6 +40,10 @@ test('rejects lookalike or external domains for campus accounts', () => {
 test('isCampusAccountAllowed rejects verified external Google accounts and unverified accounts', () => {
   assert.equal(
     isCampusAccountAllowed({ email: 'student@nileuniversity.edu.ng', emailVerified: true }),
+    true
+  );
+  assert.equal(
+    isCampusAccountAllowed({ email: '201203014@NileUniversity.edu.ng', emailVerified: true }),
     true
   );
   assert.equal(
@@ -64,6 +74,39 @@ test('isCampusAccountAllowed rejects verified external Google accounts and unver
     isCampusAccountAllowed({ email: 'delegated@example.com', emailVerified: true, isDelegatedAdmin: true }),
     true
   );
+});
+
+test('resolveDisplayName safely handles alphanumeric prefixes, short names, and empty fallbacks', () => {
+  assert.equal(resolveDisplayName('Amina Bello', '201203014@nileuniversity.edu.ng'), 'Amina');
+  assert.equal(resolveDisplayName('', '201203014@nileuniversity.edu.ng'), '201203014');
+  assert.equal(resolveDisplayName('', 'a@nileuniversity.edu.ng'), 'Campus User');
+  assert.equal(resolveDisplayName('   ', ''), 'Campus User');
+});
+
+test('ensureFreshVerifiedIdToken force-refreshes stale JWT tokens when emailVerified just became true', async () => {
+  const calls: boolean[] = [];
+  const staleTokenUser = {
+    emailVerified: true,
+    getIdTokenResult: async () => ({ claims: { email_verified: false } }),
+    getIdToken: async (force = false) => {
+      calls.push(force);
+      return force ? 'fresh-verified-jwt' : 'stale-jwt';
+    },
+  };
+  assert.equal(await ensureFreshVerifiedIdToken(staleTokenUser), 'fresh-verified-jwt');
+  assert.deepEqual(calls, [true]);
+
+  const freshCalls: boolean[] = [];
+  const alreadyFreshUser = {
+    emailVerified: true,
+    getIdTokenResult: async () => ({ claims: { email_verified: true } }),
+    getIdToken: async (force = false) => {
+      freshCalls.push(force);
+      return 'cached-verified-jwt';
+    },
+  };
+  assert.equal(await ensureFreshVerifiedIdToken(alreadyFreshUser), 'cached-verified-jwt');
+  assert.deepEqual(freshCalls, [false]);
 });
 
 test('enforces password boundaries and full-name validation', () => {

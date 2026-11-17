@@ -12,6 +12,7 @@ import {
 import { db, auth, handleFirestoreError, OperationType } from '../../lib/firebase.ts';
 import { ClaimRecord, User } from '../../types/index.ts';
 import { canUserModerate } from '../../utils/admin.ts';
+import { normalizeNileEmail, resolveDisplayName } from '../../utils/authValidation.ts';
 import {
   ClaimDecisionBatchPlan,
   computeClaimDecisionBatchPlan,
@@ -190,16 +191,30 @@ export async function saveClaimToFirestore(claim: ClaimRecord, _user?: User | nu
   if (!auth.currentUser) throw new Error('You must be signed in with a verified Nile account to submit a claim.');
 
   const uid = auth.currentUser.uid;
-  const email = auth.currentUser.email || claim.claimantEmail.slice(0, 100);
-  const rawName = auth.currentUser.displayName || claim.claimantName || 'Claimant';
-  const name = rawName.trim().length >= 2 ? rawName.trim() : 'Claimant';
+  const email = normalizeNileEmail(auth.currentUser.email || claim.claimantEmail).slice(0, 100);
+  const name = resolveDisplayName(auth.currentUser.displayName || claim.claimantName, email);
 
   const itemSnap = await getDoc(doc(db, ITEMS, claim.itemId));
-  const itemData = itemSnap.exists() ? itemSnap.data() : undefined;
-  const resolvedFinderId = finderId || itemData?.authorId;
+  if (!itemSnap.exists()) {
+    throw new Error('The item you tried to claim could not be found.');
+  }
+  const itemData = itemSnap.data();
+  if (itemData.type !== 'found') {
+    throw new Error('Only found items can be claimed.');
+  }
+  if (itemData.authorId === uid) {
+    throw new Error('You cannot submit a claim on your own item report.');
+  }
+  if (itemData.custodyStatus === 'awaiting_dropoff') {
+    throw new Error('Claims are paused until campus desk staff confirm physical drop-off.');
+  }
+  if (itemData.status !== 'open' && itemData.status !== 'claim_requested') {
+    throw new Error('This item is no longer open for new claims.');
+  }
+  const resolvedFinderId = finderId || itemData.authorId;
   if (!resolvedFinderId) throw new Error('The item you tried to claim could not be found.');
 
-  const isFoundStudentId = itemData?.type === 'found' && itemData?.category === 'student_id';
+  const isFoundStudentId = itemData.type === 'found' && itemData.category === 'student_id';
   const safeItemTitle = isFoundStudentId ? 'A student ID card was found' : claim.itemTitle;
   const claimId = `${claim.itemId}_${uid}`;
 

@@ -9,6 +9,7 @@
 import React, { useEffect, useRef } from 'react';
 import { X, ShieldCheck, Clock, Trash2, Database, MessageSquare } from 'lucide-react';
 import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
+import { shouldCloseBackdropClick, trapFocusOnTab } from '../utils/modalFocus.ts';
 
 interface PrivacyModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ interface PrivacyModalProps {
 export const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onClose }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const pointerDownOnBackdropRef = useRef(false);
   const onCloseRef = useRef(onClose);
 
   useEffect(() => {
@@ -29,7 +31,11 @@ export const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onClose }) =
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     const timer = window.setTimeout(() => dialogRef.current?.focus(), 0);
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCloseRef.current();
+      if (e.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+      trapFocusOnTab(e, dialogRef.current);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -44,7 +50,14 @@ export const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onClose }) =
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/55 overflow-y-auto modal-backdrop-enter"
-      onClick={onClose}
+      onPointerDown={(e) => {
+        pointerDownOnBackdropRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        const shouldClose = shouldCloseBackdropClick(e, pointerDownOnBackdropRef.current);
+        pointerDownOnBackdropRef.current = false;
+        if (shouldClose) onCloseRef.current();
+      }}
     >
       <div
         ref={dialogRef}

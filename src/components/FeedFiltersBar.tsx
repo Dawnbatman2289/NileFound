@@ -68,11 +68,11 @@ export const FeedFiltersBar: React.FC<FeedFiltersBarProps> = ({
         )}
       </div>
 
-      <div className="flex bg-[#FAF6EF] dark:bg-[#141311] p-1 rounded-[10px] border border-[#857C70] dark:border-[#787065] shrink-0 gap-1">
+      <div className="grid grid-cols-3 sm:flex bg-[#FAF6EF] dark:bg-[#141311] p-1 rounded-[10px] border border-[#857C70] dark:border-[#787065] shrink-0 gap-1">
         <button
           type="button"
           onClick={() => onTypeChange('all')}
-          className={`px-3 py-1.5 text-sm font-medium rounded-[10px] transition-colors min-h-[40px] cursor-pointer ${
+          className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-[10px] transition-colors min-h-[40px] cursor-pointer text-center ${
             selectedType === 'all' ? 'bg-white dark:bg-[#1E1C18] text-[#1F1B16] dark:text-[#F5F1EA] border border-[#857C70] dark:border-[#787065] shadow-xs' : 'text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
           }`}
         >
@@ -81,7 +81,7 @@ export const FeedFiltersBar: React.FC<FeedFiltersBarProps> = ({
         <button
           type="button"
           onClick={() => onTypeChange('found')}
-          className={`px-3 py-1.5 text-sm font-medium rounded-[10px] transition-colors min-h-[40px] cursor-pointer ${
+          className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-[10px] transition-colors min-h-[40px] cursor-pointer text-center ${
             selectedType === 'found' ? 'bg-[#2F7D4F] text-white shadow-xs' : 'text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
           }`}
         >
@@ -90,7 +90,7 @@ export const FeedFiltersBar: React.FC<FeedFiltersBarProps> = ({
         <button
           type="button"
           onClick={() => onTypeChange('lost')}
-          className={`px-3 py-1.5 text-sm font-medium rounded-[10px] transition-colors min-h-[40px] cursor-pointer ${
+          className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-[10px] transition-colors min-h-[40px] cursor-pointer text-center ${
             selectedType === 'lost' ? 'bg-[#E8A317] text-[#1F1B16] font-semibold shadow-xs' : 'text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA]'
           }`}
         >

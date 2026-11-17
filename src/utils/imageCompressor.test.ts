@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   calculateScaledDimensions,
   isSupportedImageFile,
+  isValidImageDataUrl,
   MAX_CANVAS_BOUND,
   MAX_FIRESTORE_DATA_URL_CHARS,
   MAX_THUMB_DATA_URL_CHARS,
@@ -15,6 +16,16 @@ test('imageCompressor validates allowed image formats and size bounds', () => {
   assert.equal(isSupportedImageFile({ type: 'image/gif', size: 1024 }), false);
   assert.equal(isSupportedImageFile({ type: 'image/jpeg', size: 0 }), false);
   assert.equal(isSupportedImageFile({ type: 'image/jpeg', size: 6 * 1024 * 1024 }), false);
+});
+
+test('isValidImageDataUrl rejects empty canvas data URLs and non-image URIs', () => {
+  assert.equal(isValidImageDataUrl('data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/'), true);
+  assert.equal(isValidImageDataUrl('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA'), true);
+  assert.equal(isValidImageDataUrl('data:,'), false);
+  assert.equal(isValidImageDataUrl(''), false);
+  assert.equal(isValidImageDataUrl(null), false);
+  assert.equal(isValidImageDataUrl('data:image/svg+xml;base64,PHN2Zz4='), false);
+  assert.equal(isValidImageDataUrl('data:image/jpeg;base64,AAAA'), false);
 });
 
 test('calculateScaledDimensions clamps large photos to <= 1280px before canvas allocation', () => {

@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, CheckCircle, Clock, Mail, MapPin, MessageSquare, ShieldCheck, Tag, Trash2, User as UserIcon, X } from 'lucide-react';
 import { CampusItem, ClaimRecord } from '../../types/index.ts';
 import { formatDateDDMMYYYY } from '../../utils/dateFormatter.ts';
+import { isValidImageDataUrl } from '../../utils/imageCompressor.ts';
+import { shouldCloseBackdropClick } from '../../utils/modalFocus.ts';
 import type { ItemPrivateDetails } from '../../services/firestoreService.ts';
 import { reportError } from '../ErrorBoundary.tsx';
 import { ADMIN_CARD } from './adminStyles.ts';
@@ -55,11 +58,33 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onErrorNotice,
   onRefreshAudit,
 }) => {
-  const [loadingClaimId, setLoadingClaimId] = React.useState<string | null>(null);
+  const [loadingClaimId, setLoadingClaimId] = useState<string | null>(null);
+  const [imgFailed, setImgFailed] = useState(false);
+  const pointerDownOnBackdropRef = useRef(false);
   const itemClaims = claims.filter((c) => c.itemId === selectedItem.id);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/55 overflow-y-auto modal-backdrop-enter" onClick={onClose}>
+  useEffect(() => {
+    setImgFailed(false);
+  }, [selectedItem.id, selectedItemPhoto]);
+
+  const hasValidPhoto = Boolean(
+    selectedItemPhoto &&
+    !imgFailed &&
+    (isValidImageDataUrl(selectedItemPhoto) || /^https?:\/\//i.test(selectedItemPhoto))
+  );
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/55 overflow-y-auto modal-backdrop-enter"
+      onPointerDown={(e) => {
+        pointerDownOnBackdropRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        const shouldClose = shouldCloseBackdropClick(e, pointerDownOnBackdropRef.current);
+        pointerDownOnBackdropRef.current = false;
+        if (shouldClose) onClose();
+      }}
+    >
       <div
         ref={dialogRef}
         tabIndex={-1}
@@ -93,9 +118,21 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             <div className="h-44 rounded-[10px] bg-[#FAF6EF] dark:bg-[#141311] border border-[#C4BBAF] dark:border-[#3E3931] flex items-center justify-center text-[#5C554C] dark:text-[#A8A095]">
               Loading full-resolution photo…
             </div>
-          ) : selectedItemPhoto ? (
+          ) : hasValidPhoto && selectedItemPhoto ? (
             <div className="rounded-[10px] overflow-hidden bg-[#FAF6EF] dark:bg-[#141311] border border-[#C4BBAF] dark:border-[#3E3931]">
-              <img src={selectedItemPhoto} alt={selectedItem.title} className="w-full max-h-96 object-contain mx-auto" loading="lazy" decoding="async" width={640} height={360} />
+              <img
+                src={selectedItemPhoto}
+                alt={selectedItem.title}
+                className="w-full max-h-96 object-contain mx-auto"
+                loading="lazy"
+                decoding="async"
+                width={640}
+                height={360}
+                onLoad={(e) => {
+                  if (e.currentTarget.naturalWidth === 0) setImgFailed(true);
+                }}
+                onError={() => setImgFailed(true)}
+              />
             </div>
           ) : null}
 
@@ -211,7 +248,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                         <MessageSquare className="w-4 h-4" />
                         <span>Handover Chat</span>
                         {unreadChatClaimIds?.has(claim.id) && (
-                          <span className="bg-[#0F6E6E] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-[6px] uppercase">
+                          <span className="bg-[#0F6E6E] text-white text-xs font-bold px-1.5 py-0.5 rounded-[6px] uppercase">
                             New
                           </span>
                         )}
@@ -283,6 +320,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

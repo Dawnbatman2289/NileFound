@@ -7,10 +7,11 @@
  * Main Action: Submit verification response to claim a found item.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ShieldCheck, Lock, AlertCircle, MessageCircle, X, CheckCircle2 } from 'lucide-react';
 import { CampusItem, ClaimRecord, User } from '../types/index.ts';
 import { validateNileEmail } from '../utils/authValidation.ts';
+import { shouldCloseBackdropClick, trapFocusOnTab } from '../utils/modalFocus.ts';
 
 interface ClaimModalProps {
   item: CampusItem | null;
@@ -38,13 +39,29 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const pointerDownOnBackdropRef = useRef(false);
   const onCloseRef = useRef(onClose);
+  const isDirtyRef = useRef(false);
+
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
+
+  const isDirty = Boolean(!isSubmitted && verificationAnswer.trim().length > 0);
+  isDirtyRef.current = isDirty;
+
+  const requestClose = useCallback(() => {
+    if (isDirtyRef.current) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    setShowDiscardConfirm(false);
+    onCloseRef.current();
+  }, []);
 
   const itemId = item?.id ?? null;
 
@@ -52,13 +69,16 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
     if (!itemId) return;
     setIsSubmitted(false);
     setErrorMsg('');
+    setShowDiscardConfirm(false);
     setVerificationAnswer('');
-    if (currentUser?.name) setClaimantName((prev) => prev || currentUser.name);
-    if (currentUser?.email) setClaimantEmail((prev) => prev || currentUser.email);
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     const timer = window.setTimeout(() => dialogRef.current?.focus(), 0);
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCloseRef.current();
+      if (e.key === 'Escape') {
+        requestClose();
+        return;
+      }
+      trapFocusOnTab(e, dialogRef.current);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -66,7 +86,13 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
       document.removeEventListener('keydown', onKeyDown);
       previousFocusRef.current?.focus?.();
     };
-  }, [itemId]);
+  }, [itemId, requestClose]);
+
+  useEffect(() => {
+    if (!itemId) return;
+    if (currentUser?.name) setClaimantName((prev) => prev || currentUser.name);
+    if (currentUser?.email) setClaimantEmail((prev) => prev || currentUser.email);
+  }, [itemId, currentUser?.name, currentUser?.email]);
 
   if (!item) return null;
 
@@ -134,7 +160,14 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/55 overflow-y-auto modal-backdrop-enter"
-      onClick={onClose}
+      onPointerDown={(e) => {
+        pointerDownOnBackdropRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        const shouldClose = shouldCloseBackdropClick(e, pointerDownOnBackdropRef.current);
+        pointerDownOnBackdropRef.current = false;
+        if (shouldClose) requestClose();
+      }}
     >
       <div
         ref={dialogRef}
@@ -154,13 +187,44 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="text-[#5C554C] dark:text-[#A8A095] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] transition-colors p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-[10px] cursor-pointer"
             aria-label="Close claim dialog"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {showDiscardConfirm && !isSubmitted && (
+          <div
+            role="alertdialog"
+            aria-labelledby="claim-discard-title"
+            className="mx-5 mt-4 bg-[#FEF7E9] dark:bg-[#2B210A] border border-[#E8A317]/40 rounded-[10px] p-3.5 text-sm space-y-2.5"
+          >
+            <p id="claim-discard-title" className="font-semibold text-[#7A5000] dark:text-[#F9CF7C]">
+              Discard your typed claim answer?
+            </p>
+            <div className="flex items-center gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDiscardConfirm(false)}
+                className="min-h-[40px] px-3 py-1.5 rounded-[8px] border border-[#857C70] dark:border-[#787065] bg-white dark:bg-[#1E1C18] text-xs font-medium cursor-pointer"
+              >
+                Keep Editing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDiscardConfirm(false);
+                  onCloseRef.current();
+                }}
+                className="min-h-[40px] px-3 py-1.5 rounded-[8px] bg-[#9B1C1C] text-white text-xs font-semibold cursor-pointer"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="p-5 sm:p-6 max-w-md mx-auto min-h-0 flex-1 overflow-y-auto">
           {!isSubmitted ? (
@@ -257,7 +321,7 @@ export const ClaimModal: React.FC<ClaimModalProps> = ({
               <div className="flex gap-2.5 pt-2">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={requestClose}
                   className="w-1/2 py-2.5 text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] bg-white dark:bg-[#28241F] rounded-[10px] border border-[#857C70] dark:border-[#787065] transition-colors min-h-[44px] cursor-pointer btn-campus"
                 >
                   Cancel

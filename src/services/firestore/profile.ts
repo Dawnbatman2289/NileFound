@@ -8,13 +8,14 @@
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../../lib/firebase.ts';
 import { User } from '../../types/index.ts';
+import { normalizeNileEmail, resolveDisplayName } from '../../utils/authValidation.ts';
 import { USERS } from './helpers.ts';
 
 export async function syncUserProfile(user: User): Promise<void> {
   if (!user?.id) return;
   const userRef = doc(db, USERS, user.id);
-  const authEmail = (auth.currentUser?.email || user.email).trim().toLowerCase().slice(0, 100);
-  const displayName = user.name.trim().length >= 2 ? user.name.trim().slice(0, 100) : 'Campus User';
+  const authEmail = normalizeNileEmail(auth.currentUser?.email || user.email).slice(0, 100);
+  const displayName = resolveDisplayName(user.name, authEmail);
 
   try {
     const existingSnap = await getDoc(userRef);

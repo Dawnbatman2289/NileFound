@@ -72,9 +72,9 @@ export const CustodyTab: React.FC<CustodyTabProps> = ({
           const awaitingDropoff = item.type === 'found' && item.custodyStatus === 'awaiting_dropoff';
           return (
             <div key={item.id} className={`${ADMIN_CARD} p-5 space-y-3 hover:border-[#0F6E6E]/40 transition-colors`}>
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-serif font-bold text-sm">{item.title}</span>
-                <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <span className="font-serif font-bold text-sm min-w-0">{item.title}</span>
+                <div className="flex flex-wrap items-center gap-1.5">
                   {awaitingDropoff ? (
                     <span className="text-xs bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C] border border-[#E8A317]/40 px-2.5 py-0.5 rounded-[8px] font-semibold">
                       Awaiting Drop-off

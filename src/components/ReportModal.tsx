@@ -6,7 +6,7 @@
  * Layout: Single-scroll report dialog with safe non-secret offline draft persistence and image compression.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Save, AlertTriangle, Lock, CheckCircle } from 'lucide-react';
 import { CampusItem, HoldingLocation, ItemCategory, ReportPrefill, User } from '../types/index.ts';
 import { CATEGORIES } from '../config/catalog.ts';
@@ -14,6 +14,7 @@ import { NILE_CAMPUS_LOCATIONS } from '../config/locations.ts';
 import { getTodayWatIsoDate } from '../utils/dateFormatter.ts';
 import { getRoleDisplayLabel } from '../utils/admin.ts';
 import { OFFICER_INTAKE_PRESETS, resolveDefaultHoldingLocation } from '../utils/reportPresets.ts';
+import { shouldCloseBackdropClick, trapFocusOnTab } from '../utils/modalFocus.ts';
 import { useReportDraft, validateReportInputs } from '../hooks/useReportDraft.ts';
 import { FoundVerificationSection } from './report/FoundVerificationSection.tsx';
 import { PhotoUploadSection } from './report/PhotoUploadSection.tsx';
@@ -32,6 +33,8 @@ interface ReportModalProps {
 const FIELD_INPUT =
   'w-full text-base sm:text-sm px-3.5 py-2.5 rounded-[10px] border border-[#857C70] dark:border-[#787065] bg-white dark:bg-[#141311] text-[#1F1B16] dark:text-[#F5F1EA] placeholder:text-[#5C554C] dark:placeholder:text-[#A8A095] focus:border-[#0F6E6E] min-h-[44px]';
 
+const PICKER_RETURN_GUARD_MS = 700;
+
 export const ReportModal: React.FC<ReportModalProps> = ({
   isOpen,
   onClose,
@@ -46,17 +49,51 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const pointerDownOnBackdropRef = useRef(false);
+  const pickerActiveRef = useRef(false);
+  const pickerReturnedAtRef = useRef(0);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   const draft = useReportDraft({ isOpen, initialPrefill, userRole: currentUser?.role, onDraftSaved, onDraftCleared });
   const isOfficer = currentUser?.role === 'security' || currentUser?.role === 'admin' || Boolean(currentUser?.isAdmin);
 
+  const isDirtyRef = useRef(draft.isDirty);
+  const isCompressingRef = useRef(draft.isCompressing);
   useEffect(() => {
-    if (isOpen) setSaveNotice(null);
+    isDirtyRef.current = draft.isDirty;
+    isCompressingRef.current = draft.isCompressing;
+  }, [draft.isDirty, draft.isCompressing]);
+
+  const isPickerGuardActive = () =>
+    pickerActiveRef.current || Date.now() - pickerReturnedAtRef.current < PICKER_RETURN_GUARD_MS;
+
+  const requestClose = useCallback((source: 'backdrop' | 'escape' | 'button') => {
+    if (source !== 'button' && (isPickerGuardActive() || isCompressingRef.current)) {
+      return;
+    }
+    if (isDirtyRef.current) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    onCloseRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSaveNotice(null);
+      setShowDiscardConfirm(false);
+      pickerActiveRef.current = false;
+      pickerReturnedAtRef.current = 0;
+    }
     return () => {
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     };
@@ -67,15 +104,27 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     const timer = window.setTimeout(() => dialogRef.current?.focus(), 0);
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        requestClose('escape');
+        return;
+      }
+      trapFocusOnTab(e, dialogRef.current);
+    };
+    const onWindowReturn = () => {
+      if (pickerActiveRef.current) {
+        pickerActiveRef.current = false;
+        pickerReturnedAtRef.current = Date.now();
+      }
     };
     document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('focus', onWindowReturn);
     return () => {
       window.clearTimeout(timer);
       document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('focus', onWindowReturn);
       previousFocusRef.current?.focus?.();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, requestClose]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,7 +188,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         return;
       }
       draft.clearDraft(false);
-      onClose();
+      onCloseRef.current();
     } catch (err: unknown) {
       draft.setFormError({
         heading: 'Could not publish notice',
@@ -153,7 +202,17 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/55 overflow-y-auto modal-backdrop-enter" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/55 overflow-y-auto modal-backdrop-enter"
+      onPointerDown={(e) => {
+        pointerDownOnBackdropRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        const allowBackdrop = shouldCloseBackdropClick(e, pointerDownOnBackdropRef.current);
+        pointerDownOnBackdropRef.current = false;
+        if (allowBackdrop) requestClose('backdrop');
+      }}
+    >
       <div
         ref={dialogRef}
         tabIndex={-1}
@@ -167,10 +226,45 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           <h3 id="report-modal-title" className="font-serif font-bold text-base tracking-tight text-[#1F1B16] dark:text-[#F5F1EA]">
             Report an Item on Campus
           </h3>
-          <button type="button" onClick={onClose} className="text-[#5C554C] dark:text-[#A8A095] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] transition-colors p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-[10px] cursor-pointer" aria-label="Close report dialog">
+          <button
+            type="button"
+            onClick={() => requestClose('button')}
+            className="text-[#5C554C] dark:text-[#A8A095] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] transition-colors p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-[10px] cursor-pointer"
+            aria-label="Close report dialog"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {showDiscardConfirm && (
+          <div role="alertdialog" aria-labelledby="discard-report-title" className="bg-[#FEF7E9] dark:bg-[#2B210A] border-b border-[#E8A317]/40 px-5 py-3.5 text-sm space-y-2.5">
+            <p id="discard-report-title" className="font-semibold text-[#7A5000] dark:text-[#F9CF7C]">
+              Close this report form?
+            </p>
+            <p className="text-xs text-[#7A5000] dark:text-[#F9CF7C]">
+              Your text fields are saved offline as a draft, but attached photos and secret verification answers are not saved until submitted.
+            </p>
+            <div className="flex flex-wrap gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDiscardConfirm(false)}
+                className="min-h-[44px] px-3.5 rounded-[10px] bg-white dark:bg-[#1E1C18] border border-[#857C70] dark:border-[#787065] text-xs font-semibold text-[#1F1B16] dark:text-[#F5F1EA] cursor-pointer"
+              >
+                Keep editing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDiscardConfirm(false);
+                  onCloseRef.current();
+                }}
+                className="min-h-[44px] px-3.5 rounded-[10px] bg-[#9B1C1C] text-white text-xs font-semibold cursor-pointer"
+              >
+                Close form
+              </button>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 min-h-0 flex-1 overflow-y-auto">
           {currentUser ? (
@@ -190,7 +284,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 <Lock className="w-4 h-4 text-[#0F6E6E] dark:text-[#199595] shrink-0" />
                 <span className="text-[#4A443C] dark:text-[#CEC7BB]">Sign in required to publish notices and get updates.</span>
               </div>
-              <button type="button" onClick={() => { setIsSigningIn(true); try { onOpenLogin?.(); } finally { setIsSigningIn(false); } }} disabled={isSigningIn} className="bg-[#0F6E6E] hover:bg-[#0C5656] disabled:opacity-50 text-white px-3.5 py-2 rounded-[10px] font-medium text-sm min-h-[44px] shrink-0 cursor-pointer shadow-xs transition-colors text-center btn-campus">
+              <button type="button" onClick={() => { setIsSigningIn(true); try { draft.saveDraftLocally(); onOpenLogin?.(); } finally { setIsSigningIn(false); } }} disabled={isSigningIn} className="bg-[#0F6E6E] hover:bg-[#0C5656] disabled:opacity-50 text-white px-3.5 py-2 rounded-[10px] font-medium text-sm min-h-[44px] shrink-0 cursor-pointer shadow-xs transition-colors text-center btn-campus">
                 Open sign-in
               </button>
             </div>
@@ -199,7 +293,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           {draft.hasRestoredDraft && (
             <div className="flex items-center justify-between text-sm bg-[#FEF7E9] dark:bg-[#2B210A] text-[#7A5000] dark:text-[#F9CF7C] border border-[#E8A317]/40 p-3 rounded-[10px]">
               <span className="flex items-center gap-2"><Save className="w-4 h-4 shrink-0" />Restored unfinished draft</span>
-              <button type="button" onClick={() => draft.clearDraft(true)} className="font-bold underline hover:opacity-80 cursor-pointer shrink-0 ml-2">Clear</button>
+              <button type="button" onClick={() => draft.clearDraft(true)} className="font-bold underline hover:opacity-80 cursor-pointer shrink-0 ml-2 min-h-[44px] px-2">Clear</button>
             </div>
           )}
 
@@ -350,6 +444,16 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             fileInputRef={fileInputRef}
             onImageChange={draft.handleImageChange}
             onRemoveImage={() => { draft.setCompressionResult(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+            onPickerOpen={() => {
+              pickerActiveRef.current = true;
+            }}
+            onPickerCancel={() => {
+              pickerActiveRef.current = false;
+              pickerReturnedAtRef.current = Date.now();
+            }}
+            onInvalidPreview={(message) => {
+              draft.setFormError({ heading: 'Photo could not be previewed', detail: message });
+            }}
           />
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#C4BBAF] dark:border-[#3E3931]">
@@ -367,8 +471,18 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               <span>Save Offline Draft</span>
             </button>
             <div className="flex gap-2.5">
-              <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] bg-white dark:bg-[#28241F] rounded-[10px] border border-[#857C70] dark:border-[#787065] transition-colors min-h-[44px] cursor-pointer btn-campus">Cancel</button>
-              <button type="submit" disabled={isSubmitting || draft.isCompressing || isSigningIn} className={`px-5 py-2 text-sm font-semibold rounded-[10px] transition-colors min-h-[44px] cursor-pointer shadow-xs disabled:opacity-50 btn-campus ${draft.reportType === 'lost' ? 'bg-[#E8A317] hover:bg-[#d69310] text-[#1F1B16]' : 'bg-[#0F6E6E] hover:bg-[#0C5656] text-white'}`}>
+              <button
+                type="button"
+                onClick={() => requestClose('button')}
+                className="px-4 py-2 text-sm font-medium text-[#4A443C] dark:text-[#CEC7BB] hover:text-[#1F1B16] dark:hover:text-[#F5F1EA] bg-white dark:bg-[#28241F] rounded-[10px] border border-[#857C70] dark:border-[#787065] transition-colors min-h-[44px] cursor-pointer btn-campus"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting || draft.isCompressing || isSigningIn}
+                className={`px-5 py-2 text-sm font-semibold rounded-[10px] transition-colors min-h-[44px] cursor-pointer shadow-xs disabled:opacity-50 btn-campus ${draft.reportType === 'lost' ? 'bg-[#E8A317] hover:bg-[#d69310] text-[#1F1B16]' : 'bg-[#0F6E6E] hover:bg-[#0C5656] text-white'}`}
+              >
                 {isSigningIn ? 'Signing in...' : isSubmitting ? 'Publishing...' : !currentUser ? `Sign in & Post ${draft.reportType === 'lost' ? 'Lost' : 'Found'}` : `Post ${draft.reportType === 'lost' ? 'Lost Notice' : 'Found Notice'}`}
               </button>
             </div>

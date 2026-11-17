@@ -23,6 +23,12 @@ export const MAX_CANVAS_BOUND = 1280;
 export const MAX_FIRESTORE_DATA_URL_CHARS = 135000;
 export const MAX_THUMB_DATA_URL_CHARS = 4096;
 
+const VALID_IMAGE_DATA_URL_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]{16,}$/;
+
+export function isValidImageDataUrl(src?: string | null): src is string {
+  return typeof src === 'string' && VALID_IMAGE_DATA_URL_RE.test(src.trim());
+}
+
 export function isSupportedImageFile(file: { type: string; size: number }): boolean {
   return ALLOWED_IMAGE_TYPES.has(file.type.toLowerCase()) && file.size > 0 && file.size <= MAX_UPLOAD_BYTES;
 }
@@ -153,6 +159,9 @@ export async function compressImageFile(
   const decoded = await decodeImageOnce(file);
 
   try {
+    if (decoded.width <= 0 || decoded.height <= 0) {
+      throw new Error('Selected image appears empty or corrupted. Choose a different photo.');
+    }
     onProgress?.(35);
 
     const boundedMax = Math.min(maxWidth, MAX_CANVAS_BOUND);
@@ -166,14 +175,17 @@ export async function compressImageFile(
     for (const attempt of fullAttempts) {
       const { width, height } = calculateScaledDimensions(decoded.width, decoded.height, attempt.maxDim);
       const rendered = renderCanvasToJpeg(decoded.source, width, height, attempt.quality);
+      if (!isValidImageDataUrl(rendered.dataUrl)) {
+        continue;
+      }
       fullRender = { ...rendered, quality: attempt.quality };
       if (rendered.dataUrl.length <= MAX_FIRESTORE_DATA_URL_CHARS) {
         break;
       }
     }
 
-    if (!fullRender || fullRender.dataUrl.length > MAX_FIRESTORE_DATA_URL_CHARS) {
-      throw new Error('Photo is still too large after compression. Try a smaller image.');
+    if (!fullRender || !isValidImageDataUrl(fullRender.dataUrl) || fullRender.dataUrl.length > MAX_FIRESTORE_DATA_URL_CHARS) {
+      throw new Error('Photo could not be processed under size limits. Try a smaller image.');
     }
 
     onProgress?.(65);
@@ -194,13 +206,16 @@ export async function compressImageFile(
     for (const attempt of thumbAttempts) {
       const { width, height } = calculateScaledDimensions(decoded.width, decoded.height, attempt.maxDim);
       const { dataUrl: candidateThumb } = renderCanvasToJpeg(decoded.source, width, height, attempt.quality);
+      if (!isValidImageDataUrl(candidateThumb)) {
+        continue;
+      }
       thumbDataUrl = candidateThumb;
       if (thumbDataUrl.length <= MAX_THUMB_DATA_URL_CHARS) {
         break;
       }
     }
 
-    if (!thumbDataUrl || thumbDataUrl.length > MAX_THUMB_DATA_URL_CHARS) {
+    if (!isValidImageDataUrl(thumbDataUrl) || thumbDataUrl.length > MAX_THUMB_DATA_URL_CHARS) {
       throw new Error('Could not generate a compact feed thumbnail under 3 KB. Try a simpler image.');
     }
 
