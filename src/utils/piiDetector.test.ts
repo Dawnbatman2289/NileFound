@@ -10,6 +10,9 @@ test('detectPii catches matric numbers in various formats', () => {
   assert.ok(res.errorMessage?.includes('matric number'));
   assert.equal(detectPii('24/ENG/0192 is on the ID').hasPii, true);
   assert.equal(detectPii('Matric starts with 23/1234').hasPii, true);
+  const nineDigit = detectPii('ID number 201203045 was written inside');
+  assert.equal(nineDigit.hasPii, true);
+  assert.equal(nineDigit.type, 'matric');
   assert.equal(detectPii('Casio FX-991EX calculator').hasPii, false);
 });
 
@@ -19,7 +22,8 @@ test('detectPii catches Nigerian phone numbers', () => {
   assert.equal(res.type, 'phone');
   assert.ok(res.errorMessage?.includes('phone number'));
   assert.equal(detectPii('Reach me on +2348031234567').hasPii, true);
-  assert.equal(detectPii('09098765432 or WhatsApp me').hasPii, true);
+  assert.equal(detectPii('Reach me on 2348031234567').hasPii, true);
+  assert.equal(detectPii('0909-876-5432 or WhatsApp me').hasPii, true);
   assert.equal(detectPii('Found at gate around 2:30pm').hasPii, false);
 });
 

@@ -10,7 +10,7 @@ import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { CampusItem, User } from '../types/index.ts';
 import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
 import { expireOldItems } from '../utils/admin.ts';
-import { calculateMatchScore } from '../utils/matching.ts';
+import { findMatchingItems, isWithinMatchingWindow } from '../utils/matching.ts';
 import { readJson, safeSetStorage } from '../utils/storage.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
 import { auth } from '../lib/firebaseAuth.ts';
@@ -46,19 +46,7 @@ function dispatchMatchNotifications(
   matchPool: CampusItem[],
   dispatchNotification: DispatchNotificationFn
 ): void {
-  const oppositeType = newItem.type === 'found' ? 'lost' : 'found';
-  const scoredMatches = matchPool
-    .filter((it) => it.id !== finalItemId && it.type === oppositeType && it.status === 'open')
-    .map((it) => ({
-      item: it,
-      result: calculateMatchScore(
-        newItem.type === 'lost' ? newItem : it,
-        newItem.type === 'found' ? newItem : it
-      ),
-    }))
-    .filter(({ result }) => result.isLikelyMatch)
-    .sort((a, b) => b.result.score - a.result.score)
-    .slice(0, 3);
+  const scoredMatches = findMatchingItems({ ...newItem, id: finalItemId }, matchPool, { limit: 3 });
 
   if (newItem.type === 'found') {
     scoredMatches.forEach(({ item: lostItem }) => {
@@ -116,6 +104,11 @@ export function useItemsFeed({
     const seen = new Set(state.items.map((it) => it.id));
     return [...state.items, ...state.olderItems.filter((it) => !seen.has(it.id))];
   }, [state.items, state.olderItems]);
+
+  const recentMatchPool = useMemo(() => {
+    const nowMs = Date.now();
+    return mergedItems.filter((it) => it.status === 'open' && isWithinMatchingWindow(it, nowMs));
+  }, [mergedItems]);
 
   useEffect(() => {
     if (!import.meta.env.DEV || !isDemoMode) return;
@@ -244,7 +237,7 @@ export function useItemsFeed({
 
       const fromUid = auth.currentUser?.uid || currentUser?.id || 'student';
       const oppositeType = newItem.type === 'found' ? 'lost' : 'found';
-      let matchPool = state.items.filter((it) => it.type === oppositeType && it.status === 'open');
+      let matchPool = recentMatchPool.filter((it) => it.type === oppositeType);
       if (!isDemoMode) {
         try {
           const { fetchMatchCandidatesFromFirestore } = await import('../services/firestoreService.ts');
@@ -256,7 +249,7 @@ export function useItemsFeed({
       dispatchMatchNotifications(newItem, finalItemId, fromUid, matchPool, dispatchNotification);
       return true;
     },
-    [isDemoMode, currentUser, state.items, setItems, dispatchNotification, onItemSubmitted]
+    [isDemoMode, currentUser, recentMatchPool, setItems, dispatchNotification, onItemSubmitted]
   );
 
   const handleUpdateItemStatus = useCallback(

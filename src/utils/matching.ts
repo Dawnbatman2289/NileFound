@@ -164,3 +164,55 @@ export function calculateMatchScore(lostItem: CampusItem, foundItem: CampusItem)
     isLikelyMatch
   };
 }
+
+export const MATCH_LOOKBACK_DAYS = 30;
+
+/**
+ * Restricts fuzzy matching scope to items logged within the past 30 days
+ * to prevent main-thread UI lag on low-power devices.
+ */
+export function isWithinMatchingWindow(
+  item: CampusItem,
+  nowMs = Date.now(),
+  lookbackDays = MATCH_LOOKBACK_DAYS
+): boolean {
+  const timestamp = new Date(item.createdAt || item.dateLostOrFound).getTime();
+  if (Number.isNaN(timestamp)) return false;
+  const maxAgeMs = lookbackDays * 24 * 60 * 60 * 1000;
+  return nowMs - timestamp <= maxAgeMs;
+}
+
+export interface RankedItemMatch {
+  item: CampusItem;
+  result: MatchScoreResult;
+}
+
+export function findMatchingItems(
+  targetItem: CampusItem,
+  candidates: CampusItem[],
+  options: { nowMs?: number; limit?: number } = {}
+): RankedItemMatch[] {
+  const nowMs = options.nowMs ?? Date.now();
+  const maxResults = options.limit ?? 3;
+  const oppositeType = targetItem.type === 'found' ? 'lost' : 'found';
+
+  return candidates
+    .filter(
+      (candidate) =>
+        candidate.id !== targetItem.id &&
+        candidate.type === oppositeType &&
+        candidate.status === 'open' &&
+        isWithinMatchingWindow(candidate, nowMs, MATCH_LOOKBACK_DAYS)
+    )
+    .map((candidate) => ({
+      item: candidate,
+      result: calculateMatchScore(
+        targetItem.type === 'lost' ? targetItem : candidate,
+        targetItem.type === 'found' ? targetItem : candidate
+      ),
+    }))
+    .filter(({ result }) => result.isLikelyMatch)
+    .sort((a, b) => b.result.score - a.result.score)
+    .slice(0, maxResults);
+}
+

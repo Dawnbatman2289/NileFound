@@ -31,6 +31,14 @@ export function reportError(context: string, error: unknown): void {
   }
 }
 
+function isChunkLoadError(msg: string): boolean {
+  return (
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('Loading chunk') ||
+    msg.includes('Importing a module script failed')
+  );
+}
+
 export function installGlobalErrorHandlers(): void {
   if (typeof window === 'undefined' || globalHandlersInstalled) return;
   globalHandlersInstalled = true;
@@ -38,20 +46,42 @@ export function installGlobalErrorHandlers(): void {
     reportError('Uncaught window error', event.error || event.message);
   });
   window.addEventListener('unhandledrejection', (event) => {
-    reportError('Unhandled promise rejection', event.reason);
+    if (!event.defaultPrevented) {
+      reportError('Unhandled promise rejection', event.reason);
+    }
   });
 }
 
 export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, isChunkError: false };
 
+  private handleUnhandledRejection = (event: PromiseRejectionEvent): void => {
+    const reason = event.reason;
+    if (reason instanceof Error && reason.name === 'AbortError') return;
+    const msg = reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : '';
+    reportError('Unhandled promise rejection', reason);
+    event.preventDefault();
+    this.setState({
+      hasError: true,
+      isChunkError: isChunkLoadError(msg),
+    });
+  };
+
+  componentDidMount(): void {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('unhandledrejection', this.handleUnhandledRejection);
+    }
+  }
+
+  componentWillUnmount(): void {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('unhandledrejection', this.handleUnhandledRejection);
+    }
+  }
+
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     const msg = error?.message || '';
-    const isChunkError =
-      msg.includes('Failed to fetch dynamically imported module') ||
-      msg.includes('Loading chunk') ||
-      msg.includes('Importing a module script failed');
-    return { hasError: true, isChunkError };
+    return { hasError: true, isChunkError: isChunkLoadError(msg) };
   }
 
   componentDidCatch(error: Error) {

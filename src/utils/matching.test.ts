@@ -97,3 +97,49 @@ test('calculateMatchScore meets the >= 0.60 specification threshold for Casio in
   assert.ok(result.score >= 80, `Expected score >= 80, got ${result.score}`);
   assert.equal(result.isLikelyMatch, true);
 });
+
+test('findMatchingItems bounds fuzzy search scope to items logged within the past 30 days', async () => {
+  const { findMatchingItems, isWithinMatchingWindow } = await import('./matching.ts');
+  const nowMs = new Date('2026-11-25T12:00:00Z').getTime();
+
+  const lostItem: CampusItem = {
+    id: 'lost-recent',
+    type: 'lost',
+    title: 'Casio Calculator FX-991EX',
+    category: 'calculator',
+    description: 'Silver and black scientific calculator left in Ubangi House',
+    location: 'Ubangi House (STEM Labs)',
+    dateLostOrFound: '2026-11-24',
+    status: 'open',
+    holdingLocation: 'finder_holding',
+    createdAt: '2026-11-24T10:00:00Z',
+  };
+
+  const recentFound: CampusItem = {
+    id: 'found-recent',
+    type: 'found',
+    title: 'Casio FX-991EX Calculator',
+    category: 'calculator',
+    description: 'Scientific calculator found in Ubangi House',
+    location: 'Ubangi House (STEM Labs)',
+    dateLostOrFound: '2026-11-24',
+    status: 'open',
+    holdingLocation: 'security_main_gate',
+    createdAt: '2026-11-24T12:00:00Z',
+  };
+
+  const staleFound: CampusItem = {
+    ...recentFound,
+    id: 'found-stale',
+    dateLostOrFound: '2026-09-01',
+    createdAt: '2026-09-01T12:00:00Z',
+  };
+
+  assert.equal(isWithinMatchingWindow(recentFound, nowMs), true);
+  assert.equal(isWithinMatchingWindow(staleFound, nowMs), false);
+
+  const matches = findMatchingItems(lostItem, [staleFound, recentFound], { nowMs });
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].item.id, 'found-recent');
+});
+
