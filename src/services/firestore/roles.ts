@@ -12,7 +12,7 @@ import {
 import { db, auth, handleFirestoreError, OperationType } from '../../lib/firebase.ts';
 import { UserRole } from '../../types/index.ts';
 import { isMasterAdminUser } from '../../utils/admin.ts';
-import { validateNileEmail } from '../../utils/authValidation.ts';
+import { normalizeNileEmail, validateNileEmail } from '../../utils/authValidation.ts';
 import { reportError } from '../../components/ErrorBoundary.tsx';
 import {
   ADMINS, ROLES, STAFF_INVITES, USERS, ROLES_PAGE_SIZE,
@@ -31,7 +31,7 @@ export async function isConfiguredAdmin(uid?: string): Promise<boolean> {
 }
 
 export async function fetchUserRole(uid: string, email?: string | null): Promise<UserRole> {
-  const normalizedEmail = (email || auth.currentUser?.email || '').trim().toLowerCase();
+  const normalizedEmail = normalizeNileEmail(email || auth.currentUser?.email || '');
 
   try {
     return await withOfflineRetry(async () => {
@@ -71,7 +71,7 @@ export async function assignUserRoleByEmail(
     throw new Error('Unauthorized: only the project owner can provision campus roles.');
   }
 
-  const email = targetEmail.trim().toLowerCase();
+  const email = normalizeNileEmail(targetEmail);
   if (!validateNileEmail(email)) {
     throw new Error('Enter a valid @nileuniversity.edu.ng email address.');
   }
@@ -122,7 +122,7 @@ export async function revokeStaffRole(
   if (!auth.currentUser || !isMasterAdminUser(auth.currentUser.uid)) {
     throw new Error('Unauthorized: only the project owner can remove staff or admin access.');
   }
-  const normalizedEmail = record.email?.trim().toLowerCase();
+  const normalizedEmail = record.email ? normalizeNileEmail(record.email) : '';
   if (!record.pending && (isMasterAdminUser(record.uid) || record.uid === auth.currentUser.uid)) {
     throw new Error('The root owner account cannot be removed.');
   }
@@ -161,7 +161,7 @@ function normalizeRoleRecords(
     if (isMasterAdminUser(d.id)) continue;
     const data = d.data();
     if (data.enabled !== true) continue;
-    const email = String(data.email || '').toLowerCase();
+    const email = normalizeNileEmail(String(data.email || ''));
     if (email) seenEmails.add(email);
     byUid.set(d.id, {
       uid: d.id,
@@ -178,7 +178,7 @@ function normalizeRoleRecords(
     const data = d.data();
     const role = (data.role || 'student') as UserRoleRecord['role'];
     if (role === 'student') continue;
-    const email = String(data.email || '').toLowerCase();
+    const email = normalizeNileEmail(String(data.email || ''));
     if (email) seenEmails.add(email);
     const existing = byUid.get(d.id);
     byUid.set(d.id, {
@@ -196,12 +196,12 @@ function normalizeRoleRecords(
   }
 
   const pendingRoles: UserRoleRecord[] = invitesDocs
-    .filter((d) => !seenEmails.has(String(d.data().email || d.id).toLowerCase()))
+    .filter((d) => !seenEmails.has(normalizeNileEmail(String(d.data().email || d.id))))
     .map((d) => {
       const data = d.data();
       return {
         uid: d.id,
-        email: String(data.email || d.id).toLowerCase(),
+        email: normalizeNileEmail(String(data.email || d.id)),
         role: (data.role || 'student') as UserRoleRecord['role'],
         assignedAt: data.assignedAt ? toIsoString(data.assignedAt) : undefined,
         assignedBy: data.assignedBy,

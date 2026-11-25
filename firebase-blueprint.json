@@ -18,6 +18,7 @@
         "authorId": { "type": "string", "maxLength": 128 },
         "verificationQuestion": { "type": "string", "maxLength": 300 },
         "thumbUrl": { "type": "string", "maxLength": 4200 },
+        "imageUrl": { "type": "string", "maxLength": 2048 },
         "isSensitiveId": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }

@@ -7,7 +7,7 @@
 
 import {
   collection, doc, getDoc, getDocs, onSnapshot, query, where, orderBy, limit, startAfter,
-  writeBatch, runTransaction, serverTimestamp, QueryDocumentSnapshot, DocumentData, Unsubscribe,
+  runTransaction, serverTimestamp, QueryDocumentSnapshot, DocumentData, Unsubscribe,
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../../lib/firebase.ts';
 import { ClaimRecord, User } from '../../types/index.ts';
@@ -199,58 +199,73 @@ export async function saveClaimToFirestore(claim: ClaimRecord, _user?: User | nu
   const uid = auth.currentUser.uid;
   const email = normalizeNileEmail(auth.currentUser.email || claim.claimantEmail).slice(0, 100);
   const name = resolveDisplayName(auth.currentUser.displayName || claim.claimantName, email);
-
-  const itemSnap = await getDoc(doc(db, ITEMS, claim.itemId));
-  if (!itemSnap.exists()) {
-    throw new Error('The item you tried to claim could not be found.');
-  }
-  const itemData = itemSnap.data();
-  if (itemData.type !== 'found') {
-    throw new Error('Only found items can be claimed.');
-  }
-  if (itemData.authorId === uid) {
-    throw new Error('You cannot submit a claim on your own item report.');
-  }
-  if (itemData.custodyStatus === 'awaiting_dropoff') {
-    throw new Error('Claims are paused until campus desk staff confirm physical drop-off.');
-  }
-  if (itemData.status !== 'open' && itemData.status !== 'claim_requested') {
-    throw new Error('This item is no longer open for new claims.');
-  }
-  const resolvedFinderId = finderId || itemData.authorId;
-  if (!resolvedFinderId) throw new Error('The item you tried to claim could not be found.');
-
-  const isFoundStudentId = itemData.type === 'found' && itemData.category === 'student_id';
-  const safeItemTitle = isFoundStudentId ? 'A student ID card was found' : claim.itemTitle;
   const claimId = `${claim.itemId}_${uid}`;
 
   try {
-    const batch = writeBatch(db);
-    batch.set(doc(db, CLAIMS, claimId), {
-      itemId: claim.itemId,
-      itemTitle: safeItemTitle.slice(0, 100),
-      claimantId: uid,
-      finderId: resolvedFinderId,
-      status: 'pending',
-      resubmitted: false,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+    assertFirestoreReady();
+    return await runTransaction(db, async (tx) => {
+      const itemRef = doc(db, ITEMS, claim.itemId);
+      const claimRef = doc(db, CLAIMS, claimId);
+      const privateClaimRef = doc(db, ITEMS, claim.itemId, 'privateClaims', claimId);
+
+      const [itemSnap, existingClaimSnap] = await Promise.all([
+        tx.get(itemRef),
+        tx.get(claimRef),
+      ]);
+
+      if (!itemSnap.exists()) {
+        throw new Error('The item you tried to claim could not be found.');
+      }
+      if (existingClaimSnap.exists()) {
+        throw new Error('You already have a claim recorded for this item.');
+      }
+
+      const itemData = itemSnap.data();
+      if (itemData.type !== 'found') {
+        throw new Error('Only found items can be claimed.');
+      }
+      if (itemData.authorId === uid) {
+        throw new Error('You cannot submit a claim on your own item report.');
+      }
+      if (itemData.custodyStatus === 'awaiting_dropoff') {
+        throw new Error('Claims are paused until campus desk staff confirm physical drop-off.');
+      }
+      if (itemData.status !== 'open' && itemData.status !== 'claim_requested') {
+        throw new Error('This item is no longer open for new claims.');
+      }
+      const resolvedFinderId = finderId || itemData.authorId;
+      if (!resolvedFinderId || resolvedFinderId !== itemData.authorId) {
+        throw new Error('Could not verify the item reporter for this claim.');
+      }
+
+      const isFoundStudentId = itemData.type === 'found' && itemData.category === 'student_id';
+      const safeItemTitle = isFoundStudentId ? 'A student ID card was found' : claim.itemTitle;
+
+      tx.set(claimRef, {
+        itemId: claim.itemId,
+        itemTitle: safeItemTitle.slice(0, 100),
+        claimantId: uid,
+        finderId: resolvedFinderId,
+        status: 'pending',
+        resubmitted: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      tx.set(privateClaimRef, {
+        itemId: claim.itemId,
+        claimId,
+        claimantId: uid,
+        claimantName: name.slice(0, 100),
+        claimantEmail: email.slice(0, 100),
+        submittedAnswer: claim.submittedAnswer.slice(0, 500),
+        createdAt: serverTimestamp(),
+      });
+      tx.update(itemRef, {
+        status: 'claim_requested',
+        updatedAt: serverTimestamp(),
+      });
+      return claimId;
     });
-    batch.set(doc(db, ITEMS, claim.itemId, 'privateClaims', claimId), {
-      itemId: claim.itemId,
-      claimId,
-      claimantId: uid,
-      claimantName: name.slice(0, 100),
-      claimantEmail: email.slice(0, 100),
-      submittedAnswer: claim.submittedAnswer.slice(0, 500),
-      createdAt: serverTimestamp(),
-    });
-    batch.update(doc(db, ITEMS, claim.itemId), {
-      status: 'claim_requested',
-      updatedAt: serverTimestamp(),
-    });
-    await batch.commit();
-    return claimId;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, CLAIMS);
   }
@@ -262,22 +277,55 @@ export async function resubmitClaimInFirestore(
   updatedAnswer: string
 ): Promise<void> {
   if (!auth.currentUser) throw new Error('You must be signed in with a verified Nile account to resubmit a claim.');
+  const uid = auth.currentUser.uid;
+  const cleanAnswer = updatedAnswer.trim().slice(0, 500);
+
   try {
-    const batch = writeBatch(db);
-    batch.update(doc(db, CLAIMS, claimId), {
-      status: 'pending',
-      resubmitted: true,
-      updatedAt: serverTimestamp(),
+    assertFirestoreReady();
+    await runTransaction(db, async (tx) => {
+      const itemRef = doc(db, ITEMS, itemId);
+      const claimRef = doc(db, CLAIMS, claimId);
+      const privateClaimRef = doc(db, ITEMS, itemId, 'privateClaims', claimId);
+
+      const [itemSnap, claimSnap, privateClaimSnap] = await Promise.all([
+        tx.get(itemRef),
+        tx.get(claimRef),
+        tx.get(privateClaimRef),
+      ]);
+
+      if (!itemSnap.exists() || !claimSnap.exists() || !privateClaimSnap.exists()) {
+        throw new Error('The claim or item record no longer exists.');
+      }
+
+      const itemData = itemSnap.data();
+      const claimData = claimSnap.data();
+      if (claimData.claimantId !== uid) {
+        throw new Error('You can only resubmit your own claim.');
+      }
+      if (claimData.status !== 'rejected' || claimData.resubmitted === true) {
+        throw new Error('You have already used your one claim resubmission for this item.');
+      }
+      if (itemData.type !== 'found' || (itemData.status !== 'open' && itemData.status !== 'claim_requested')) {
+        throw new Error('This item is no longer open for claim resubmission.');
+      }
+      if (itemData.custodyStatus === 'awaiting_dropoff') {
+        throw new Error('Claims are paused until campus desk staff confirm physical drop-off.');
+      }
+
+      tx.update(claimRef, {
+        status: 'pending',
+        resubmitted: true,
+        updatedAt: serverTimestamp(),
+      });
+      tx.update(privateClaimRef, {
+        submittedAnswer: cleanAnswer,
+        updatedAt: serverTimestamp(),
+      });
+      tx.update(itemRef, {
+        status: 'claim_requested',
+        updatedAt: serverTimestamp(),
+      });
     });
-    batch.update(doc(db, ITEMS, itemId, 'privateClaims', claimId), {
-      submittedAnswer: updatedAnswer.trim().slice(0, 500),
-      updatedAt: serverTimestamp(),
-    });
-    batch.update(doc(db, ITEMS, itemId), {
-      status: 'claim_requested',
-      updatedAt: serverTimestamp(),
-    });
-    await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${CLAIMS}/${claimId}`);
   }

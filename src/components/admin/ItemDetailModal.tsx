@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Calendar, CheckCircle, Clock, Mail, MapPin, MessageSquare, ShieldCheck, Tag, Trash2, User as UserIcon, X } from 'lucide-react';
 import { CampusItem, ClaimRecord } from '../../types/index.ts';
 import { formatDateDDMMYYYY } from '../../utils/dateFormatter.ts';
-import { isValidImageDataUrl } from '../../utils/imageCompressor.ts';
+import { isValidDisplayImageUrl } from '../../utils/imageCompressor.ts';
 import { shouldCloseBackdropClick } from '../../utils/modalFocus.ts';
 import type { ItemPrivateDetails } from '../../services/firestoreService.ts';
 import { reportError } from '../ErrorBoundary.tsx';
@@ -70,7 +70,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const hasValidPhoto = Boolean(
     selectedItemPhoto &&
     !imgFailed &&
-    (isValidImageDataUrl(selectedItemPhoto) || /^https?:\/\//i.test(selectedItemPhoto))
+    isValidDisplayImageUrl(selectedItemPhoto)
   );
 
   return createPortal(

@@ -1,8 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import { ShieldAlert, ShieldCheck, UserCheck } from 'lucide-react';
-import { CampusItem, ClaimRecord, User } from '../../types/index.ts';
+import { CampusItem, ClaimRecord, DemoPersonaOption, User } from '../../types/index.ts';
 import { generateCampusAuditReport } from '../../utils/admin.ts';
-import type { DemoPersonaOption } from '../../data/demoPersonas.ts';
 import type { useAdminPanel } from '../../hooks/useAdminPanel.ts';
 import { ADMIN_CARD } from './adminStyles.ts';
 

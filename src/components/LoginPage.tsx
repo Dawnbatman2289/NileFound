@@ -8,8 +8,7 @@
 
 import React from 'react';
 import { Shield, Check, AlertCircle } from 'lucide-react';
-import { User } from '../types/index.ts';
-import type { DemoPersonaOption } from '../data/demoPersonas.ts';
+import { DemoPersonaOption, User } from '../types/index.ts';
 import { useLoginAuth } from '../hooks/useLoginAuth.ts';
 import { SignedInCard } from './login/SignedInCard.tsx';
 import { InboxVerificationCard } from './login/InboxVerificationCard.tsx';

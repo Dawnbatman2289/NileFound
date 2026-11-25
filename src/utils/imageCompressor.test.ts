@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import {
   calculateScaledDimensions,
   isSupportedImageFile,
+  isValidDisplayImageUrl,
   isValidImageDataUrl,
+  isValidStorageImageUrl,
   MAX_CANVAS_BOUND,
-  MAX_FIRESTORE_DATA_URL_CHARS,
-  MAX_THUMB_DATA_URL_CHARS,
+  MAX_STORAGE_PHOTO_BYTES,
+  MAX_STORAGE_THUMB_BYTES,
 } from './imageCompressor.ts';
 
 test('imageCompressor validates allowed image formats and size bounds', () => {
@@ -18,7 +20,17 @@ test('imageCompressor validates allowed image formats and size bounds', () => {
   assert.equal(isSupportedImageFile({ type: 'image/jpeg', size: 6 * 1024 * 1024 }), false);
 });
 
-test('isValidImageDataUrl rejects empty canvas data URLs and non-image URIs', () => {
+test('image URL validators accept Storage HTTPS URLs, blob previews, and valid legacy data URLs while rejecting unsafe URIs', () => {
+  assert.equal(
+    isValidStorageImageUrl('https://firebasestorage.googleapis.com/v0/b/kempt-coyote-nc70r.firebasestorage.app/o/items%2F1%2Fphoto.jpg?alt=media'),
+    true
+  );
+  assert.equal(isValidStorageImageUrl('http://insecure.example.com/photo.jpg'), false);
+  assert.equal(isValidStorageImageUrl('data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/'), false);
+
+  assert.equal(isValidDisplayImageUrl('blob:https://nilefound.example.com/1234-5678'), true);
+  assert.equal(isValidDisplayImageUrl('javascript:alert(1)'), false);
+
   assert.equal(isValidImageDataUrl('data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/'), true);
   assert.equal(isValidImageDataUrl('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA'), true);
   assert.equal(isValidImageDataUrl('data:,'), false);
@@ -28,17 +40,17 @@ test('isValidImageDataUrl rejects empty canvas data URLs and non-image URIs', ()
   assert.equal(isValidImageDataUrl('data:image/jpeg;base64,AAAA'), false);
 });
 
-test('calculateScaledDimensions clamps large photos to <= 1280px before canvas allocation', () => {
-  assert.equal(MAX_CANVAS_BOUND, 1280);
-  assert.deepEqual(calculateScaledDimensions(4000, 3000), { width: 1280, height: 960 });
-  assert.deepEqual(calculateScaledDimensions(3000, 4000), { width: 960, height: 1280 });
+test('calculateScaledDimensions clamps large photos to <= 1024px before canvas allocation', () => {
+  assert.equal(MAX_CANVAS_BOUND, 1024);
+  assert.deepEqual(calculateScaledDimensions(4000, 3000), { width: 1024, height: 768 });
+  assert.deepEqual(calculateScaledDimensions(3000, 4000), { width: 768, height: 1024 });
   assert.deepEqual(calculateScaledDimensions(4000, 3000, 800), { width: 800, height: 600 });
   assert.deepEqual(calculateScaledDimensions(800, 600, 2000), { width: 800, height: 600 });
 });
 
-test('inline thumbnail cap guarantees 25 photo items transfer under 150 KB', () => {
-  assert.ok(MAX_THUMB_DATA_URL_CHARS <= 4096);
-  assert.ok(MAX_FIRESTORE_DATA_URL_CHARS <= 135000);
+test('Storage URL references keep Firestore feed item documents lightweight', () => {
+  assert.ok(MAX_STORAGE_PHOTO_BYTES <= 100 * 1024);
+  assert.ok(MAX_STORAGE_THUMB_BYTES <= 24 * 1024);
 
   const sampleItemPayload = JSON.stringify({
     id: 'item-1234567890',
@@ -52,7 +64,8 @@ test('inline thumbnail cap guarantees 25 photo items transfer under 150 KB', () 
     status: 'open',
     holdingLocation: 'finder_holding',
     authorId: 'student1234567890',
-    thumbUrl: 'data:image/jpeg;base64,' + 'A'.repeat(MAX_THUMB_DATA_URL_CHARS - 23),
+    thumbUrl: 'https://firebasestorage.googleapis.com/v0/b/kempt-coyote-nc70r.firebasestorage.app/o/items%2Fitem-1234567890%2Fthumb.jpg?alt=media&token=123',
+    imageUrl: 'https://firebasestorage.googleapis.com/v0/b/kempt-coyote-nc70r.firebasestorage.app/o/items%2Fitem-1234567890%2Fphoto.jpg?alt=media&token=123',
     createdAt: '2026-11-10T10:00:00.000Z',
   });
 
@@ -61,7 +74,7 @@ test('inline thumbnail cap guarantees 25 photo items transfer under 150 KB', () 
     'utf8'
   );
   assert.ok(
-    twentyFiveItemsBytes < 150 * 1024,
-    `Expected 25 photo items feed payload to be under 150 KB, got ${twentyFiveItemsBytes} bytes`
+    twentyFiveItemsBytes < 25 * 1024,
+    `Expected 25 Storage-backed photo items feed payload to be under 25 KB, got ${twentyFiveItemsBytes} bytes`
   );
 });

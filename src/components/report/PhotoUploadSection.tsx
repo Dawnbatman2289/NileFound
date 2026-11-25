@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle, Lock, Upload } from 'lucide-react';
-import { isValidImageDataUrl, type CompressionResult } from '../../utils/imageCompressor.ts';
+import { isValidDisplayImageUrl, type CompressionResult } from '../../utils/imageCompressor.ts';
 
 interface PhotoUploadSectionProps {
   isFoundStudentId: boolean;
+  isStudentId?: boolean;
   isCompressing: boolean;
   compressionProgress?: number;
   compressionResult: CompressionResult | null;
@@ -17,6 +18,7 @@ interface PhotoUploadSectionProps {
 
 export const PhotoUploadSection: React.FC<PhotoUploadSectionProps> = ({
   isFoundStudentId,
+  isStudentId = false,
   isCompressing,
   compressionProgress = 0,
   compressionResult,
@@ -39,7 +41,7 @@ export const PhotoUploadSection: React.FC<PhotoUploadSectionProps> = ({
 
   useEffect(() => {
     setPreviewFailed(false);
-  }, [compressionResult?.dataUrl]);
+  }, [compressionResult?.previewUrl]);
 
   useEffect(() => {
     const input = fileInputRef.current;
@@ -75,23 +77,25 @@ export const PhotoUploadSection: React.FC<PhotoUploadSectionProps> = ({
       window.removeEventListener('focus', handleWindowFocusReturn);
       if (cancelTimerRef.current) window.clearTimeout(cancelTimerRef.current);
     };
-  }, [fileInputRef, isFoundStudentId]);
+  }, [fileInputRef, isFoundStudentId, isStudentId]);
 
-  if (isFoundStudentId) {
+  if (isFoundStudentId || isStudentId) {
     return (
       <div className="border border-[#C4BBAF] dark:border-[#3E3931] bg-[#FAF6EF] dark:bg-[#141311] rounded-[10px] p-4 text-center text-sm text-[#4A443C] dark:text-[#CEC7BB]">
         <Lock className="w-5 h-5 text-[#5C554C] dark:text-[#A8A095] mx-auto mb-1.5" />
         <p className="font-medium text-[#1F1B16] dark:text-[#F5F1EA]">Photos of student ID cards are prohibited.</p>
         <p className="text-sm text-[#5C554C] dark:text-[#A8A095] mt-0.5">
-          Hand the physical ID card to the Main Gate Security Post.
+          {isFoundStudentId
+            ? 'Hand the physical ID card to the Main Gate Security Post.'
+            : 'ID card photos contain personal details and cannot be uploaded.'}
         </p>
       </div>
     );
   }
 
   const validPreviewUrl =
-    compressionResult && isValidImageDataUrl(compressionResult.dataUrl) && !previewFailed
-      ? compressionResult.dataUrl
+    compressionResult && isValidDisplayImageUrl(compressionResult.previewUrl) && !previewFailed
+      ? compressionResult.previewUrl
       : null;
 
   const handleOpenPicker = () => {
@@ -139,7 +143,7 @@ export const PhotoUploadSection: React.FC<PhotoUploadSectionProps> = ({
           {validPreviewUrl ? 'Change Photo' : 'Attach Photo (Optional)'}
         </span>
         <span className="text-sm text-[#5C554C] dark:text-[#A8A095]">
-          Compressed on your device under 90KB to save mobile data
+          Compressed on your device under 100KB to save mobile data
         </span>
       </button>
 

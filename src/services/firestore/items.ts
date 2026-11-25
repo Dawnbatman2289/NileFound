@@ -21,6 +21,12 @@ import {
   assertFirestoreReady, mapDocToCampusItem, withOfflineRetry,
 } from './helpers.ts';
 import { fetchUserRole } from './roles.ts';
+import {
+  uploadItemPhotosToStorage,
+  cleanupStoragePaths,
+  deleteItemPhotosFromStorage,
+} from '../storage/itemPhotos.ts';
+import { isValidStorageImageUrl } from '../../utils/imageCompressor.ts';
 
 export function subscribeToRealtimeItems(
   pageLimit: number,
@@ -97,8 +103,15 @@ export async function fetchMatchCandidatesFromFirestore(
   }
 }
 
-export async function fetchItemFullPhoto(itemId: string, lowDataMode = false): Promise<string | null> {
+export async function fetchItemFullPhoto(
+  itemId: string,
+  lowDataMode = false,
+  existingImageUrl?: string
+): Promise<string | null> {
   if (lowDataMode) return null;
+  if (existingImageUrl && isValidStorageImageUrl(existingImageUrl)) {
+    return existingImageUrl;
+  }
   try {
     const snap = await withOfflineRetry(() => getDoc(doc(db, ITEMS, itemId, 'media', 'full')));
     return snap.exists() ? (snap.data().dataUrl || null) : null;
@@ -108,7 +121,13 @@ export async function fetchItemFullPhoto(itemId: string, lowDataMode = false): P
   }
 }
 
-export async function saveItemToFirestore(item: CampusItem, user?: User | null): Promise<string> {
+export interface SavedItemResult {
+  id: string;
+  imageUrl?: string;
+  thumbUrl?: string;
+}
+
+export async function saveItemToFirestore(item: CampusItem, user?: User | null): Promise<SavedItemResult> {
   if (!auth.currentUser) throw new Error('You must be signed in with a verified Nile account to report an item.');
 
   const uid = auth.currentUser.uid;
@@ -122,6 +141,20 @@ export async function saveItemToFirestore(item: CampusItem, user?: User | null):
     isDeskFound && !isPrivilegedOfficer ? 'awaiting_dropoff' : 'confirmed';
 
   const itemRef = doc(collection(db, ITEMS));
+  const uploaded =
+    !isStudentId && (item.photoFile || item.thumbFile)
+      ? await uploadItemPhotosToStorage({
+          itemId: itemRef.id,
+          authorId: uid,
+          photoFile: item.photoFile,
+          thumbFile: item.thumbFile,
+        })
+      : {
+          imageUrl: !isStudentId && isValidStorageImageUrl(item.imageUrl) ? item.imageUrl : undefined,
+          thumbUrl: !isStudentId && isValidStorageImageUrl(item.thumbUrl) ? item.thumbUrl : undefined,
+          uploadedPaths: [] as string[],
+        };
+
   const payload: Record<string, unknown> = {
     title: item.title.trim().slice(0, 100),
     type: item.type,
@@ -136,7 +169,8 @@ export async function saveItemToFirestore(item: CampusItem, user?: User | null):
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     ...(item.locationDetails?.trim() && { locationDetails: item.locationDetails.trim().slice(0, 160) }),
-    ...(!isStudentId && item.thumbUrl && { thumbUrl: item.thumbUrl }),
+    ...(!isStudentId && uploaded.thumbUrl && { thumbUrl: uploaded.thumbUrl }),
+    ...(!isStudentId && uploaded.imageUrl && { imageUrl: uploaded.imageUrl }),
     ...(item.verificationQuestion?.trim() && { verificationQuestion: item.verificationQuestion.trim().slice(0, 300) }),
     ...((isStudentId || item.isSensitiveId !== undefined) && { isSensitiveId: isStudentId ? true : item.isSensitiveId }),
   };
@@ -151,14 +185,6 @@ export async function saveItemToFirestore(item: CampusItem, user?: User | null):
       authorEmail: email.slice(0, 100),
       createdAt: serverTimestamp(),
     });
-    if (!isStudentId && item.imageUrl) {
-      batch.set(doc(db, ITEMS, itemRef.id, 'media', 'full'), {
-        itemId: itemRef.id,
-        authorId: uid,
-        dataUrl: item.imageUrl,
-        createdAt: serverTimestamp(),
-      });
-    }
     if (item.verificationAnswer && item.type === 'found') {
       batch.set(doc(db, ITEMS, itemRef.id, 'secrets', 'verification'), {
         itemId: itemRef.id,
@@ -168,8 +194,15 @@ export async function saveItemToFirestore(item: CampusItem, user?: User | null):
       });
     }
     await batch.commit();
-    return itemRef.id;
+    return {
+      id: itemRef.id,
+      imageUrl: uploaded.imageUrl,
+      thumbUrl: uploaded.thumbUrl,
+    };
   } catch (error) {
+    if (uploaded.uploadedPaths.length > 0) {
+      await cleanupStoragePaths(uploaded.uploadedPaths);
+    }
     handleFirestoreError(error, OperationType.CREATE, ITEMS);
   }
 }
@@ -351,6 +384,7 @@ export async function deleteItemFromFirestore(itemId: string): Promise<void> {
       refsToDelete.slice(i, i + 450).forEach((ref) => batch.delete(ref));
       await batch.commit();
     }
+    await deleteItemPhotosFromStorage(itemId);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `${ITEMS}/${itemId}`);
   }

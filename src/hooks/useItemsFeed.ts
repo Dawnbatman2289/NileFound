@@ -16,6 +16,7 @@ import { reportError } from '../components/ErrorBoundary.tsx';
 import { auth } from '../lib/firebaseAuth.ts';
 import type { DispatchNotificationFn } from './useNotifications.ts';
 import { itemsFeedReducer, type ItemsFeedState } from './reducers.ts';
+import { attachAsyncSubscription } from '../utils/subscriptionLifecycle.ts';
 
 interface UseItemsFeedOptions {
   isDemoMode: boolean;
@@ -126,17 +127,16 @@ export function useItemsFeed({
 
   useEffect(() => {
     if (isDemoMode || !userId || !auth.currentUser?.emailVerified) return;
-    let isMounted = true;
-    let unsubscribe: (() => void) | undefined;
     hasPaginatedRef.current = false;
     dispatch({ type: 'RESET_LISTENER' });
-    import('../services/firestoreService.ts')
-      .then(({ subscribeToRealtimeItems }) => {
-        if (!isMounted) return;
-        unsubscribe = subscribeToRealtimeItems(
+    return attachAsyncSubscription(
+      async (isActive) => {
+        const { subscribeToRealtimeItems } = await import('../services/firestoreService.ts');
+        if (!isActive()) return () => {};
+        return subscribeToRealtimeItems(
           25,
           (liveItems, hasMore, lastDoc) => {
-            if (!isMounted) return;
+            if (!isActive()) return;
             dispatch({
               type: 'LIVE_ITEMS_RECEIVED',
               items: liveItems,
@@ -146,21 +146,17 @@ export function useItemsFeed({
             });
           },
           (err) => {
-            if (!isMounted) return;
+            if (!isActive()) return;
             reportError('subscribeToRealtimeItems failed', err);
             dispatch({ type: 'SET_ERROR', error: 'Could not load campus notices. Check your connection and try again.' });
           }
         );
-      })
-      .catch((err) => {
-        if (!isMounted) return;
+      },
+      (err) => {
         reportError('Load Firestore items module failed', err);
         dispatch({ type: 'SET_ERROR', error: 'Could not load campus notices. Check your connection and try again.' });
-      });
-    return () => {
-      isMounted = false;
-      unsubscribe?.();
-    };
+      }
+    );
   }, [isDemoMode, userId, state.itemsRetryNonce]);
 
   const handleLoadMoreItems = useCallback(async () => {
@@ -212,21 +208,37 @@ export function useItemsFeed({
 
   const handleFetchFullPhoto = useCallback(
     async (itemId: string) => {
+      const existing = mergedItems.find((it) => it.id === itemId);
       const { fetchItemFullPhoto } = await import('../services/firestoreService.ts');
-      return fetchItemFullPhoto(itemId, lowDataMode);
+      return fetchItemFullPhoto(itemId, lowDataMode, existing?.imageUrl);
     },
-    [lowDataMode]
+    [lowDataMode, mergedItems]
   );
 
   const handleAddItem = useCallback(
     async (newItem: CampusItem): Promise<boolean> => {
       let finalItemId = newItem.id;
+      const { photoFile, thumbFile, ...cleanBase } = newItem;
       if (isDemoMode) {
-        setItems((prev) => [newItem, ...prev]);
+        const demoImageUrl = photoFile ? URL.createObjectURL(photoFile) : cleanBase.imageUrl;
+        const demoThumbUrl = thumbFile ? URL.createObjectURL(thumbFile) : demoImageUrl;
+        setItems((prev) => [
+          { ...cleanBase, imageUrl: demoImageUrl, thumbUrl: demoThumbUrl },
+          ...prev,
+        ]);
       } else {
         const { saveItemToFirestore } = await import('../services/firestoreService.ts');
-        finalItemId = await saveItemToFirestore(newItem, currentUser);
-        setItems((prev) => [{ ...newItem, id: finalItemId }, ...prev]);
+        const saved = await saveItemToFirestore(newItem, currentUser);
+        finalItemId = saved.id;
+        setItems((prev) => [
+          {
+            ...cleanBase,
+            id: saved.id,
+            imageUrl: saved.imageUrl,
+            thumbUrl: saved.thumbUrl,
+          },
+          ...prev,
+        ]);
       }
       onItemSubmitted?.();
 

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { CampusItem } from '../types/index.ts';
 import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
-import { isValidImageDataUrl } from '../utils/imageCompressor.ts';
+import { isValidDisplayImageUrl } from '../utils/imageCompressor.ts';
 import { shouldCloseBackdropClick, trapFocusOnTab } from '../utils/modalFocus.ts';
 
 interface FeedDetailModalProps {
@@ -57,7 +57,7 @@ export const FeedDetailModal: React.FC<FeedDetailModalProps> = ({
   const hasValidPhoto = Boolean(
     detailPhotoUrl &&
     !imgFailed &&
-    (isValidImageDataUrl(detailPhotoUrl) || /^https?:\/\//i.test(detailPhotoUrl))
+    isValidDisplayImageUrl(detailPhotoUrl)
   );
 
   return createPortal(

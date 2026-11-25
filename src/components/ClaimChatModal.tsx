@@ -103,7 +103,7 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
     hasLoadedEarlierRef.current = false;
     lastLatestIdRef.current = null;
 
-    if (isDemoMode) {
+    if (import.meta.env?.DEV && isDemoMode) {
       const existing = demoMessageThreads.get(claimId);
       if (existing) {
         setLatestMessages(existing);

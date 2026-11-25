@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { HoldingLocation, ItemCategory, ItemType, ReportPrefill, UserRole } from '../types/index.ts';
 import { detectPii } from '../utils/piiDetector.ts';
-import { compressImageFile, CompressionResult, isSupportedImageFile } from '../utils/imageCompressor.ts';
+import {
+  compressImageFile,
+  CompressionResult,
+  isSupportedImageFile,
+  MAX_CANVAS_BOUND,
+} from '../utils/imageCompressor.ts';
 import { getTodayWatIsoDate } from '../utils/dateFormatter.ts';
 import { buildInitialReportFields, OfficerIntakePreset, resolveDefaultHoldingLocation } from '../utils/reportPresets.ts';
 import { reportError } from '../components/ErrorBoundary.tsx';
@@ -76,11 +81,31 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
   const [holdingLocation, setHoldingLocation] = useState<HoldingLocation>('finder_holding');
   const [verificationQuestion, setVerificationQuestion] = useState('');
   const [verificationAnswer, setVerificationAnswer] = useState('');
-  const [compressionResult, setCompressionResult] = useState<CompressionResult | null>(null);
+  const [compressionResult, setCompressionResultState] = useState<CompressionResult | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionProgress, setCompressionProgress] = useState(0);
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   const [formError, setFormError] = useState<ReportFormError | null>(null);
+
+  const previewUrlRef = useRef<string | null>(null);
+  const setCompressionResult = useCallback((next: CompressionResult | null) => {
+    const prevUrl = previewUrlRef.current;
+    const nextUrl = next?.previewUrl ?? null;
+    if (prevUrl && prevUrl !== nextUrl && prevUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(prevUrl);
+    }
+    previewUrlRef.current = nextUrl;
+    setCompressionResultState(next);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current && previewUrlRef.current.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+      }
+    };
+  }, []);
 
   const wasOpenRef = useRef(false);
   const onDraftSavedRef = useRef(onDraftSaved);
@@ -92,7 +117,8 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
     userRoleRef.current = userRole;
   }, [onDraftSaved, onDraftCleared, userRole]);
 
-  const isFoundStudentId = reportType === 'found' && category === 'student_id';
+  const isStudentId = category === 'student_id';
+  const isFoundStudentId = reportType === 'found' && isStudentId;
 
   const resetEmptyFields = useCallback((prefill?: ReportPrefill | null) => {
     const defaults = buildInitialReportFields(prefill, userRoleRef.current);
@@ -108,14 +134,16 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
     setVerificationQuestion('');
     setVerificationAnswer('');
     setCompressionResult(null);
-  }, []);
+  }, [setCompressionResult]);
 
   useEffect(() => {
     if (isFoundStudentId) {
       setHoldingLocation('security_main_gate');
+    }
+    if (isStudentId) {
       setCompressionResult(null);
     }
-  }, [isFoundStudentId]);
+  }, [isFoundStudentId, isStudentId, setCompressionResult]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -208,7 +236,7 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       e.target.value = '';
-      if (!file || isFoundStudentId) return;
+      if (!file || isStudentId) return;
       if (!isSupportedImageFile(file)) {
         setFormError({ heading: 'Unsupported image file', detail: 'Choose a JPEG, PNG, or WebP image no larger than 5MB.' });
         return;
@@ -217,7 +245,7 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
         setIsCompressing(true);
         setCompressionProgress(0);
         setFormError(null);
-        setCompressionResult(await compressImageFile(file, 800, 0.72, setCompressionProgress));
+        setCompressionResult(await compressImageFile(file, MAX_CANVAS_BOUND, 0.72, setCompressionProgress));
       } catch (err: unknown) {
         setCompressionResult(null);
         setFormError({
@@ -229,7 +257,7 @@ export function useReportDraft({ isOpen, initialPrefill, userRole, onDraftSaved,
         setCompressionProgress(0);
       }
     },
-    [isFoundStudentId]
+    [isStudentId, setCompressionResult]
   );
 
   const selectListedLocation = useCallback((value: string) => {

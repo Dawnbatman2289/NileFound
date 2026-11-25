@@ -1,7 +1,6 @@
 import React from 'react';
 import { ShieldCheck } from 'lucide-react';
-import type { User } from '../../types/index.ts';
-import type { DemoPersonaOption } from '../../data/demoPersonas.ts';
+import type { DemoPersonaOption, User } from '../../types/index.ts';
 import { ADMIN_CARD } from './adminStyles.ts';
 
 interface PersonasTabProps {

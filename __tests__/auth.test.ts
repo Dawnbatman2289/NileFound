@@ -12,11 +12,16 @@ import {
 } from '../src/utils/authValidation.ts';
 
 test('accepts and normalizes verified Nile addresses including alphanumeric and mixed-case formats', () => {
-  assert.equal(normalizeNileEmail(' USER@NILEUNIVERSITY.EDU.NG '), 'user@nileuniversity.edu.ng');
-  assert.equal(validateNileEmail('user@nileuniversity.edu.ng'), true);
+  assert.equal(normalizeNileEmail(' \tUSER@NILEUNIVERSITY.EDU.NG\n '), 'user@nileuniversity.edu.ng');
+  assert.equal(validateNileEmail('  user@nileuniversity.edu.ng  '), true);
   assert.equal(validateNileEmail('student2025@nileuniversity.edu.ng'), true);
   assert.equal(validateNileEmail('201203014@nileuniversity.edu.ng'), true);
-  assert.equal(validateNileEmail('A.Bello99@NileUniversity.edu.ng'), true);
+  assert.equal(validateNileEmail('  A.Bello99@NileUniversity.edu.ng '), true);
+  assert.equal(
+    isCampusAccountAllowed({ email: '  STUDENT99@NileUniversity.EDU.NG  ', emailVerified: true }),
+    true
+  );
+  assert.equal(resolveDisplayName('', '  201203014@NileUniversity.EDU.NG '), '201203014');
 });
 
 test('validates general email syntax without embedding personal emails', () => {

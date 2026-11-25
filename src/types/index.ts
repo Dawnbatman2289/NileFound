@@ -44,8 +44,10 @@ export interface CampusItem {
   holdingLocation: HoldingLocation;
   custodyStatus?: 'awaiting_dropoff' | 'confirmed';
   authorId?: string;
-  thumbUrl?: string; // <= 3 KB inline feed thumbnail
-  imageUrl?: string; // legacy inline image or preview fetched from items/{id}/media/full
+  thumbUrl?: string; // Firebase Storage thumbnail HTTPS URL or legacy inline feed thumbnail
+  imageUrl?: string; // Firebase Storage full-photo HTTPS URL or legacy preview
+  photoFile?: File; // transient client-only compressed File uploaded to Cloud Storage on submit
+  thumbFile?: File; // transient client-only compressed thumbnail File uploaded to Cloud Storage on submit
   isSensitiveId?: boolean; // If true, photos are blurred/partial
   // Hidden verification question set by finder
   verificationQuestion?: string;
@@ -141,3 +143,11 @@ export interface ClaimMessage {
   createdAt: string;
 }
 
+export interface DemoPersonaOption {
+  badge: string;
+  initial: string;
+  badgeClass: string;
+  buttonLabel: string;
+  description: string;
+  user: User;
+}

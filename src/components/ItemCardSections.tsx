@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Shield, Mail, Image as ImageIcon, ShieldCheck, MessageSquare } from 'lucide-react';
 import { CampusItem, ClaimRecord } from '../types/index.ts';
-import { isValidImageDataUrl } from '../utils/imageCompressor.ts';
+import { isValidDisplayImageUrl } from '../utils/imageCompressor.ts';
 
 const STATUS_LABELS: Record<CampusItem['status'], string> = {
   open: 'Open',
@@ -61,7 +61,7 @@ export const ItemCardMedia: React.FC<{
   const hasValidPreview = Boolean(
     previewPhoto &&
     !imgFailed &&
-    (isValidImageDataUrl(previewPhoto) || /^https?:\/\//i.test(previewPhoto))
+    isValidDisplayImageUrl(previewPhoto)
   );
 
   if (isFoundIdCard) {

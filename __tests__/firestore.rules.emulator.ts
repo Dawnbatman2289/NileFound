@@ -1443,7 +1443,7 @@ test('Item 11 & Task 8: items reject legacy imageUrl, enforce authorId/createdAt
   const finderDb = testEnv.authenticatedContext(FINDER_UID, verifiedToken(FINDER_EMAIL)).firestore();
   const intruderDb = testEnv.authenticatedContext(INTRUDER_UID, verifiedToken(INTRUDER_EMAIL)).firestore();
 
-  // Denied: legacy inline imageUrl on items is rejected
+  // Denied: legacy inline base64 imageUrl on items is rejected
   await assertFails(
     setDoc(doc(finderDb, 'items/legacyPhotoItem'), {
       title: 'Leather Wallet',
@@ -1456,6 +1456,43 @@ test('Item 11 & Task 8: items reject legacy imageUrl, enforce authorId/createdAt
       custodyStatus: 'confirmed',
       authorId: FINDER_UID,
       imageUrl: 'data:image/jpeg;base64,AAAA',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  // Denied: student_id items cannot attach Cloud Storage HTTPS URLs
+  await assertFails(
+    setDoc(doc(finderDb, 'items/idHttpsPhoto'), {
+      title: 'Found ID Card',
+      type: 'found',
+      category: 'student_id',
+      description: 'Found at Nile House.',
+      location: 'Nile House (Admin)',
+      status: 'open',
+      holdingLocation: 'security_main_gate',
+      authorId: FINDER_UID,
+      isSensitiveId: true,
+      imageUrl: 'https://firebasestorage.googleapis.com/v0/b/demo/o/items%2Fid%2Fphoto.jpg?alt=media',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  // Allowed: non-sensitive items accept Firebase Storage HTTPS imageUrl and thumbUrl
+  await assertSucceeds(
+    setDoc(doc(finderDb, 'items/storagePhotoItem'), {
+      title: 'Black Anker Power Bank',
+      type: 'found',
+      category: 'power_bank',
+      description: 'Found near Engineering Block.',
+      location: 'Engineering Block (Block C)',
+      status: 'open',
+      holdingLocation: 'finder_holding',
+      custodyStatus: 'confirmed',
+      authorId: FINDER_UID,
+      imageUrl: 'https://firebasestorage.googleapis.com/v0/b/demo/o/items%2FstoragePhotoItem%2Fphoto.jpg?alt=media',
+      thumbUrl: 'https://firebasestorage.googleapis.com/v0/b/demo/o/items%2FstoragePhotoItem%2Fthumb.jpg?alt=media',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })

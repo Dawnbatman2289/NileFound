@@ -14,3 +14,7 @@ service-account*.json
 public/assets/aistudio/
 .playwright-cli/
 functions/lib/
+bun.lock
+bun.lockb
+yarn.lock
+pnpm-lock.yaml

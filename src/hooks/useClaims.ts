@@ -13,6 +13,7 @@ import { auth } from '../lib/firebaseAuth.ts';
 import { canUserModerate } from '../utils/admin.ts';
 import type { DispatchNotificationFn } from './useNotifications.ts';
 import { claimsReducer, type ClaimsState } from './reducers.ts';
+import { attachAsyncSubscription } from '../utils/subscriptionLifecycle.ts';
 
 interface UseClaimsOptions {
   isDemoMode: boolean;
@@ -73,17 +74,16 @@ export function useClaims({
 
   useEffect(() => {
     if (isDemoMode || !userId || !auth.currentUser?.emailVerified) return;
-    let isMounted = true;
-    let unsubscribe: (() => void) | undefined;
     hasPaginatedRef.current = false;
     dispatch({ type: 'RESET_LISTENER' });
-    import('../services/firestoreService.ts')
-      .then(({ subscribeToRealtimeClaims }) => {
-        if (!isMounted) return;
-        unsubscribe = subscribeToRealtimeClaims(
+    return attachAsyncSubscription(
+      async (isActive) => {
+        const { subscribeToRealtimeClaims } = await import('../services/firestoreService.ts');
+        if (!isActive()) return () => {};
+        return subscribeToRealtimeClaims(
           currentUser,
           (liveClaims, moreClaims, nextCursor) => {
-            if (!isMounted) return;
+            if (!isActive()) return;
             hasSeededOrMutatedDemoRef.current = true;
             dispatch({
               type: 'LIVE_CLAIMS_RECEIVED',
@@ -94,21 +94,17 @@ export function useClaims({
             });
           },
           (err) => {
-            if (!isMounted) return;
+            if (!isActive()) return;
             reportError('subscribeToRealtimeClaims failed', err);
             dispatch({ type: 'SET_ERROR', error: 'Could not load claims. Check your connection and try again.' });
           }
         );
-      })
-      .catch((err) => {
-        if (!isMounted) return;
+      },
+      (err) => {
         reportError('Load Firestore claims module failed', err);
         dispatch({ type: 'SET_ERROR', error: 'Could not load claims. Check your connection and try again.' });
-      });
-    return () => {
-      isMounted = false;
-      unsubscribe?.();
-    };
+      }
+    );
   }, [isDemoMode, userId, userRole, userIsAdmin, state.claimsRetryNonce]);
 
   const handleLoadMoreClaims = useCallback(async () => {

@@ -10,14 +10,34 @@
  *   node scripts/migrate-images.mjs --apply
  */
 
-import { initializeApp, applicationDefault } from 'firebase-admin/app';
+import { initializeApp, applicationDefault, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import config from '../firebase-applet-config.json' with { type: 'json' };
 
 const args = new Set(process.argv.slice(2));
 const applyChanges = args.has('--apply');
 
-const app = initializeApp({ credential: applicationDefault(), projectId: config.projectId });
+function resolveEnvCredential() {
+  const inlineJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
+  if (inlineJson) {
+    let parsed;
+    try {
+      parsed = JSON.parse(inlineJson);
+    } catch {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON.');
+    }
+    if (!parsed || typeof parsed.project_id !== 'string' || typeof parsed.client_email !== 'string' || typeof parsed.private_key !== 'string') {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is missing required service account fields.');
+    }
+    return cert(parsed);
+  }
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim()) {
+    return applicationDefault();
+  }
+  throw new Error('Set GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_SERVICE_ACCOUNT_JSON in process.env.');
+}
+
+const app = initializeApp({ credential: resolveEnvCredential(), projectId: config.projectId });
 const db = getFirestore(app, config.firestoreDatabaseId);
 
 const BATCH_SIZE = 200;

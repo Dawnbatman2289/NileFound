@@ -193,10 +193,13 @@ export const FeedView: React.FC<FeedViewProps> = ({
   const canShowSampleToggle = Boolean(import.meta.env.DEV && isAdmin);
 
   useEffect(() => {
-    if (!import.meta.env.DEV || !includeDemoSeed || !canShowSampleToggle) return setDemoSeedItems([]);
-    import('../data/mockItems.ts')
-      .then((m) => setDemoSeedItems(m.DEMO_ITEMS))
-      .catch((err) => { reportError('Load sample feed items failed', err); setDemoSeedItems([]); });
+    if (import.meta.env.DEV && includeDemoSeed && canShowSampleToggle) {
+      import('../data/mockItems.ts')
+        .then((m) => setDemoSeedItems(m.DEMO_ITEMS))
+        .catch((err) => { reportError('Load sample feed items failed', err); setDemoSeedItems([]); });
+      return;
+    }
+    setDemoSeedItems([]);
   }, [includeDemoSeed, canShowSampleToggle]);
 
   const displayableItems = useMemo(() => {

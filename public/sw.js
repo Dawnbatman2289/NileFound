@@ -1,4 +1,4 @@
-const CACHE = 'nilefound-static-v5';
+const CACHE = 'nilefound-static-v6';
 const OFFLINE = '/offline.html';
 const NAVIGATION_TIMEOUT_MS = 4000;
 const MAX_CACHE_ENTRIES = 60;
@@ -75,10 +75,32 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
+const FIREBASE_BYPASS_HOSTS = new Set([
+  '127.0.0.1',
+  'localhost',
+  'identitytoolkit.googleapis.com',
+  'securetoken.googleapis.com',
+  'firestore.googleapis.com',
+  'firebasestorage.googleapis.com',
+  'storage.googleapis.com',
+  'firebaseappcheck.googleapis.com',
+  'content-firebaseappcheck.googleapis.com',
+  'firebaseinstallations.googleapis.com',
+]);
+
+function isFirebaseOrEmulatorHost(hostname) {
+  if (FIREBASE_BYPASS_HOSTS.has(hostname)) return true;
+  return (
+    hostname.endsWith('.firebasestorage.app') ||
+    hostname.endsWith('.firebaseapp.com') ||
+    hostname.endsWith('.googleapis.com')
+  );
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
-  if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') return;
+  if (isFirebaseOrEmulatorHost(url.hostname)) return;
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/__/') || url.pathname.startsWith('/api/')) return;
 

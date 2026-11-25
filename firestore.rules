@@ -20,20 +20,57 @@ service cloud.firestore {
       return resource.data;
     }
 
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn()
+        && request.auth.token.keys().hasAll(['email_verified'])
+        && request.auth.token.email_verified == true;
+    }
+
+    function hasTokenEmail() {
+      return isEmailVerified() && request.auth.token.email is string;
+    }
+
+    function isNileEmail(email) {
+      return email.lower().matches('^[^@\\s]+@nileuniversity\\.edu\\.ng$');
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function hasImmutableAuditFields() {
+      return incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+    }
+
+    function isValidStorageHttpsUrl(url) {
+      return url is string
+        && url.size() <= 2048
+        && url.matches('^https://(firebasestorage|storage)\\.googleapis\\.com/[^\\s]+$');
+    }
+
+    function isValidThumbUrl(url) {
+      return isValidStorageHttpsUrl(url)
+        || (
+          url is string
+          && url.size() <= 4200
+          && url.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')
+        );
+    }
+
     // Root project owner identity by Firebase Auth UID (update UID if self-hosting a different Firebase project)
     function isMasterAdmin() {
-      return request.auth != null
-        && request.auth.uid == 'nFdIhTjOOqMqMG4y1KIT550Qf5m1'
-        && request.auth.token.keys().hasAll(['email_verified'])
-        && request.auth.token.email_verified == true
-        && request.auth.token.email is string;
+      return hasTokenEmail() && request.auth.uid == 'nFdIhTjOOqMqMG4y1KIT550Qf5m1';
     }
 
     // Delegated admin flag in /admins/{uid} (does NOT grant master admin privileges)
     function isConfiguredAdmin() {
-      return request.auth != null
-        && request.auth.token.keys().hasAll(['email_verified'])
-        && request.auth.token.email_verified == true
+      return isEmailVerified()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
         && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.enabled == true;
     }
@@ -41,14 +78,8 @@ service cloud.firestore {
     function isVerifiedUser() {
       return isMasterAdmin()
         || (
-          request.auth != null
-          && request.auth.token.keys().hasAll(['email_verified'])
-          && request.auth.token.email_verified == true
-          && request.auth.token.email is string
-          && (
-            request.auth.token.email.lower().matches('^[^@\\s]+@nileuniversity\\.edu\\.ng$')
-            || isConfiguredAdmin()
-          )
+          hasTokenEmail()
+          && (isNileEmail(request.auth.token.email) || isConfiguredAdmin())
         );
     }
 
@@ -58,7 +89,7 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/roles/$(request.auth.uid))
           ? get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == roleName
           : (
-            request.auth.token.email is string
+            hasTokenEmail()
             && exists(/databases/$(database)/documents/staffInvites/$(request.auth.token.email.lower()))
             && get(/databases/$(database)/documents/staffInvites/$(request.auth.token.email.lower())).data.role == roleName
           )
@@ -77,11 +108,10 @@ service cloud.firestore {
       return isAdmin() || isSecurity();
     }
 
-    // Item schema and field validation (no PII, no legacy imageUrl, and no photos for student_id)
+    // Item schema and field validation (no PII, Storage HTTPS URLs for photos, and no photos for student_id)
     function isValidItem(data) {
       return data.keys().hasAll(['title', 'type', 'category', 'description', 'location', 'status', 'holdingLocation', 'authorId', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['title', 'type', 'category', 'description', 'location', 'locationDetails', 'dateLostOrFound', 'status', 'holdingLocation', 'custodyStatus', 'authorId', 'thumbUrl', 'isSensitiveId', 'verificationQuestion', 'createdAt', 'updatedAt'])
-        && !('imageUrl' in data)
+        && data.keys().hasOnly(['title', 'type', 'category', 'description', 'location', 'locationDetails', 'dateLostOrFound', 'status', 'holdingLocation', 'custodyStatus', 'authorId', 'thumbUrl', 'imageUrl', 'isSensitiveId', 'verificationQuestion', 'createdAt', 'updatedAt'])
         && data.title is string && data.title.size() >= 2 && data.title.size() <= 100
         && data.type in ['lost', 'found']
         && data.category in ['student_id', 'phone_tech', 'power_bank', 'calculator', 'flash_drive', 'keys', 'bag_backpack', 'lab_coat_clothing', 'books_notes', 'other']
@@ -95,13 +125,10 @@ service cloud.firestore {
         && data.authorId is string && data.authorId.size() <= 128
         && data.createdAt is timestamp
         && data.updatedAt is timestamp
-        && !(data.category == 'student_id' && 'thumbUrl' in data)
+        && !(data.category == 'student_id' && ('thumbUrl' in data || 'imageUrl' in data))
         && (data.category != 'student_id' || data.isSensitiveId == true)
-        && (!('thumbUrl' in data) || (
-          data.thumbUrl is string
-          && data.thumbUrl.size() <= 4200
-          && data.thumbUrl.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')
-        ))
+        && (!('thumbUrl' in data) || isValidThumbUrl(data.thumbUrl))
+        && (!('imageUrl' in data) || isValidStorageHttpsUrl(data.imageUrl))
         && (!('verificationQuestion' in data) || (data.verificationQuestion is string && data.verificationQuestion.size() <= 300))
         && (!('isSensitiveId' in data) || (data.isSensitiveId is bool));
     }
@@ -181,7 +208,7 @@ service cloud.firestore {
       allow list: if isVerifiedUser() && request.query.limit <= 50;
       allow create: if isValidId(itemId) && isVerifiedUser()
         && isValidItem(incoming())
-        && incoming().authorId == request.auth.uid
+        && isOwner(incoming().authorId)
         && incoming().status == 'open'
         && (
           !('custodyStatus' in incoming())
@@ -201,9 +228,7 @@ service cloud.firestore {
       allow update: if isValidId(itemId) && isVerifiedUser()
         && isValidItem(incoming())
         // Enforce immutable reporter identity (authorId) and createdAt post-creation
-        && incoming().authorId == existing().authorId
-        && incoming().createdAt == existing().createdAt
-        && incoming().updatedAt == request.time
+        && hasImmutableAuditFields()
         && (
           isAdmin()
           || (
@@ -225,7 +250,7 @@ service cloud.firestore {
             )
           )
           || (
-            existing().authorId == request.auth.uid
+            isOwner(existing().authorId)
             && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
             && existing().status != 'returned'
             && incoming().status in ['open', 'claim_requested', 'verified', 'returned', 'expired']
@@ -242,7 +267,7 @@ service cloud.firestore {
         );
       allow delete: if isValidId(itemId) && (
         isAdmin() ||
-        (isVerifiedUser() && existing().authorId == request.auth.uid)
+        (isVerifiedUser() && isOwner(existing().authorId))
       );
 
       // Guard nested /items/{itemId}/claims/{claimId} if ever queried directly: claimant or admin only

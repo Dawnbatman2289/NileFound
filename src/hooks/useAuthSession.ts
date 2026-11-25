@@ -16,6 +16,7 @@ import { canUserModerate, getDefaultDepartmentForRole, isMasterAdminUser } from 
 import {
   ensureFreshVerifiedIdToken,
   isCampusAccountAllowed,
+  normalizeNileEmail,
   resolveDisplayName,
   validateNileEmail,
 } from '../utils/authValidation.ts';
@@ -102,23 +103,24 @@ export function useAuthSession({
   );
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    import('../data/demoPersonas.ts')
-      .then((m) => dispatch({ type: 'SET_DEV_PERSONAS', personas: m.DEV_TEST_PERSONAS }))
-      .catch((err) => reportError('Load dev personas failed', err));
+    if (import.meta.env.DEV) {
+      import('../data/demoPersonas.ts')
+        .then((m) => dispatch({ type: 'SET_DEV_PERSONAS', personas: m.DEV_TEST_PERSONAS }))
+        .catch((err) => reportError('Load dev personas failed', err));
 
-    if (!state.isSimulating || hasSeededDemoRef.current) return;
-    hasSeededDemoRef.current = true;
-    import('../data/mockItems.ts')
-      .then((m) => {
-        const savedItems = readJson<CampusItem[]>('nilefound_demo_items_v1', []);
-        const savedClaims = readJson<ClaimRecord[]>('nilefound_demo_claims_v1', []);
-        onSeedDemoDataRef.current(
-          savedItems.length > 0 ? savedItems : m.DEMO_ITEMS,
-          savedClaims.length > 0 ? savedClaims : m.DEMO_CLAIMS
-        );
-      })
-      .catch((err) => reportError('Load demo seed items failed', err));
+      if (!state.isSimulating || hasSeededDemoRef.current) return;
+      hasSeededDemoRef.current = true;
+      import('../data/mockItems.ts')
+        .then((m) => {
+          const savedItems = readJson<CampusItem[]>('nilefound_demo_items_v1', []);
+          const savedClaims = readJson<ClaimRecord[]>('nilefound_demo_claims_v1', []);
+          onSeedDemoDataRef.current(
+            savedItems.length > 0 ? savedItems : m.DEMO_ITEMS,
+            savedClaims.length > 0 ? savedClaims : m.DEMO_CLAIMS
+          );
+        })
+        .catch((err) => reportError('Load demo seed items failed', err));
+    }
   }, [state.isSimulating]);
 
   useEffect(() => {
@@ -166,7 +168,7 @@ export function useAuthSession({
     };
 
     const handleVerifiedUser = async (fbUser: FirebaseUser) => {
-      const email = (fbUser.email || '').trim().toLowerCase();
+      const email = normalizeNileEmail(fbUser.email || '');
       try {
         await ensureFreshVerifiedIdToken(fbUser);
       } catch (tokenErr) {
@@ -236,7 +238,7 @@ export function useAuthSession({
         return;
       }
       if (fbUser && (!fbUser.email || !fbUser.emailVerified)) {
-        const email = (fbUser.email || '').trim().toLowerCase();
+        const email = normalizeNileEmail(fbUser.email || '');
         if (email && !validateNileEmail(email) && !isMasterAdminUser(fbUser.uid)) {
           await rejectDisallowedAccount();
           return;
@@ -268,7 +270,7 @@ export function useAuthSession({
       const now = Date.now();
       if (now - lastRoleCheckMsRef.current < 60_000) return;
       lastRoleCheckMsRef.current = now;
-      const email = fbUser.email.trim().toLowerCase();
+      const email = normalizeNileEmail(fbUser.email);
       import('../services/firestore/roles.ts')
         .then(({ fetchUserRole }) => fetchUserRole(fbUser.uid, email))
         .then((nextRole) => {
@@ -283,38 +285,40 @@ export function useAuthSession({
   }, []);
 
   const handleSwitchPersona = useCallback(async (user: User) => {
-    if (!import.meta.env.DEV) return;
-    if (!isSimulatingRef.current || !hasSeededDemoRef.current) {
-      hasSeededDemoRef.current = true;
-      try {
-        const m = await import('../data/mockItems.ts');
-        const savedItems = readJson<CampusItem[]>('nilefound_demo_items_v1', []);
-        const savedClaims = readJson<ClaimRecord[]>('nilefound_demo_claims_v1', []);
-        onSeedDemoDataRef.current(
-          savedItems.length > 0 ? savedItems : m.DEMO_ITEMS,
-          savedClaims.length > 0 ? savedClaims : m.DEMO_CLAIMS
-        );
-      } catch (err) {
-        reportError('Load simulation mock items failed', err);
+    if (import.meta.env.DEV) {
+      if (!isSimulatingRef.current || !hasSeededDemoRef.current) {
+        hasSeededDemoRef.current = true;
+        try {
+          const m = await import('../data/mockItems.ts');
+          const savedItems = readJson<CampusItem[]>('nilefound_demo_items_v1', []);
+          const savedClaims = readJson<ClaimRecord[]>('nilefound_demo_claims_v1', []);
+          onSeedDemoDataRef.current(
+            savedItems.length > 0 ? savedItems : m.DEMO_ITEMS,
+            savedClaims.length > 0 ? savedClaims : m.DEMO_CLAIMS
+          );
+        } catch (err) {
+          reportError('Load simulation mock items failed', err);
+        }
       }
+      dispatch({ type: 'ENTER_SIMULATION', user });
+      safeSetStorage('nilefound_admin_simulating', 'true');
+      safeSetStorage('nilefound_simulated_persona', JSON.stringify(user));
+      setActiveTabRef.current(user.role === 'admin' || user.role === 'security' ? 'admin' : 'feed');
     }
-    dispatch({ type: 'ENTER_SIMULATION', user });
-    safeSetStorage('nilefound_admin_simulating', 'true');
-    safeSetStorage('nilefound_simulated_persona', JSON.stringify(user));
-    setActiveTabRef.current(user.role === 'admin' || user.role === 'security' ? 'admin' : 'feed');
   }, []);
 
   const handleResetDemoData = useCallback(async () => {
-    if (!import.meta.env.DEV) return;
-    safeRemoveStorage('nilefound_demo_items_v1');
-    safeRemoveStorage('nilefound_demo_claims_v1');
-    safeRemoveStorage('nilefound_demo_notifs_v1');
-    hasSeededDemoRef.current = true;
-    try {
-      const m = await import('../data/mockItems.ts');
-      onSeedDemoDataRef.current(m.DEMO_ITEMS, m.DEMO_CLAIMS);
-    } catch (err) {
-      reportError('Reset simulation mock items failed', err);
+    if (import.meta.env.DEV) {
+      safeRemoveStorage('nilefound_demo_items_v1');
+      safeRemoveStorage('nilefound_demo_claims_v1');
+      safeRemoveStorage('nilefound_demo_notifs_v1');
+      hasSeededDemoRef.current = true;
+      try {
+        const m = await import('../data/mockItems.ts');
+        onSeedDemoDataRef.current(m.DEMO_ITEMS, m.DEMO_CLAIMS);
+      } catch (err) {
+        reportError('Reset simulation mock items failed', err);
+      }
     }
   }, []);
 

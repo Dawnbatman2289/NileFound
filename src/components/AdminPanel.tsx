@@ -7,9 +7,8 @@
 
 import React, { useState } from 'react';
 import { Archive, Download, Check, ShieldCheck, AlertTriangle, Plus } from 'lucide-react';
-import { CampusItem, ClaimRecord, User } from '../types/index.ts';
+import { CampusItem, ClaimRecord, DemoPersonaOption, User } from '../types/index.ts';
 import { ITEM_EXPIRY_DAYS } from '../config/catalog.ts';
-import type { DemoPersonaOption } from '../data/demoPersonas.ts';
 import { useAdminPanel } from '../hooks/useAdminPanel.ts';
 import { getDeskTabTransitionClass } from '../utils/chat.ts';
 import { ADMIN_CARD } from './admin/adminStyles.ts';

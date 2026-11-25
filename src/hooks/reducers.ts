@@ -7,9 +7,8 @@
 
 import type React from 'react';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
-import type { CampusItem, ClaimRecord, User } from '../types/index.ts';
+import type { CampusItem, ClaimRecord, DemoPersonaOption, User } from '../types/index.ts';
 import type { ClaimsCursor } from '../services/firestore/helpers.ts';
-import type { DemoPersonaOption } from '../data/demoPersonas.ts';
 
 export interface AuthSessionState {
   isSimulating: boolean;

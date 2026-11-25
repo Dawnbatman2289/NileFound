@@ -38,7 +38,7 @@ export function resolveDisplayName(displayName?: string | null, email?: string |
     if (firstToken.length >= 2) return firstToken.slice(0, 100);
     return cleanDisplay.slice(0, 100);
   }
-  const localPart = (email || '').trim().split('@')[0] || '';
+  const localPart = normalizeNileEmail(email || '').split('@')[0] || '';
   if (localPart.length >= 2) return localPart.slice(0, 100);
   return 'Campus User';
 }

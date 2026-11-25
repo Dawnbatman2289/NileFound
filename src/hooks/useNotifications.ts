@@ -9,6 +9,7 @@ import {
 } from '../services/notificationService.ts';
 import { canUserModerate } from '../utils/admin.ts';
 import { readJson, safeSetStorage, safeRemoveStorage } from '../utils/storage.ts';
+import { attachAsyncSubscription } from '../utils/subscriptionLifecycle.ts';
 
 export type DispatchNotificationFn = (
   payload: Omit<CampusNotification, 'id' | 'read' | 'createdAt'>,
@@ -70,15 +71,14 @@ export function useNotifications({
       setLiveNotifications([]);
       return;
     }
-    let isMounted = true;
-    let unsubscribe: (() => void) | undefined;
-    import('../services/firestoreService.ts')
-      .then(({ subscribeToRealtimeNotifications }) => {
-        if (!isMounted) return;
-        unsubscribe = subscribeToRealtimeNotifications(
+    return attachAsyncSubscription(
+      async (isActive) => {
+        const { subscribeToRealtimeNotifications } = await import('../services/firestoreService.ts');
+        if (!isActive()) return () => {};
+        return subscribeToRealtimeNotifications(
           currentUser,
           (realtimeNotifs) => {
-            if (!isMounted) return;
+            if (!isActive()) return;
             setLiveNotifications((prev) => {
               if (!hasLoadedInitialRef.current) {
                 hasLoadedInitialRef.current = true;
@@ -95,17 +95,12 @@ export function useNotifications({
             });
           },
           (err) => {
-            if (isMounted) reportError('subscribeToRealtimeNotifications failed', err);
+            if (isActive()) reportError('subscribeToRealtimeNotifications failed', err);
           }
         );
-      })
-      .catch((err) => {
-        if (isMounted) reportError('Load Firestore notifications module failed', err);
-      });
-    return () => {
-      isMounted = false;
-      unsubscribe?.();
-    };
+      },
+      (err) => reportError('Load Firestore notifications module failed', err)
+    );
   }, [isDemoMode, userId, userRole, userIsAdmin]);
 
   const notifications = useMemo(() => {

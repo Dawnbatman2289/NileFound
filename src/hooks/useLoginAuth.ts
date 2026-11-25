@@ -19,6 +19,7 @@ import { canUserModerate, getDefaultDepartmentForRole, isMasterAdminUser } from 
 import {
   ensureFreshVerifiedIdToken,
   isCampusAccountAllowed,
+  normalizeNileEmail,
   resolveDisplayName,
   validateEmailFormat,
   validateFullName,
@@ -52,14 +53,15 @@ async function isAllowedCampusAccount(
   email: string,
   emailVerified: boolean
 ): Promise<boolean> {
+  const normalizedEmail = normalizeNileEmail(email);
   const isMaster = isMasterAdminUser(uid);
   let isDelegated = false;
-  if (!validateNileEmail(email) && !isMaster && emailVerified) {
+  if (!validateNileEmail(normalizedEmail) && !isMaster && emailVerified) {
     const { isConfiguredAdmin } = await import('../services/firestore/roles.ts');
     isDelegated = await isConfiguredAdmin(uid);
   }
   return isCampusAccountAllowed({
-    email,
+    email: normalizedEmail,
     emailVerified,
     isMasterAdmin: isMaster,
     isDelegatedAdmin: isDelegated,
@@ -67,7 +69,7 @@ async function isAllowedCampusAccount(
 }
 
 async function buildUserFromFirebase(fbUser: FirebaseUser): Promise<User> {
-  const userEmail = (fbUser.email || '').trim().toLowerCase();
+  const userEmail = normalizeNileEmail(fbUser.email || '');
   const { fetchUserRole } = await import('../services/firestore/roles.ts');
   const role: UserRole = await fetchUserRole(fbUser.uid, userEmail);
   return {
@@ -139,7 +141,7 @@ export function useLoginAuth({
 
   const completeVerifiedAuth = useCallback(async (fbUser: FirebaseUser): Promise<boolean> => {
     await ensureFreshVerifiedIdToken(fbUser);
-    const userEmail = (fbUser.email || '').trim().toLowerCase();
+    const userEmail = normalizeNileEmail(fbUser.email || '');
     if (!(await isAllowedCampusAccount(fbUser.uid, userEmail, fbUser.emailVerified))) {
       await signOut(auth);
       setShowInbox(false);
@@ -162,7 +164,7 @@ export function useLoginAuth({
         setShowInbox(false);
         return;
       }
-      const userEmail = (fbUser.email || '').trim().toLowerCase();
+      const userEmail = normalizeNileEmail(fbUser.email || '');
       if (!fbUser.emailVerified && userEmail && (validateNileEmail(userEmail) || isMasterAdminUser(fbUser.uid))) {
         setEmail((prev) => prev || userEmail);
         setShowInbox(true);
@@ -259,7 +261,7 @@ export function useLoginAuth({
     clearFeedback();
     setIsSigningIn(true);
     try {
-      const normalizedEmail = email.trim().toLowerCase();
+      const normalizedEmail = normalizeNileEmail(email);
       const validationErr = validateCredentials(normalizedEmail);
       if (validationErr) return setErrorMessage(validationErr);
 
@@ -346,7 +348,7 @@ export function useLoginAuth({
 
   const handleForgotPassword = async () => {
     clearFeedback();
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeNileEmail(email);
     if (!normalizedEmail) return setErrorMessage('Enter your email address first.');
     if (!validateEmailFormat(normalizedEmail)) return setErrorMessage('Enter a valid email address.');
     try {
