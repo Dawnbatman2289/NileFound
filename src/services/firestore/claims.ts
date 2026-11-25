@@ -172,8 +172,14 @@ export async function fetchMoreClaimsPage(
     const cDocs = claimantSnap ? claimantSnap.docs.slice(0, pageSize) : [];
     const fDocs = finderSnap ? finderSnap.docs.slice(0, pageSize) : [];
 
+    const byId = new Map<string, ClaimRecord>();
+    [...cDocs, ...fDocs].forEach((d) => byId.set(d.id, mapDocToClaimRecord(d)));
+    const sorted = [...byId.values()].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
     return {
-      claims: [...cDocs, ...fDocs].map(mapDocToClaimRecord),
+      claims: sorted,
       hasMore: cHasMore || fHasMore,
       cursor: cHasMore || fHasMore
         ? {

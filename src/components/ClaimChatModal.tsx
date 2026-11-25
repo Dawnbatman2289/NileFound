@@ -66,6 +66,7 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
   const pointerDownOnBackdropRef = useRef(false);
   const onCloseRef = useRef(onClose);
   const lastLatestIdRef = useRef<string | null>(null);
+  const hasLoadedEarlierRef = useRef(false);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -99,6 +100,7 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
     setOlderMessages([]);
     setOlderCursor(undefined);
     setHasMoreMessages(false);
+    hasLoadedEarlierRef.current = false;
     lastLatestIdRef.current = null;
 
     if (isDemoMode) {
@@ -133,8 +135,10 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
       claimId,
       (nextMessages, hasMore, nextCursor) => {
         setLatestMessages(nextMessages);
-        setHasMoreMessages((prevHasMore) => (olderCursor ? prevHasMore : hasMore));
-        setOlderCursor((prevCursor) => prevCursor ?? nextCursor);
+        if (!hasLoadedEarlierRef.current) {
+          setHasMoreMessages(hasMore);
+          setOlderCursor(nextCursor);
+        }
         setIsLoading(false);
       },
       (err) => {
@@ -166,6 +170,7 @@ export const ClaimChatModal: React.FC<ClaimChatModalProps> = ({
     setChatError(null);
     try {
       const page = await fetchOlderClaimMessages(claimId, olderCursor);
+      hasLoadedEarlierRef.current = true;
       setOlderMessages((prev) => {
         const seen = new Set(prev.map((m) => m.id));
         return [...page.messages.filter((m) => !seen.has(m.id)), ...prev];

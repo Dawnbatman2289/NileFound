@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../../lib/firebase.ts';
 import { CampusItem, ItemCategory, ItemType, User } from '../../types/index.ts';
-import { canUserModerate, isMasterAdminUser } from '../../utils/admin.ts';
+import { canUserModerate } from '../../utils/admin.ts';
 import { normalizeNileEmail, resolveDisplayName } from '../../utils/authValidation.ts';
 import { normalizeCustomLocation } from '../../config/locations.ts';
 import { reportError } from '../../components/ErrorBoundary.tsx';
@@ -20,7 +20,7 @@ import {
   ITEMS, CLAIMS, ITEMS_PAGE_SIZE, CampusAuditCounts, ItemPage, ItemPrivateDetails,
   assertFirestoreReady, mapDocToCampusItem, withOfflineRetry,
 } from './helpers.ts';
-import { fetchUserRole, isConfiguredAdmin } from './roles.ts';
+import { fetchUserRole } from './roles.ts';
 
 export function subscribeToRealtimeItems(
   pageLimit: number,
@@ -296,13 +296,18 @@ export async function deleteItemFromFirestore(itemId: string): Promise<void> {
   try {
     assertFirestoreReady();
     const uid = auth.currentUser?.uid;
-    const isAdminUser = Boolean(
-      uid && (isMasterAdminUser(uid) || (await isConfiguredAdmin(uid)) || (await fetchUserRole(uid)) === 'admin')
-    );
+    const isAdminUser = Boolean(uid && (await fetchUserRole(uid)) === 'admin');
+    if (!isAdminUser && !uid) {
+      throw new Error('You must be signed in to delete this item.');
+    }
+
+    const claimsQuery = isAdminUser
+      ? query(collection(db, CLAIMS), where('itemId', '==', itemId))
+      : query(collection(db, CLAIMS), where('itemId', '==', itemId), where('finderId', '==', uid));
 
     const [privateClaimsDocs, claimsDocs] = await Promise.all([
       fetchAllPaginatedDocs(query(collection(db, ITEMS, itemId, 'privateClaims'))),
-      fetchAllPaginatedDocs(query(collection(db, CLAIMS), where('itemId', '==', itemId))),
+      fetchAllPaginatedDocs(claimsQuery),
     ]);
 
     const messageDocsPerClaim = await Promise.all(
@@ -317,11 +322,25 @@ export async function deleteItemFromFirestore(itemId: string): Promise<void> {
         .map((d) => d.ref)
     );
 
+    const mediaRef = doc(db, ITEMS, itemId, 'media', 'full');
+    const privateDetailsRef = doc(db, ITEMS, itemId, 'private', 'details');
+    const secretRef = doc(db, ITEMS, itemId, 'secrets', 'verification');
+
+    let subdocRefs = [mediaRef, privateDetailsRef, secretRef];
+    if (!isAdminUser) {
+      const subdocSnaps = await Promise.all([
+        getDoc(mediaRef),
+        getDoc(privateDetailsRef),
+        getDoc(secretRef),
+      ]);
+      subdocRefs = subdocSnaps
+        .filter((snap) => snap.exists() && snap.data()?.authorId === uid)
+        .map((snap) => snap.ref);
+    }
+
     const refsToDelete = [
       ...messageRefsToDelete,
-      doc(db, ITEMS, itemId, 'media', 'full'),
-      doc(db, ITEMS, itemId, 'private', 'details'),
-      doc(db, ITEMS, itemId, 'secrets', 'verification'),
+      ...subdocRefs,
       ...privateClaimsDocs.map((d) => d.ref),
       ...claimsDocs.map((d) => d.ref),
       doc(db, ITEMS, itemId),

@@ -5,7 +5,7 @@
  * NileFound Campus Feed
  */
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { LogIn, PackageSearch, AlertTriangle, RotateCcw } from 'lucide-react';
 import { CampusItem, ClaimRecord, ItemType, User } from '../types/index.ts';
 import { filterCampusItems, FeedStatusFilter } from '../utils/feedFilters.ts';
@@ -199,31 +199,49 @@ export const FeedView: React.FC<FeedViewProps> = ({
       .catch((err) => { reportError('Load sample feed items failed', err); setDemoSeedItems([]); });
   }, [includeDemoSeed, canShowSampleToggle]);
 
+  const displayableItems = useMemo(() => {
+    if (!includeDemoSeed || !canShowSampleToggle || demoSeedItems.length === 0) return items;
+    const existingIds = new Set(items.map((it) => it.id));
+    return [...items, ...demoSeedItems.filter((demo) => !existingIds.has(demo.id))];
+  }, [items, includeDemoSeed, canShowSampleToggle, demoSeedItems]);
+
+  const activeDetailItem = useMemo(
+    () => (detailItem ? displayableItems.find((it) => it.id === detailItem.id) ?? detailItem : null),
+    [detailItem, displayableItems]
+  );
+  const activeDetailItemRef = useRef(activeDetailItem);
   useEffect(() => {
-    if (!detailItem || lowDataMode || detailItem.category === 'student_id') {
+    activeDetailItemRef.current = activeDetailItem;
+  }, [activeDetailItem]);
+
+  const detailItemId = activeDetailItem?.id ?? null;
+
+  useEffect(() => {
+    const current = activeDetailItemRef.current;
+    if (!detailItemId || !current || lowDataMode || current.category === 'student_id') {
       setDetailPhotoUrl(null);
       setDetailPhotoError(null);
       setIsLoadingDetailPhoto(false);
       return;
     }
-    if (detailItem.imageUrl) return setDetailPhotoUrl(detailItem.imageUrl);
-    if (!detailItem.thumbUrl || !onFetchFullPhoto || isDemoMode) return setDetailPhotoUrl(detailItem.thumbUrl || null);
+    if (current.imageUrl) return setDetailPhotoUrl(current.imageUrl);
+    if (!current.thumbUrl || !onFetchFullPhoto || isDemoMode) return setDetailPhotoUrl(current.thumbUrl || null);
 
     let cancelled = false;
     setIsLoadingDetailPhoto(true);
     setDetailPhotoError(null);
-    onFetchFullPhoto(detailItem.id)
-      .then((fullUrl) => { if (!cancelled) setDetailPhotoUrl(fullUrl || detailItem.thumbUrl || null); })
+    onFetchFullPhoto(detailItemId)
+      .then((fullUrl) => { if (!cancelled) setDetailPhotoUrl(fullUrl || current.thumbUrl || null); })
       .catch((err) => {
         if (!cancelled) {
           reportError('Fetch detail full photo failed', err);
           setDetailPhotoError('Could not load full-resolution photo. Showing thumbnail.');
-          setDetailPhotoUrl(detailItem.thumbUrl || null);
+          setDetailPhotoUrl(current.thumbUrl || null);
         }
       })
       .finally(() => { if (!cancelled) setIsLoadingDetailPhoto(false); });
     return () => { cancelled = true; };
-  }, [detailItem, lowDataMode, onFetchFullPhoto, isDemoMode]);
+  }, [detailItemId, lowDataMode, onFetchFullPhoto, isDemoMode]);
 
   const handleRequestHandoverContact = useCallback(async (itemId: string) => {
     if (!onFetchHandoverContact) return;
@@ -258,11 +276,6 @@ export const FeedView: React.FC<FeedViewProps> = ({
     setSelectedDateRange('all');
   };
 
-  const displayableItems = useMemo(() => {
-    if (!includeDemoSeed || !canShowSampleToggle || demoSeedItems.length === 0) return items;
-    const existingIds = new Set(items.map((it) => it.id));
-    return [...items, ...demoSeedItems.filter((demo) => !existingIds.has(demo.id))];
-  }, [items, includeDemoSeed, canShowSampleToggle, demoSeedItems]);
 
   const filteredItems = useMemo(
     () => filterCampusItems(displayableItems, { searchTerm: debouncedSearch, type: selectedType, category: selectedCategory, location: selectedLocation, status: selectedStatus, dateRange: selectedDateRange }),
@@ -395,8 +408,8 @@ export const FeedView: React.FC<FeedViewProps> = ({
         )}
       </div>
 
-      {detailItem && (
-        <FeedDetailModal detailItem={detailItem} lowDataMode={lowDataMode} detailPhotoUrl={detailPhotoUrl} isLoadingDetailPhoto={isLoadingDetailPhoto} detailPhotoError={detailPhotoError} onClose={() => setDetailItem(null)} />
+      {activeDetailItem && (
+        <FeedDetailModal detailItem={activeDetailItem} lowDataMode={lowDataMode} detailPhotoUrl={detailPhotoUrl} isLoadingDetailPhoto={isLoadingDetailPhoto} detailPhotoError={detailPhotoError} onClose={() => setDetailItem(null)} />
       )}
     </div>
   );

@@ -129,7 +129,7 @@ export function useAuthSession({
       if (typeof auth.authStateReady === 'function') {
         await auth.authStateReady();
       }
-      if (!auth.currentUser) return;
+      if (!auth.currentUser?.emailVerified) return;
       const { testConnection } = await import('../lib/firebase.ts');
       await testConnection();
     };

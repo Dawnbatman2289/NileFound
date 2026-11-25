@@ -145,3 +145,55 @@ test('claimsReducer preserves previously loaded private claim fields across live
   assert.equal(next.claims[0].submittedAnswer, 'Red sticker');
   assert.equal(next.claims[1].privateLoaded, false);
 });
+
+test('claimsReducer preserves paginated older claims and private details across live updates', () => {
+  const page1Cursor = { main: undefined };
+  const initial: ClaimsState = {
+    claims: [sampleClaim('c-1', false)],
+    claimsCursor: page1Cursor,
+    hasMoreClaims: true,
+    isLoadingMoreClaims: false,
+    claimsError: null,
+    claimsRetryNonce: 0,
+  };
+
+  const appended = claimsReducer(initial, {
+    type: 'APPEND_CLAIMS_PAGE',
+    claims: [sampleClaim('c-2', false), sampleClaim('c-1', false)],
+    hasMore: false,
+    cursor: undefined,
+  });
+  assert.deepEqual(
+    appended.claims.map((c) => c.id),
+    ['c-1', 'c-2']
+  );
+  assert.equal(appended.hasMoreClaims, false);
+
+  const enriched = claimsReducer(appended, {
+    type: 'SET_CLAIMS',
+    updater: (prev) =>
+      prev.map((c) =>
+        c.id === 'c-2' ? { ...c, submittedAnswer: 'Serial ends 42', privateLoaded: true } : c
+      ),
+  });
+  assert.equal(enriched.olderClaims?.[0].privateLoaded, true);
+
+  const liveRefresh = claimsReducer(enriched, {
+    type: 'LIVE_CLAIMS_RECEIVED',
+    claims: [sampleClaim('c-0', false), sampleClaim('c-1', false)],
+    hasMore: true,
+    cursor: page1Cursor,
+    preservePagination: true,
+  });
+
+  assert.deepEqual(
+    liveRefresh.claims.map((c) => c.id),
+    ['c-0', 'c-1', 'c-2']
+  );
+  assert.equal(liveRefresh.claims[2].submittedAnswer, 'Serial ends 42');
+  assert.equal(liveRefresh.hasMoreClaims, false);
+
+  const reset = claimsReducer(liveRefresh, { type: 'RESET_LISTENER' });
+  assert.deepEqual(reset.olderClaims, []);
+});
+

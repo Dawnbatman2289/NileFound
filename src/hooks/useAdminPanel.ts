@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { CampusItem, User } from '../types/index.ts';
 import { formatDateDDMMYYYY } from '../utils/dateFormatter.ts';
 import { sanitizeCsvCell } from '../utils/csv.ts';
@@ -21,7 +21,7 @@ interface UseAdminPanelOptions {
   lowDataMode: boolean;
   hasMoreItems: boolean;
   onFetchFullPhoto?: (itemId: string) => Promise<string | null>;
-  onLoadAll?: () => Promise<void>;
+  onLoadAll?: () => Promise<CampusItem[] | null | void>;
 }
 
 export function useAdminPanel({
@@ -47,10 +47,25 @@ export function useAdminPanel({
   const [isExportingCsv, setIsExportingCsv] = useState(false);
   const isMasterOwner = !isDemoMode && isAdmin && isMasterAdminUser(currentUser?.id);
 
+  const activeSelectedItem = useMemo(
+    () => (selectedItem ? items.find((i) => i.id === selectedItem.id) ?? selectedItem : null),
+    [selectedItem, items]
+  );
+
   const deleteDialogRef = useRef<HTMLDivElement>(null);
   const detailDialogRef = useRef<HTMLDivElement>(null);
   const noticeTimerRef = useRef<number | null>(null);
   const isMountedRef = useRef(true);
+  const activeSelectedItemRef = useRef(activeSelectedItem);
+  const hasPendingDeleteRef = useRef(Boolean(pendingDelete));
+
+  useEffect(() => {
+    activeSelectedItemRef.current = activeSelectedItem;
+  }, [activeSelectedItem]);
+
+  useEffect(() => {
+    hasPendingDeleteRef.current = Boolean(pendingDelete);
+  }, [pendingDelete]);
 
   const clearNoticeTimer = () => {
     if (noticeTimerRef.current) {
@@ -96,18 +111,21 @@ export function useAdminPanel({
 
   useEffect(() => { refreshAuditCounts(); }, [refreshAuditCounts]);
 
+  const pendingDeleteId = pendingDelete?.id ?? null;
+  const selectedItemId = activeSelectedItem?.id ?? null;
+
   useEffect(() => {
-    if (!pendingDelete && !selectedItem) return;
+    if (!pendingDeleteId && !selectedItemId) return;
     const previousFocus = document.activeElement as HTMLElement | null;
-    const activeDialog = pendingDelete ? deleteDialogRef.current : detailDialogRef.current;
+    const activeDialog = pendingDeleteId ? deleteDialogRef.current : detailDialogRef.current;
     const focusTimer = window.setTimeout(() => activeDialog?.focus(), 0);
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (pendingDelete) setPendingDelete(null);
+        if (hasPendingDeleteRef.current) setPendingDelete(null);
         else setSelectedItem(null);
         return;
       }
-      trapFocusOnTab(e, pendingDelete ? deleteDialogRef.current : detailDialogRef.current);
+      trapFocusOnTab(e, hasPendingDeleteRef.current ? deleteDialogRef.current : detailDialogRef.current);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -115,10 +133,11 @@ export function useAdminPanel({
       document.removeEventListener('keydown', onKeyDown);
       previousFocus?.focus?.();
     };
-  }, [pendingDelete, selectedItem]);
+  }, [pendingDeleteId, selectedItemId]);
 
   useEffect(() => {
-    if (!selectedItem) {
+    const current = activeSelectedItemRef.current;
+    if (!selectedItemId || !current) {
       setPrivateDetails({});
       setSelectedItemPhoto(null);
       setIsLoadingItemPhoto(false);
@@ -130,11 +149,11 @@ export function useAdminPanel({
       setPrivateDetails({
         authorName: 'Campus Demo Reporter',
         authorEmail: 'Recorded in live campus account',
-        expectedAnswer: selectedItem.verificationAnswer || 'Demo verification answer',
+        expectedAnswer: current.verificationAnswer || 'Demo verification answer',
       });
     } else {
       setIsLoadingPrivate(true);
-      fetchItemPrivateDetails(selectedItem.id)
+      fetchItemPrivateDetails(selectedItemId)
         .then((d) => { if (!cancelled) setPrivateDetails(d); })
         .catch((err) => {
           reportError('fetchItemPrivateDetails failed', err);
@@ -143,31 +162,41 @@ export function useAdminPanel({
         .finally(() => { if (!cancelled) setIsLoadingPrivate(false); });
     }
 
-    if (lowDataMode || selectedItem.category === 'student_id') {
+    if (lowDataMode || current.category === 'student_id') {
       setSelectedItemPhoto(null);
-    } else if (selectedItem.imageUrl) {
-      setSelectedItemPhoto(selectedItem.imageUrl);
-    } else if (selectedItem.thumbUrl && onFetchFullPhoto && !isDemoMode) {
+    } else if (current.imageUrl) {
+      setSelectedItemPhoto(current.imageUrl);
+    } else if (current.thumbUrl && onFetchFullPhoto && !isDemoMode) {
       setIsLoadingItemPhoto(true);
-      onFetchFullPhoto(selectedItem.id)
-        .then((fullUrl) => { if (!cancelled) setSelectedItemPhoto(fullUrl || selectedItem.thumbUrl || null); })
+      onFetchFullPhoto(selectedItemId)
+        .then((fullUrl) => { if (!cancelled) setSelectedItemPhoto(fullUrl || current.thumbUrl || null); })
         .catch((err) => {
           reportError('Admin fetch full photo failed', err);
-          if (!cancelled) setSelectedItemPhoto(selectedItem.thumbUrl || null);
+          if (!cancelled) setSelectedItemPhoto(current.thumbUrl || null);
         })
         .finally(() => { if (!cancelled) setIsLoadingItemPhoto(false); });
     } else {
-      setSelectedItemPhoto(selectedItem.thumbUrl || null);
+      setSelectedItemPhoto(current.thumbUrl || null);
     }
     return () => { cancelled = true; };
-  }, [selectedItem, lowDataMode, onFetchFullPhoto, isDemoMode]);
+  }, [selectedItemId, lowDataMode, onFetchFullPhoto, isDemoMode]);
 
   const exportAuditLogCsv = useCallback(async () => {
     setIsExportingCsv(true);
     try {
-      if (hasMoreItems && onLoadAll) await onLoadAll();
+      let exportItems = items;
+      if (hasMoreItems && onLoadAll) {
+        const loaded = await onLoadAll();
+        if (loaded === null) {
+          showError('Could not complete full audit export. Please try again.');
+          return;
+        }
+        if (Array.isArray(loaded)) {
+          exportItems = loaded;
+        }
+      }
       const headers = ['ID', 'Type', 'Title', 'Category', 'Location', 'Holding Desk', 'Status', 'Date Reported'];
-      const rows = items.map((i) => [
+      const rows = exportItems.map((i) => [
         sanitizeCsvCell(i.id),
         sanitizeCsvCell(i.type),
         sanitizeCsvCell(i.title),
@@ -186,7 +215,7 @@ export function useAdminPanel({
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      showNotification(`Exported ${items.length} records to CSV.`);
+      showNotification(`Exported ${exportItems.length} records to CSV.`);
     } catch (err) {
       reportError('exportAuditLogCsv failed', err);
       showError('Could not complete full audit export. Please try again.');
@@ -197,7 +226,7 @@ export function useAdminPanel({
 
   return {
     actionNotice, actionError,
-    selectedItem, setSelectedItem,
+    selectedItem: activeSelectedItem, setSelectedItem,
     selectedItemPhoto, isLoadingItemPhoto,
     pendingDelete, setPendingDelete,
     privateDetails, isLoadingPrivate,

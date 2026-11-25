@@ -37,6 +37,14 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "itemId", "order": "ASCENDING" },
+        { "fieldPath": "finderId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "claims",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "itemId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "finderId", "order": "ASCENDING" }
       ]

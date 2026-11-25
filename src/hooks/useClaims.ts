@@ -44,6 +44,17 @@ export function useClaims({
 }: UseClaimsOptions) {
   const [state, dispatch] = useReducer(claimsReducer, isDemoMode, buildInitialClaimsState);
   const hasSeededOrMutatedDemoRef = useRef(false);
+  const hasPaginatedRef = useRef(false);
+  const itemsRef = useRef(items);
+  const claimsRef = useRef(state.claims);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  useEffect(() => {
+    claimsRef.current = state.claims;
+  }, [state.claims]);
 
   const setClaims = useCallback<React.Dispatch<React.SetStateAction<ClaimRecord[]>>>((updater) => {
     hasSeededOrMutatedDemoRef.current = true;
@@ -64,6 +75,7 @@ export function useClaims({
     if (isDemoMode || !userId || !auth.currentUser?.emailVerified) return;
     let isMounted = true;
     let unsubscribe: (() => void) | undefined;
+    hasPaginatedRef.current = false;
     dispatch({ type: 'RESET_LISTENER' });
     import('../services/firestoreService.ts')
       .then(({ subscribeToRealtimeClaims }) => {
@@ -73,7 +85,13 @@ export function useClaims({
           (liveClaims, moreClaims, nextCursor) => {
             if (!isMounted) return;
             hasSeededOrMutatedDemoRef.current = true;
-            dispatch({ type: 'LIVE_CLAIMS_RECEIVED', claims: liveClaims, hasMore: moreClaims, cursor: nextCursor });
+            dispatch({
+              type: 'LIVE_CLAIMS_RECEIVED',
+              claims: liveClaims,
+              hasMore: moreClaims,
+              cursor: nextCursor,
+              preservePagination: hasPaginatedRef.current,
+            });
           },
           (err) => {
             if (!isMounted) return;
@@ -100,6 +118,7 @@ export function useClaims({
       const { fetchMoreClaimsPage } = await import('../services/firestoreService.ts');
       const page = await fetchMoreClaimsPage(currentUser, state.claimsCursor);
       hasSeededOrMutatedDemoRef.current = true;
+      hasPaginatedRef.current = true;
       dispatch({ type: 'APPEND_CLAIMS_PAGE', claims: page.claims, hasMore: page.hasMore, cursor: page.cursor });
     } catch (err: unknown) {
       reportError('handleLoadMoreClaims failed', err);
@@ -132,7 +151,7 @@ export function useClaims({
   const handleClaimSuccess = useCallback(
     async (newClaim: ClaimRecord) => {
       const fromUid = auth.currentUser?.uid || currentUser?.id || 'claimant';
-      const matchingItem = items.find((i) => i.id === newClaim.itemId);
+      const matchingItem = itemsRef.current.find((i) => i.id === newClaim.itemId);
       let finalClaimId = newClaim.id;
       if (isDemoMode) {
         setClaims((prev) => [{ ...newClaim, claimantId: fromUid }, ...prev]);
@@ -141,6 +160,9 @@ export function useClaims({
         finalClaimId = await saveClaimToFirestore(newClaim, currentUser, matchingItem?.authorId);
       }
       setItems((prev) =>
+        prev.map((it) => (it.id === newClaim.itemId ? { ...it, status: 'claim_requested' } : it))
+      );
+      setOlderItems((prev) =>
         prev.map((it) => (it.id === newClaim.itemId ? { ...it, status: 'claim_requested' } : it))
       );
 
@@ -156,7 +178,7 @@ export function useClaims({
         });
       }
     },
-    [isDemoMode, currentUser, items, setClaims, setItems, dispatchNotification]
+    [isDemoMode, currentUser, setClaims, setItems, setOlderItems, dispatchNotification]
   );
 
   const handleResubmitClaim = useCallback(
@@ -166,7 +188,7 @@ export function useClaims({
       }
       const cleanAnswer = updatedAnswer.trim().slice(0, 500);
       const fromUid = auth.currentUser?.uid || currentUser?.id || 'claimant';
-      const matchingItem = items.find((i) => i.id === claim.itemId);
+      const matchingItem = itemsRef.current.find((i) => i.id === claim.itemId);
 
       if (!isDemoMode) {
         const { resubmitClaimInFirestore } = await import('../services/firestoreService.ts');
@@ -204,15 +226,16 @@ export function useClaims({
         });
       }
     },
-    [isDemoMode, currentUser, items, setClaims, setItems, setOlderItems, dispatchNotification]
+    [isDemoMode, currentUser, setClaims, setItems, setOlderItems, dispatchNotification]
   );
 
   const handleApproveClaim = useCallback(
     async (claimId: string, itemId: string): Promise<boolean> => {
       try {
         const fromUid = auth.currentUser?.uid || currentUser?.id || 'admin';
-        const claim = state.claims.find((c) => c.id === claimId);
-        let autoRejectedIds = state.claims
+        const latestClaims = claimsRef.current;
+        const claim = latestClaims.find((c) => c.id === claimId);
+        let autoRejectedIds = latestClaims
           .filter((c) => c.itemId === itemId && c.id !== claimId && c.status === 'pending')
           .map((c) => c.id);
 
@@ -250,16 +273,17 @@ export function useClaims({
         return false;
       }
     },
-    [isDemoMode, currentUser, state.claims, setClaims, setItems, setOlderItems, dispatchNotification]
+    [isDemoMode, currentUser, setClaims, setItems, setOlderItems, dispatchNotification]
   );
 
   const handleRejectClaim = useCallback(
     async (claimId: string): Promise<boolean> => {
       try {
         const fromUid = auth.currentUser?.uid || currentUser?.id || 'admin';
-        const claim = state.claims.find((c) => c.id === claimId);
+        const latestClaims = claimsRef.current;
+        const claim = latestClaims.find((c) => c.id === claimId);
         if (!claim) return false;
-        const localOtherPending = state.claims.filter(
+        const localOtherPending = latestClaims.filter(
           (c) => c.itemId === claim.itemId && c.id !== claimId && c.status === 'pending'
         ).length;
 
@@ -292,7 +316,7 @@ export function useClaims({
         return false;
       }
     },
-    [isDemoMode, currentUser, state.claims, setClaims, setItems, setOlderItems, dispatchNotification]
+    [isDemoMode, currentUser, setClaims, setItems, setOlderItems, dispatchNotification]
   );
 
   const removeClaimsForItem = useCallback(

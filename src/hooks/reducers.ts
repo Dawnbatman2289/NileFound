@@ -214,6 +214,7 @@ export function itemsFeedReducer(state: ItemsFeedState, action: ItemsFeedAction)
 
 export interface ClaimsState {
   claims: ClaimRecord[];
+  olderClaims?: ClaimRecord[];
   claimsCursor?: ClaimsCursor;
   hasMoreClaims: boolean;
   isLoadingMoreClaims: boolean;
@@ -228,6 +229,7 @@ export type ClaimsAction =
       claims: ClaimRecord[];
       hasMore: boolean;
       cursor?: ClaimsCursor;
+      preservePagination?: boolean;
     }
   | { type: 'START_LOAD_MORE' }
   | {
@@ -244,10 +246,16 @@ export type ClaimsAction =
 export function claimsReducer(state: ClaimsState, action: ClaimsAction): ClaimsState {
   switch (action.type) {
     case 'RESET_LISTENER':
-      return { ...state, claimsError: null };
+      return { ...state, olderClaims: [], claimsError: null };
     case 'LIVE_CLAIMS_RECEIVED': {
-      const prevPrivate = new Map(state.claims.filter((c) => c.privateLoaded).map((c) => [c.id, c]));
-      const merged = action.claims.map((claim) => {
+      const prevPrivate = new Map<string, ClaimRecord>();
+      for (const c of state.olderClaims ?? []) {
+        if (c.privateLoaded) prevPrivate.set(c.id, c);
+      }
+      for (const c of state.claims) {
+        if (c.privateLoaded) prevPrivate.set(c.id, c);
+      }
+      const mergedLive = action.claims.map((claim) => {
         const prev = prevPrivate.get(claim.id);
         if (!prev) return claim;
         return {
@@ -258,9 +266,23 @@ export function claimsReducer(state: ClaimsState, action: ClaimsAction): ClaimsS
           privateLoaded: true,
         };
       });
+      const existingOlder = state.olderClaims ?? [];
+      if (action.preservePagination && existingOlder.length > 0) {
+        const liveIds = new Set(mergedLive.map((c) => c.id));
+        const survivingOlder = existingOlder.filter((c) => !liveIds.has(c.id));
+        return {
+          ...state,
+          claims: [...mergedLive, ...survivingOlder],
+          olderClaims: existingOlder,
+          hasMoreClaims: state.hasMoreClaims,
+          claimsCursor: state.claimsCursor,
+          claimsError: null,
+        };
+      }
       return {
         ...state,
-        claims: merged,
+        claims: mergedLive,
+        olderClaims: [],
         hasMoreClaims: action.hasMore,
         claimsCursor: action.cursor,
         claimsError: null,
@@ -278,6 +300,7 @@ export function claimsReducer(state: ClaimsState, action: ClaimsAction): ClaimsS
       return {
         ...state,
         claims: [...state.claims, ...uniqueIncoming],
+        olderClaims: [...(state.olderClaims ?? []), ...uniqueIncoming],
         hasMoreClaims: action.hasMore,
         claimsCursor: action.cursor,
         isLoadingMoreClaims: false,
@@ -290,12 +313,17 @@ export function claimsReducer(state: ClaimsState, action: ClaimsAction): ClaimsS
     case 'SET_CLAIMS': {
       const next =
         typeof action.updater === 'function' ? action.updater(state.claims) : action.updater;
-      return { ...state, claims: next };
+      const nextById = new Map(next.map((c) => [c.id, c]));
+      const nextOlder = (state.olderClaims ?? [])
+        .filter((c) => nextById.has(c.id))
+        .map((c) => nextById.get(c.id)!);
+      return { ...state, claims: next, olderClaims: nextOlder };
     }
     case 'CLEAR_CLAIMS':
       return {
         ...state,
         claims: [],
+        olderClaims: [],
         claimsCursor: undefined,
         hasMoreClaims: false,
         isLoadingMoreClaims: false,

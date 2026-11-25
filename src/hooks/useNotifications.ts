@@ -117,6 +117,15 @@ export function useNotifications({
     );
   }, [isDemoMode, liveNotifications, demoNotifications, currentUser]);
 
+  const notificationsRef = useRef(notifications);
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => {
+    notificationsRef.current = notifications;
+  }, [notifications]);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
   const dispatchNotification = useCallback<DispatchNotificationFn>(
     (payload, { toast = false, push = false } = {}) => {
       const linkTab: AppTab =
@@ -131,11 +140,12 @@ export function useNotifications({
         read: false,
         createdAt: new Date().toISOString(),
       };
+      const activeUser = currentUserRef.current;
       if (isDemoMode) {
         setDemoNotifications((prev) => [record, ...prev.filter((n) => n.id !== record.id)]);
         const isForCurrentUser =
-          record.recipientUid === currentUser?.id ||
-          (record.recipientUid === 'admin' && canUserModerate(currentUser));
+          record.recipientUid === activeUser?.id ||
+          (record.recipientUid === 'admin' && canUserModerate(activeUser));
         if (isForCurrentUser && toast) {
           playNotificationChime();
           setActiveToast(record);
@@ -148,8 +158,8 @@ export function useNotifications({
         .then(({ saveNotificationToFirestore }) => saveNotificationToFirestore(record))
         .catch((err) => reportError('saveNotificationToFirestore failed', err));
       const isForCurrentUser =
-        record.recipientUid === currentUser?.id ||
-        (record.recipientUid === 'admin' && canUserModerate(currentUser));
+        record.recipientUid === activeUser?.id ||
+        (record.recipientUid === 'admin' && canUserModerate(activeUser));
       if (isForCurrentUser) {
         setLiveNotifications((prev) => [record, ...prev.filter((n) => n.id !== record.id)]);
         if (toast) {
@@ -159,13 +169,13 @@ export function useNotifications({
         }
       }
     },
-    [isDemoMode, isPrivileged, currentUser]
+    [isDemoMode, isPrivileged]
   );
 
   const dismissToast = useCallback(() => setActiveToast(null), []);
 
   const markAllAsRead = useCallback(() => {
-    const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id);
+    const unreadIds = notificationsRef.current.filter((n) => !n.read).map((n) => n.id);
     if (unreadIds.length === 0) return;
     if (isDemoMode) {
       const unreadSet = new Set(unreadIds);
@@ -176,7 +186,7 @@ export function useNotifications({
     import('../services/firestoreService.ts')
       .then(({ markNotificationsReadInFirestore }) => markNotificationsReadInFirestore(unreadIds))
       .catch((err) => reportError('Mark notifications read failed', err));
-  }, [notifications, isDemoMode]);
+  }, [isDemoMode]);
 
   const markAsRead = useCallback(
     (id: string) => {
@@ -195,7 +205,7 @@ export function useNotifications({
   const markClaimChatNotificationsRead = useCallback(
     (claimId: string) => {
       if (!claimId) return;
-      const unreadIds = notifications
+      const unreadIds = notificationsRef.current
         .filter((n) => !n.read && n.type === 'chat_message' && n.claimId === claimId)
         .map((n) => n.id);
       if (unreadIds.length === 0) return;
@@ -209,7 +219,7 @@ export function useNotifications({
         .then(({ markNotificationsReadInFirestore }) => markNotificationsReadInFirestore(unreadIds))
         .catch((err) => reportError('Mark chat notifications read failed', err));
     },
-    [notifications, isDemoMode]
+    [isDemoMode]
   );
 
   const clearNotifications = useCallback(() => {

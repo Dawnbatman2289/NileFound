@@ -5,7 +5,7 @@
  * NileFound - Root application shell and state wiring.
  */
 
-import { lazy, Suspense, useState, useEffect, useRef, useCallback } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Navbar, AppTab } from './components/Navbar.tsx';
 import { FeedView } from './components/FeedView.tsx';
 import { NotificationToast } from './components/NotificationToast.tsx';
@@ -85,19 +85,23 @@ export default function App() {
   const claimsState = useClaims({
     isDemoMode: authSession.isDemoMode,
     currentUser: authSession.currentUser,
-    items: itemsFeed.items,
+    items: itemsFeed.mergedItems,
     setItems: itemsFeed.setItems,
     setOlderItems: itemsFeed.setOlderItems,
     dispatchNotification: notifState.dispatchNotification,
   });
 
+  const { setItems: setFeedItems, clearItems: clearFeedItems } = itemsFeed;
+  const { setClaims, clearClaims, removeClaimsForItem } = claimsState;
+  const { clearNotifications } = notifState;
+
   useEffect(() => {
     sessionHooksRef.current = {
-      seedDemo: (demoItems, demoClaims) => { itemsFeed.setItems(demoItems); claimsState.setClaims(demoClaims); },
-      clearAll: () => { itemsFeed.clearItems(); claimsState.clearClaims(); notifState.clearNotifications(); setSavedDraftCount(0); },
-      removeItemClaims: claimsState.removeClaimsForItem,
+      seedDemo: (demoItems, demoClaims) => { setFeedItems(demoItems); setClaims(demoClaims); },
+      clearAll: () => { clearFeedItems(); clearClaims(); clearNotifications(); setSavedDraftCount(0); },
+      removeItemClaims: removeClaimsForItem,
     };
-  }, [itemsFeed, claimsState, notifState]);
+  }, [setFeedItems, setClaims, clearFeedItems, clearClaims, clearNotifications, removeClaimsForItem]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDarkMode);
@@ -119,10 +123,19 @@ export default function App() {
     return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); };
   }, []);
 
-  const unreadChatClaimIds = getUnreadChatClaimIds(
-    notifState.notifications,
-    authSession.currentUser?.id,
-    authSession.isPrivileged
+  const unreadChatClaimIds = useMemo(
+    () =>
+      getUnreadChatClaimIds(
+        notifState.notifications,
+        authSession.currentUser?.id,
+        authSession.isPrivileged
+      ),
+    [notifState.notifications, authSession.currentUser?.id, authSession.isPrivileged]
+  );
+
+  const pendingClaimsCount = useMemo(
+    () => claimsState.claims.filter((c) => c.status === 'pending').length,
+    [claimsState.claims]
   );
 
   const activeChatClaimId = activeChatTarget?.claim.id;
@@ -135,13 +148,14 @@ export default function App() {
 
   const handleResetAllDemoData = useCallback(async () => {
     lastChatNotifSentRef.current = {};
-    notifState.clearNotifications();
+    clearNotifications();
     await import('./components/ClaimChatModal.tsx')
       .then((m) => m.resetDemoChatThreads())
       .catch((err) => reportError('Reset chat threads failed', err));
     await authSession.handleResetDemoData();
-  }, [notifState, authSession]);
+  }, [clearNotifications, authSession]);
 
+  const { handleLogout } = authSession;
   const handleAppLogout = useCallback(async () => {
     lastChatNotifSentRef.current = {};
     if (import.meta.env.DEV) {
@@ -149,14 +163,23 @@ export default function App() {
         .then((m) => m.resetDemoChatThreads())
         .catch((err) => reportError('Reset demo chat threads on logout failed', err));
     }
-    await authSession.handleLogout();
-  }, [authSession]);
+    await handleLogout();
+  }, [handleLogout]);
 
-  const handleSelectNotificationItem = (itemId?: string, type?: string, claimId?: string) => {
+  const claimsListRef = useRef(claimsState.claims);
+  const mergedItemsRef = useRef(itemsFeed.mergedItems);
+  useEffect(() => {
+    claimsListRef.current = claimsState.claims;
+  }, [claimsState.claims]);
+  useEffect(() => {
+    mergedItemsRef.current = itemsFeed.mergedItems;
+  }, [itemsFeed.mergedItems]);
+
+  const handleSelectNotificationItem = useCallback((itemId?: string, type?: string, claimId?: string) => {
     if (type === 'chat_message' && claimId) {
-      const targetClaim = claimsState.claims.find((c) => c.id === claimId);
+      const targetClaim = claimsListRef.current.find((c) => c.id === claimId);
       if (targetClaim) {
-        const targetItem = itemsFeed.mergedItems.find((i) => i.id === (itemId || targetClaim.itemId));
+        const targetItem = mergedItemsRef.current.find((i) => i.id === (itemId || targetClaim.itemId));
         setActiveChatTarget({ claim: targetClaim, item: targetItem });
         return;
       }
@@ -171,7 +194,42 @@ export default function App() {
       el.classList.add('ring-2', 'ring-[#0F6E6E]');
       setTimeout(() => el.classList.remove('ring-2', 'ring-[#0F6E6E]'), 3000);
     }, 150);
-  };
+  }, [authSession.isPrivileged, setActiveTab]);
+
+  const handleOpenReportModal = useCallback(() => {
+    setReportPrefill(null);
+    setIsReportModalOpen(true);
+  }, []);
+
+  const handleClaimItem = useCallback(
+    (item: CampusItem) => (authSession.currentUser ? setSelectedItemForClaim(item) : setActiveTab('login')),
+    [authSession.currentUser, setActiveTab]
+  );
+
+  const handleFoundMatch = useCallback((lostItem: CampusItem) => {
+    setReportPrefill({ type: 'found', category: lostItem.category, location: lostItem.location, title: lostItem.title });
+    setIsReportModalOpen(true);
+  }, []);
+
+  const handleFetchHandoverContact = useCallback(
+    (itemId: string) =>
+      authSession.isDemoMode
+        ? Promise.resolve({ authorName: 'Finder', authorEmail: 'finder@nileuniversity.edu.ng' })
+        : import('./services/firestoreService.ts').then((m) => m.fetchApprovedHandoverContact(itemId)),
+    [authSession.isDemoMode]
+  );
+
+  const handleOpenClaimChat = useCallback((claim: ClaimRecord, item?: CampusItem) => {
+    setActiveChatTarget({ claim, item });
+  }, []);
+
+  const handleNavigateToLogin = useCallback(() => setActiveTab('login'), [setActiveTab]);
+  const handleToggleDarkMode = useCallback(() => setIsDarkMode((p) => !p), []);
+  const { setIsDemoMode, handleExitSimulation } = authSession;
+  const handleSetDemoMode = useCallback(
+    (v: boolean) => (v ? setIsDemoMode(true) : handleExitSimulation()),
+    [setIsDemoMode, handleExitSimulation]
+  );
 
   return (
     <ErrorBoundary>
@@ -180,14 +238,14 @@ export default function App() {
             activeTab={activeTab} setActiveTab={setActiveTab} isOnline={isOnline}
             lowDataMode={lowDataMode} setLowDataMode={setLowDataMode}
             isDemoMode={authSession.isDemoMode}
-            setIsDemoMode={(v) => (v ? authSession.setIsDemoMode(true) : authSession.handleExitSimulation())}
-            onOpenReportModal={() => { setReportPrefill(null); setIsReportModalOpen(true); }}
+            setIsDemoMode={handleSetDemoMode}
+            onOpenReportModal={handleOpenReportModal}
             savedDraftCount={savedDraftCount} currentUser={authSession.currentUser}
-            pendingClaimsCount={claimsState.claims.filter((c) => c.status === 'pending').length}
+            pendingClaimsCount={pendingClaimsCount}
             notifications={notifState.notifications}
             onMarkAllAsRead={notifState.markAllAsRead} onMarkAsRead={notifState.markAsRead}
             onSelectNotificationItem={handleSelectNotificationItem}
-            isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode((p) => !p)}
+            isDarkMode={isDarkMode} onToggleDarkMode={handleToggleDarkMode}
             onLogout={handleAppLogout}
           />
 
@@ -257,18 +315,18 @@ export default function App() {
                 <FeedView
                   items={itemsFeed.mergedItems} claims={claimsState.claims} lowDataMode={lowDataMode}
                   itemsError={itemsFeed.itemsError} onRetryLoadItems={itemsFeed.retryLoadItems}
-                  onClaimItem={(item) => (authSession.currentUser ? setSelectedItemForClaim(item) : setActiveTab('login'))}
-                  onOpenReportModal={() => { setReportPrefill(null); setIsReportModalOpen(true); }}
-                  onFoundMatch={(lostItem) => { setReportPrefill({ type: 'found', category: lostItem.category, location: lostItem.location, title: lostItem.title }); setIsReportModalOpen(true); }}
-                  onFetchHandoverContact={(itemId) => (authSession.isDemoMode ? Promise.resolve({ authorName: 'Finder', authorEmail: 'finder@nileuniversity.edu.ng' }) : import('./services/firestoreService.ts').then((m) => m.fetchApprovedHandoverContact(itemId)))}
+                  onClaimItem={handleClaimItem}
+                  onOpenReportModal={handleOpenReportModal}
+                  onFoundMatch={handleFoundMatch}
+                  onFetchHandoverContact={handleFetchHandoverContact}
                   onFetchFullPhoto={itemsFeed.handleFetchFullPhoto}
                   onFetchClaimPrivateDetails={claimsState.handleFetchClaimPrivateDetails}
                   onApproveClaim={claimsState.handleApproveClaim} onRejectClaim={claimsState.handleRejectClaim}
                   onUpdateItemStatus={itemsFeed.handleUpdateItemStatus}
-                  onOpenClaimChat={(claim, item) => setActiveChatTarget({ claim, item })}
+                  onOpenClaimChat={handleOpenClaimChat}
                   unreadChatClaimIds={unreadChatClaimIds}
                   currentUser={authSession.currentUser} isDemoMode={authSession.isDemoMode}
-                  onNavigateToLogin={() => setActiveTab('login')}
+                  onNavigateToLogin={handleNavigateToLogin}
                   onLoadMore={itemsFeed.handleLoadMoreItems} onLoadAll={itemsFeed.handleLoadAllItems}
                   hasMoreItems={itemsFeed.hasMoreItems} isLoadingMoreItems={itemsFeed.isLoadingMoreItems}
                 />
@@ -287,13 +345,13 @@ export default function App() {
                     onUpdateItemStatus={itemsFeed.handleUpdateItemStatus} onConfirmCustody={itemsFeed.handleConfirmCustody} onDeleteItem={itemsFeed.handleDeleteItem}
                     onApproveClaim={claimsState.handleApproveClaim} onRejectClaim={claimsState.handleRejectClaim}
                     onExpireOldItems={itemsFeed.handleExpireOldItems}
-                    onOpenClaimChat={(claim, item) => setActiveChatTarget({ claim, item })}
+                    onOpenClaimChat={handleOpenClaimChat}
                     onOpenAddFoundItem={() => {
                       setReportPrefill({ type: 'found', holdingLocation: 'security_main_gate', location: 'Main Campus Gate' });
                       setIsReportModalOpen(true);
                     }}
                     unreadChatClaimIds={unreadChatClaimIds}
-                    onNavigateToLogin={() => setActiveTab('login')}
+                    onNavigateToLogin={handleNavigateToLogin}
                     onSwitchPersona={authSession.canUsePersonaSimulation ? authSession.handleSwitchPersona : undefined}
                     devPersonas={authSession.devPersonas}
                   />

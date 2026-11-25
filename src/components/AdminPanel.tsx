@@ -37,7 +37,7 @@ interface AdminPanelProps {
   onLoadMoreClaims?: () => Promise<void> | void;
   onFetchClaimPrivateDetails?: (itemId: string, claimId: string) => Promise<void>;
   onFetchFullPhoto?: (itemId: string) => Promise<string | null>;
-  onLoadAll?: () => Promise<void>;
+  onLoadAll?: () => Promise<CampusItem[] | null | void>;
   onUpdateItemStatus: (itemId: string, status: CampusItem['status']) => Promise<boolean> | void;
   onConfirmCustody?: (itemId: string) => Promise<boolean> | void;
   onDeleteItem: (itemId: string) => Promise<boolean> | void;

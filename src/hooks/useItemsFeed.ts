@@ -182,8 +182,9 @@ export function useItemsFeed({
     }
   }, [isDemoMode, state.isLoadingMoreItems, state.hasMoreItems, state.itemsCursor]);
 
-  const handleLoadAllItems = useCallback(async () => {
-    if (isDemoMode || state.isLoadingMoreItems || !state.hasMoreItems || !state.itemsCursor) return;
+  const handleLoadAllItems = useCallback(async (): Promise<CampusItem[] | null> => {
+    if (isDemoMode || !state.hasMoreItems || !state.itemsCursor) return mergedItems;
+    if (state.isLoadingMoreItems) return null;
     dispatch({ type: 'START_LOAD_MORE' });
     try {
       const { fetchItemsPage } = await import('../services/firestoreService.ts');
@@ -200,11 +201,14 @@ export function useItemsFeed({
       }
       hasPaginatedRef.current = true;
       dispatch({ type: 'APPEND_OLDER_ITEMS', items: accumulated, hasMore: more, cursor });
+      const seen = new Set(mergedItems.map((it) => it.id));
+      return [...mergedItems, ...accumulated.filter((it) => !seen.has(it.id))];
     } catch (err: unknown) {
       reportError('handleLoadAllItems failed', err);
       dispatch({ type: 'SET_ERROR', error: err instanceof Error ? err.message : 'Could not load remaining notices.' });
+      return null;
     }
-  }, [isDemoMode, state.isLoadingMoreItems, state.hasMoreItems, state.itemsCursor]);
+  }, [isDemoMode, state.isLoadingMoreItems, state.hasMoreItems, state.itemsCursor, mergedItems]);
 
   const handleFetchFullPhoto = useCallback(
     async (itemId: string) => {
